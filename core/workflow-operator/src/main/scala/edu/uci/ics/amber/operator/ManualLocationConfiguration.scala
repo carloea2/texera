@@ -22,7 +22,7 @@ trait ManualLocationConfiguration {
   //  @JsonPropertyDescription("The node address to use when manual location is enabled")
   //  var nodeAddr: String = _
 
-  @JsonProperty(required = true)
+  @JsonProperty(required = false)
   @JsonSchemaTitle("Designated Node Address")
   @JsonPropertyDescription("The node address to use when manual location is enabled")
   @JsonSchemaInject(
