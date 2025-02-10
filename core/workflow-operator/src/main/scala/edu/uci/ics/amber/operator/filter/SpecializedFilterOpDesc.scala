@@ -7,23 +7,14 @@ import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, InputPort, OutputPort,
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 
-class SpecializedFilterOpDesc extends FilterOpDesc {
+class SpecializedFilterOpDesc extends FilterOpDesc with ManualLocationConfiguration {
 
   @JsonProperty(value = "predicates", required = true)
   @JsonPropertyDescription("multiple predicates in OR")
   var predicates: List[FilterPredicate] = List.empty
-
-  @JsonProperty(required = false)
-  @JsonSchemaTitle("nodeAddr")
-  @JsonSchemaInject(json = UIWidget.UIWidgetTextArea)
-  var nodeAddr: String = _
-
-  @JsonProperty(defaultValue = "true")
-  @JsonSchemaTitle("location preference(default)")
-  @JsonPropertyDescription("Whether use default RoundRobinPreference")
-  var UseRoundRobin: Boolean = true
 
   override def getPhysicalOp(
                               workflowId: WorkflowIdentity,
@@ -42,11 +33,7 @@ class SpecializedFilterOpDesc extends FilterOpDesc {
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
 
-    if (!UseRoundRobin) {
-      baseOp.withLocationPreference(Some(GoToSpecificNode(nodeAddr))) // Use the actual `nodeAddr`
-    } else {
-      baseOp // Return without modifying location preference
-    }
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

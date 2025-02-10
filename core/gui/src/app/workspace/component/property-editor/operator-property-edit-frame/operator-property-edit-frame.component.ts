@@ -104,6 +104,9 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
   formlyFields: FormlyFieldConfig[] | undefined;
   formTitle: string | undefined;
 
+  public basicFields: FormlyFieldConfig[] = [];
+  public advancedFields: FormlyFieldConfig[] = [];
+
   // The field name and its css style to be overridden, e.g., for showing the diff between two workflows.
   // example: new Map([
   //     ["attribute", "outline: 3px solid green; transition: 0.3s ease-in-out outline;"],
@@ -124,9 +127,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
   quill!: Quill;
   // used to tear down subscriptions that takeUntil(teardownObservable)
   private teardownObservable: Subject<void> = new Subject();
-
-  public basicFields: FormlyFieldConfig[] = [];
-  public advancedFields: FormlyFieldConfig[] = [];
 
   constructor(
     private formlyJsonschema: FormlyJsonschema,
@@ -382,12 +382,20 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         },
       };
 
-      if (mapSource.description === "advance") {
+      if (mappedField.key == "nodeAddr") {
         mappedField.props = {
           ...mappedField.props,
           tab: "AdvancedSettings"
         };
       }
+
+      if (mappedField.key == "manualLocation") {
+        mappedField.props = {
+          ...mappedField.props,
+          tab: "AdvancedSettings"
+        };
+      }
+
 
 
       // Disable dummy operator for user
@@ -443,6 +451,9 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         mappedField.type = "inputautocomplete";
       }
 
+      if (mappedField.key == "nodeAddr") {
+        mappedField.type = "inputnodeaddress";
+      }
       //若
 
       // if the title is python script (for Python UDF), then make this field a custom template 'codearea'

@@ -25,6 +25,9 @@ export class WorkflowWebsocketService {
 
   public isConnected: boolean = false;
   public numWorkers: number = -1;
+
+  public workerAddresses: string[] = [];
+
   private connectedWid: number = 0;
 
   private websocket?: WebSocketSubject<TexeraWebsocketEvent | TexeraWebsocketRequest>;
@@ -98,6 +101,10 @@ export class WorkflowWebsocketService {
     this.websocketEvent().subscribe(evt => {
       if (evt.type === "ClusterStatusUpdateEvent") {
         this.numWorkers = evt.numWorkers;
+        this.workerAddresses = evt.addresses;
+
+        console.log("更新后的节点数量：", this.numWorkers);
+        console.log("节点地址列表：", this.workerAddresses);
       }
       this.isConnected = true;
       this.connectedWid = wId;

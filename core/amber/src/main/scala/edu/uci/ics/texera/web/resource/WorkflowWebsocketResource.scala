@@ -36,7 +36,8 @@ class WorkflowWebsocketResource extends LazyLogging {
     val workflowState =
       WorkflowService.getOrCreate(WorkflowIdentity(wid))
     sessionState.subscribe(workflowState)
-    sessionState.send(ClusterStatusUpdateEvent(ClusterListener.numWorkerNodesInCluster))
+    val addressesStr = ClusterListener.currentAddresses.map(_.toString).toSeq
+    sessionState.send(ClusterStatusUpdateEvent(ClusterListener.numWorkerNodesInCluster, addressesStr)) //1
     logger.info("connection open")
   }
 
@@ -63,10 +64,6 @@ class WorkflowWebsocketResource extends LazyLogging {
         case paginationRequest: ResultPaginationRequest =>
           workflowStateOpt.foreach(state =>
             sessionState.send(state.resultService.handleResultPagination(paginationRequest))
-          )
-        case resultExportRequest: ResultExportRequest =>
-          workflowStateOpt.foreach(state =>
-            sessionState.send(state.exportService.exportResult(userOpt.get, resultExportRequest))
           )
         case modifyLogicRequest: ModifyLogicRequest =>
           if (workflowStateOpt.isDefined) {
