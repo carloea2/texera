@@ -1,8 +1,8 @@
 package edu.uci.ics.amber.engine.architecture.common
 
-import akka.actor.{Address, Deploy}
+import akka.actor.{Address, AddressFromURIString, Deploy}
 import akka.remote.RemoteScope
-import edu.uci.ics.amber.core.workflow.{PhysicalOp, PreferController, RoundRobinPreference, GoToSpecificNode}
+import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, PhysicalOp, PreferController, RoundRobinPreference}
 import edu.uci.ics.amber.engine.architecture.controller.execution.OperatorExecution
 import edu.uci.ics.amber.engine.architecture.deploysemantics.AddressInfo
 import edu.uci.ics.amber.engine.architecture.pythonworker.PythonWorkflowWorker
@@ -22,6 +22,8 @@ object ExecutorDeployment {
                      replayLoggingConfig: Option[FaultToleranceConfig]
                    ): Unit = {
 
+    println("123321=====")
+
     val addressInfo = AddressInfo(
       controllerActorService.getClusterNodeAddresses,
       controllerActorService.self.path.address
@@ -38,9 +40,22 @@ object ExecutorDeployment {
           println("---------++")
           println("worker id: " + workerId)
           println("worker index: " + workerIndex)
-          addressInfo.allAddresses.foreach(address => println("Address: " + address + "Address host: " + address.host.get))
+          addressInfo.allAddresses.foreach { address =>
+            println(s"Address: $address, Address host: ${address.host.getOrElse("None")}")
+          }
           println("---------++")
-          addressInfo.allAddresses.find(addr => addr.host.get == node.nodeAddr).get
+
+          val targetAddress = AddressFromURIString(node.nodeAddr)
+
+          // 尝试在所有地址中查找匹配指定节点地址的 Address
+          addressInfo.allAddresses.find(addr => addr == targetAddress) match {
+            case Some(address) => address
+            case None =>
+              throw new IllegalStateException(
+                s"Designated node address '${node.nodeAddr}' not found among available addresses: " +
+                  addressInfo.allAddresses.map(_.host.getOrElse("None")).mkString(", ")
+              )
+          }
         case RoundRobinPreference =>
           println("+++++")
           println("worker id: " + workerId)

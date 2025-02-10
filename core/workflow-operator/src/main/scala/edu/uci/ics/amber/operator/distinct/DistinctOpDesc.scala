@@ -5,21 +5,11 @@ import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchema
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, HashPartition, InputPort, OutputPort, PhysicalOp}
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 
-class DistinctOpDesc extends LogicalOp {
-
-  @JsonProperty(required = false)
-  @JsonSchemaTitle("nodeAddr")
-  @JsonSchemaInject(json = UIWidget.UIWidgetTextArea)
-  var nodeAddr: String = _
-
-  @JsonProperty(defaultValue = "true")
-  @JsonSchemaTitle("location preference(default)")
-  @JsonPropertyDescription("Whether use default RoundRobinPreference")
-  var UseRoundRobin: Boolean = true
+class DistinctOpDesc extends LogicalOp with ManualLocationConfiguration{
 
   override def getPhysicalOp(
                               workflowId: WorkflowIdentity,
@@ -36,11 +26,8 @@ class DistinctOpDesc extends LogicalOp {
       .withOutputPorts(operatorInfo.outputPorts)
       .withPartitionRequirement(List(Option(HashPartition())))
       .withDerivePartition(_ => HashPartition())
-    if (!UseRoundRobin) {
-      baseOp.withLocationPreference(Some(GoToSpecificNode(nodeAddr))) // Use the actual `nodeAddr`
-    } else {
-      baseOp // Return without modifying location preference
-    }
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =
