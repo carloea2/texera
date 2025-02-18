@@ -7,11 +7,12 @@ import edu.uci.ics.amber.core.tuple.Schema
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.PhysicalOp.oneToOnePhysicalOp
 import edu.uci.ics.amber.core.workflow._
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 import edu.uci.ics.amber.operator.map.MapOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-class ProjectionOpDesc extends MapOpDesc {
+class ProjectionOpDesc extends MapOpDesc with ManualLocationConfiguration{
 
   @JsonProperty(required = true, defaultValue = "false")
   @JsonSchemaTitle("Drop Option")
@@ -21,10 +22,10 @@ class ProjectionOpDesc extends MapOpDesc {
   var attributes: List[AttributeUnit] = List()
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
-    oneToOnePhysicalOp(
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
+    val baseOp = oneToOnePhysicalOp(
       workflowId,
       executionId,
       operatorIdentifier,
@@ -53,6 +54,8 @@ class ProjectionOpDesc extends MapOpDesc {
 
         Map(operatorInfo.outputPorts.head.id -> outputSchema)
       }))
+
+    applyManualLocation(baseOp)
   }
 
   def derivePartition()(partition: List[PartitionInfo]): PartitionInfo = {
