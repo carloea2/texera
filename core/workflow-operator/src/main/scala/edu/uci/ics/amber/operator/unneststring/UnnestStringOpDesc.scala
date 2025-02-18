@@ -10,8 +10,9 @@ import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class UnnestStringOpDesc extends FlatMapOpDesc {
+class UnnestStringOpDesc extends FlatMapOpDesc with ManualLocationConfiguration{
   @JsonProperty(value = "Delimiter", required = true, defaultValue = ",")
   @JsonPropertyDescription("string that separates the data")
   var delimiter: String = _
@@ -36,10 +37,10 @@ class UnnestStringOpDesc extends FlatMapOpDesc {
     )
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
-    PhysicalOp
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -60,5 +61,7 @@ class UnnestStringOpDesc extends FlatMapOpDesc {
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         })
       )
+
+    applyManualLocation(baseOp)
   }
 }
