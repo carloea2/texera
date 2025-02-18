@@ -5,19 +5,14 @@ import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
-import edu.uci.ics.amber.core.workflow.{
-  PartitionInfo,
-  PhysicalOp,
-  SchemaPropagationFunc,
-  UnknownPartition
-}
+import edu.uci.ics.amber.core.workflow.{PartitionInfo, PhysicalOp, SchemaPropagationFunc, UnknownPartition}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.{LogicalOp, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration, PortDescription, StateTransferFunc}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
 import scala.util.{Success, Try}
-class JavaUDFOpDesc extends LogicalOp {
+class JavaUDFOpDesc extends LogicalOp with ManualLocationConfiguration{
   @JsonProperty(
     required = true,
     defaultValue =
@@ -59,9 +54,9 @@ class JavaUDFOpDesc extends LogicalOp {
   var outputColumns: List[Attribute] = List()
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
     Preconditions.checkArgument(workers >= 1, "Need at least 1 worker.", Array())
     val opInfo = this.operatorInfo
     val partitionRequirement: List[Option[PartitionInfo]] = if (inputPorts != null) {
@@ -90,8 +85,8 @@ class JavaUDFOpDesc extends LogicalOp {
       Map(operatorInfo.outputPorts.head.id -> outputSchema)
     }
 
-    if (workers > 1)
-      PhysicalOp
+    if (workers > 1) {
+      val baseOp = PhysicalOp
         .oneToOnePhysicalOp(
           workflowId,
           executionId,
@@ -106,8 +101,10 @@ class JavaUDFOpDesc extends LogicalOp {
         .withParallelizable(true)
         .withSuggestedWorkerNum(workers)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
-    else
-      PhysicalOp
+
+      applyManualLocation(baseOp)
+    } else {
+      val baseOp = PhysicalOp
         .manyToOnePhysicalOp(
           workflowId,
           executionId,
@@ -121,6 +118,9 @@ class JavaUDFOpDesc extends LogicalOp {
         .withIsOneToManyOp(true)
         .withParallelizable(false)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
+
+      applyManualLocation(baseOp)
+    }
   }
 
   override def operatorInfo: OperatorInfo = {
@@ -159,11 +159,11 @@ class JavaUDFOpDesc extends LogicalOp {
   }
 
   override def runtimeReconfiguration(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity,
-      oldLogicalOp: LogicalOp,
-      newLogicalOp: LogicalOp
-  ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
+                                       workflowId: WorkflowIdentity,
+                                       executionId: ExecutionIdentity,
+                                       oldLogicalOp: LogicalOp,
+                                       newLogicalOp: LogicalOp
+                                     ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
     Success(newLogicalOp.getPhysicalOp(workflowId, executionId), None)
   }
 }

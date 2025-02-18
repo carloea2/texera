@@ -10,8 +10,9 @@ import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class TypeCastingOpDesc extends MapOpDesc {
+class TypeCastingOpDesc extends MapOpDesc with ManualLocationConfiguration{
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("TypeCasting Units")
@@ -19,11 +20,11 @@ class TypeCastingOpDesc extends MapOpDesc {
   var typeCastingUnits: List[TypeCastingUnit] = List.empty
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
     if (typeCastingUnits == null) typeCastingUnits = List.empty
-    PhysicalOp
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -43,6 +44,8 @@ class TypeCastingOpDesc extends MapOpDesc {
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         }
       )
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {
