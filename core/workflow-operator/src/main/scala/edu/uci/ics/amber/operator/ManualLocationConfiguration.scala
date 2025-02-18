@@ -12,15 +12,9 @@ import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, PhysicalOp}
 trait ManualLocationConfiguration {
 
   @JsonProperty(defaultValue = "false")
-  @JsonSchemaTitle("Manual Location")
+  @JsonSchemaTitle("Auto Select Node Address")
   @JsonPropertyDescription("Set to true to manually specify the node address instead of using the default RoundRobin strategy")
-  var manualLocation: Boolean = false
-
-  //  @JsonProperty(required = false)
-  //  @JsonSchemaTitle("Designated Node Address")
-  //  @JsonSchemaInject(json = UIWidget.UIWidgetTextArea)
-  //  @JsonPropertyDescription("The node address to use when manual location is enabled")
-  //  var nodeAddr: String = _
+  var autoSelectNodeAddress: Boolean = true
 
   @JsonProperty(required = false)
   @JsonSchemaTitle("Designated Node Address")
@@ -42,7 +36,7 @@ trait ManualLocationConfiguration {
    * @return The PhysicalOp object with the applied location preference if manual is enabled; otherwise, the original baseOp.
    */
   def applyManualLocation(baseOp: PhysicalOp): PhysicalOp = {
-    if (manualLocation && nodeAddr != null) {
+    if (!autoSelectNodeAddress && nodeAddr != null) {
       baseOp.withLocationPreference(Some(GoToSpecificNode(nodeAddr)))
     } else {
       baseOp

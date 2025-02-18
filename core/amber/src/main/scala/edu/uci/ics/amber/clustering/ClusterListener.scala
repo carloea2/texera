@@ -28,7 +28,6 @@ object ClusterListener {
 
   var numWorkerNodesInCluster = 0
 
-  //这里用var吗
   // add a variable to hold the addresses
   var currentAddresses: Set[Address] = Set.empty
 }

@@ -389,7 +389,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         };
       }
 
-      if (mappedField.key == "manualLocation") {
+      if (mappedField.key == "autoSelectNodeAddress") {
         mappedField.props = {
           ...mappedField.props,
           tab: "AdvancedSettings"
