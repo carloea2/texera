@@ -1,12 +1,9 @@
 package edu.uci.ics.amber.operator.distinct
 
-import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
-import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, HashPartition, InputPort, OutputPort, PhysicalOp}
+import edu.uci.ics.amber.core.workflow.{HashPartition, InputPort, OutputPort, PhysicalOp}
 import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
-import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 
 class DistinctOpDesc extends LogicalOp with ManualLocationConfiguration{

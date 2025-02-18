@@ -1,14 +1,12 @@
 package edu.uci.ics.amber.operator.filter
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
-import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
-import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, InputPort, OutputPort, PhysicalOp}
+import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
-import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 
 class SpecializedFilterOpDesc extends FilterOpDesc with ManualLocationConfiguration {
 
