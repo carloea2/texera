@@ -4,28 +4,22 @@ import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.core.workflow.{
-  InputPort,
-  OutputPort,
-  PhysicalOp,
-  PortIdentity,
-  SchemaPropagationFunc
-}
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, PortIdentity, SchemaPropagationFunc}
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-class IfOpDesc extends LogicalOp {
+class IfOpDesc extends LogicalOp with ManualLocationConfiguration{
   @JsonProperty(required = true)
   @JsonSchemaTitle("Condition State")
   @JsonPropertyDescription("name of the state variable to evaluate")
   var conditionName: String = _
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
-    PhysicalOp
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -46,6 +40,8 @@ class IfOpDesc extends LogicalOp {
             .toMap
         )
       )
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

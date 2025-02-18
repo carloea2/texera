@@ -6,20 +6,17 @@ import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchema
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
 import edu.uci.ics.amber.core.workflow.{HashPartition, PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.metadata.annotations.{
-  AutofillAttributeName,
-  AutofillAttributeNameOnPort1
-}
+import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, AutofillAttributeNameOnPort1}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
 /** This Operator have two assumptions:
-  * 1. The tuples in both inputs come in ascending order
-  * 2. The left input join key takes as points, join condition is: left key in the range of (right key, right key + constant)
-  */
+ * 1. The tuples in both inputs come in ascending order
+ * 2. The left input join key takes as points, join condition is: left key in the range of (right key, right key + constant)
+ */
 @JsonSchemaInject(json = """
 {
   "attributeTypeRules": {
@@ -34,7 +31,7 @@ import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
   }
 }
 """)
-class IntervalJoinOpDesc extends LogicalOp {
+class IntervalJoinOpDesc extends LogicalOp with ManualLocationConfiguration{
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("Left Input attr")
@@ -70,15 +67,15 @@ class IntervalJoinOpDesc extends LogicalOp {
   var timeIntervalType: Option[TimeIntervalType] = _
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
     val partitionRequirement = List(
       Option(HashPartition(List(leftAttributeName))),
       Option(HashPartition(List(rightAttributeName)))
     )
 
-    PhysicalOp
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -111,6 +108,8 @@ class IntervalJoinOpDesc extends LogicalOp {
         })
       )
       .withPartitionRequirement(partitionRequirement)
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =
@@ -130,13 +129,13 @@ class IntervalJoinOpDesc extends LogicalOp {
     )
 
   def this(
-      leftTableAttributeName: String,
-      rightTableAttributeName: String,
-      constant: Long,
-      includeLeftBound: Boolean,
-      includeRightBound: Boolean,
-      timeIntervalType: TimeIntervalType
-  ) = {
+            leftTableAttributeName: String,
+            rightTableAttributeName: String,
+            constant: Long,
+            includeLeftBound: Boolean,
+            includeRightBound: Boolean,
+            timeIntervalType: TimeIntervalType
+          ) = {
     this() // Calling primary constructor, and it is first line
     this.leftAttributeName = leftTableAttributeName
     this.rightAttributeName = rightTableAttributeName
