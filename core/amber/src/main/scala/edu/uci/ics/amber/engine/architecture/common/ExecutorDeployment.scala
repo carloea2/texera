@@ -66,13 +66,6 @@ object ExecutorDeployment {
               )
           }
         case RoundRobinPreference =>
-          println("+++++")
-          println("worker id: " + workerId)
-          println("worker index: " + workerIndex)
-          addressInfo.allAddresses.foreach(address =>
-            println("Address: " + address + "Address host: " + address.host.get)
-          )
-          println("+++++")
           assert(
             addressInfo.allAddresses.nonEmpty,
             "Execution failed to start, no available computation nodes"
