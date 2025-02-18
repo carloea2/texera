@@ -396,8 +396,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         };
       }
 
-
-
       // Disable dummy operator for user
       if (mappedField.key === "dummyOperator") {
         mappedField.expressions = {
@@ -454,7 +452,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       if (mappedField.key == "nodeAddr") {
         mappedField.type = "inputnodeaddress";
       }
-      //若
 
       // if the title is python script (for Python UDF), then make this field a custom template 'codearea'
       if (mapSource?.description?.toLowerCase() === "input your code here") {
@@ -669,9 +666,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     };
 
     const schemaProperties = schema.properties;
-
-    // const fields = field.fieldGroup;
-    const fields = field.fieldGroup ?? [];
+    const fields = field.fieldGroup;
 
     // adding custom options, relational N-to-M mapping.
     if (schemaProperties && fields) {
@@ -696,10 +691,10 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     // doing so the validator in the field will not be triggered
     this.formlyFields = [field];
 
-    this.basicFields = fields.filter(f => f.props?.tab !== "AdvancedSettings");
-    this.advancedFields = fields.filter(f => f.props?.tab === "AdvancedSettings");
+    const fieldGroup = this.formlyFields?.[0]?.fieldGroup ?? [];
+    this.basicFields = fieldGroup.filter(f => f.props?.tab !== "AdvancedSettings");
+    this.advancedFields = fieldGroup.filter(f => f.props?.tab === "AdvancedSettings");
 
-    console.log("++++++fileds:", this.formlyFields )
   }
 
   allowModifyOperatorLogic(): void {

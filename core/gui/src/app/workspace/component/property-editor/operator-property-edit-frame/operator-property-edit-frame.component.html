@@ -68,29 +68,6 @@
   (focusout)="disconnectQuillFromText()"
   (keyup.enter)="disconnectQuillFromText()"></div>
 
-<!--<form-->
-<!--  nz-form-->
-<!--  [nzLayout]="'vertical'"-->
-<!--  *ngIf="formlyFields && formlyFormGroup"-->
-<!--  [formGroup]="formlyFormGroup"-->
-<!--  class="property-editor-form">-->
-<!--  <formly-form-->
-<!--    (modelChange)="onFormChanges($event)"-->
-<!--    [fields]="formlyFields"-->
-<!--    [form]="formlyFormGroup"-->
-<!--    [model]="formData"-->
-<!--    [options]="formlyOptions">-->
-<!--  </formly-form>-->
-<!--  <texera-type-casting-display-->
-<!--    *ngIf="isTypeCasting"-->
-<!--    currentOperatorId="{{this.currentOperatorId}}"></texera-type-casting-display>-->
-<!--</form>-->
-
-
-<!--有个问题，validator可能有问题？// not return field.fieldGroup directly because-->
-<!--// doing so the validator in the field will not be triggered-->
-<!--this.formlyFields = [field];-->
-
 <nz-tabset>
   <nz-tab nzTitle="Basic Settings" *ngIf="basicFields.length > 0">
     <form
@@ -140,45 +117,7 @@
   </nz-tab>
 </nz-tabset>
 
-<!--<form-->
-<!--  nz-form-->
-<!--  [nzLayout]="'vertical'"-->
-<!--  *ngIf="formlyFields && formlyFormGroup"-->
-<!--  [formGroup]="formlyFormGroup"-->
-<!--  class="property-editor-form"-->
-<!--&gt;-->
-<!--  <formly-form-->
-<!--    (modelChange)="onFormChanges($event)"-->
-<!--    [fields]="formlyFields"-->
-<!--    [form]="formlyFormGroup"-->
-<!--    [model]="formData"-->
-<!--    [options]="formlyOptions"-->
-<!--  >-->
-<!--  </formly-form>-->
-<!--</form>-->
 
-<!--&lt;!&ndash; ====== 分 Tab 手动渲染子字段 ====== &ndash;&gt;-->
-<!--<nz-tabset>-->
-<!--  &lt;!&ndash; Basic 配置 &ndash;&gt;-->
-<!--  <nz-tab nzTitle="Basic Settings" *ngIf="(basicFields?.length ?? 0) > 0">-->
-<!--    <ng-container *ngFor="let f of basicFields">-->
-<!--      <formly-field [field]="f"></formly-field>-->
-<!--    </ng-container>-->
-<!--  </nz-tab>-->
-
-<!--  &lt;!&ndash; Advanced 配置 &ndash;&gt;-->
-<!--  <nz-tab nzTitle="Advanced Settings" *ngIf="advancedFields?.length ?? 0> 0">-->
-<!--    <ng-container *ngFor="let f of advancedFields">-->
-<!--      <formly-field [field]="f"></formly-field>-->
-<!--    </ng-container>-->
-<!--  </nz-tab>-->
-<!--</nz-tabset>-->
-
-<!--&lt;!&ndash; 如果有 TypeCasting 显示区 &ndash;&gt;-->
-<!--<texera-type-casting-display-->
-<!--  *ngIf="isTypeCasting"-->
-<!--  [currentOperatorId]="currentOperatorId"-->
-<!--&gt;</texera-type-casting-display>-->
 
 <button
   (click)="allowModifyOperatorLogic()"
