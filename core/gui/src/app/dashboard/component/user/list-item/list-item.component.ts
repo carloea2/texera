@@ -19,9 +19,8 @@ import {
   WorkflowPersistService,
 } from "src/app/common/service/workflow-persist/workflow-persist.service";
 import { firstValueFrom } from "rxjs";
-import { SearchService } from "../../../service/user/search.service";
 import { HubWorkflowDetailComponent } from "../../../../hub/component/workflow/detail/hub-workflow-detail.component";
-import { HubWorkflowService } from "../../../../hub/service/workflow/hub-workflow.service";
+import { HubService } from "../../../../hub/service/hub.service";
 import { DownloadService } from "src/app/dashboard/service/user/download/download.service";
 import { formatSize } from "src/app/common/util/size-formatter.util";
 import { DatasetService, DEFAULT_DATASET_NAME } from "../../../service/user/dataset/dataset.service";
@@ -31,6 +30,7 @@ import {
   DASHBOARD_USER_PROJECT,
   DASHBOARD_USER_WORKSPACE,
   DASHBOARD_USER_DATASET,
+  DASHBOARD_HUB_DATASET_RESULT_DETAIL,
 } from "../../../../app-routing.constant";
 
 @UntilDestroy()
@@ -76,12 +76,11 @@ export class ListItemComponent implements OnInit, OnChanges {
   refresh = new EventEmitter<void>();
 
   constructor(
-    private searchService: SearchService,
     private modalService: NzModalService,
     private workflowPersistService: WorkflowPersistService,
     private datasetService: DatasetService,
     private modal: NzModalService,
-    private hubWorkflowService: HubWorkflowService,
+    private hubService: HubService,
     private downloadService: DownloadService,
     private cdr: ChangeDetectorRef,
     private notificationService: NotificationService
@@ -91,38 +90,52 @@ export class ListItemComponent implements OnInit, OnChanges {
     if (this.entry.type === "workflow") {
       if (typeof this.entry.id === "number") {
         this.disableDelete = !this.entry.workflow.isOwner;
-        // eslint-disable-next-line rxjs-angular/prefer-takeuntil
-        this.searchService.getWorkflowOwners(this.entry.id).subscribe((data: number[]) => {
-          this.owners = data;
-          if (this.currentUid !== undefined && this.owners.includes(this.currentUid)) {
-            this.entryLink = [DASHBOARD_USER_WORKSPACE, String(this.entry.id)];
-          } else {
-            this.entryLink = [DASHBOARD_HUB_WORKFLOW_RESULT_DETAIL, String(this.entry.id)];
-          }
-          setTimeout(() => this.cdr.detectChanges(), 0);
-        });
-        this.hubWorkflowService
-          .getLikeCount(this.entry.id)
+        this.workflowPersistService
+          .getWorkflowOwners(this.entry.id)
+          .pipe(untilDestroyed(this))
+          .subscribe((data: number[]) => {
+            this.owners = data;
+            if (this.currentUid !== undefined && this.owners.includes(this.currentUid)) {
+              this.entryLink = [DASHBOARD_USER_WORKSPACE, String(this.entry.id)];
+            } else {
+              this.entryLink = [DASHBOARD_HUB_WORKFLOW_RESULT_DETAIL, String(this.entry.id)];
+            }
+            setTimeout(() => this.cdr.detectChanges(), 0);
+          });
+        this.hubService
+          .getLikeCount(this.entry.id, this.entry.type)
           .pipe(untilDestroyed(this))
           .subscribe(count => {
             this.likeCount = count;
           });
-        this.hubWorkflowService
-          .getViewCount(this.entry.id)
+        this.hubService
+          .getViewCount(this.entry.id, this.entry.type)
           .pipe(untilDestroyed(this))
           .subscribe(count => {
             this.viewCount = count;
           });
       }
-      // this.entryLink = this.ROUTER_WORKFLOW_BASE_URL + "/" + this.entry.id;
       this.iconType = "project";
     } else if (this.entry.type === "project") {
       this.entryLink = [DASHBOARD_USER_PROJECT, String(this.entry.id)];
       this.iconType = "container";
     } else if (this.entry.type === "dataset") {
-      this.entryLink = [DASHBOARD_USER_DATASET, String(this.entry.id)];
-      this.iconType = "database";
-      this.disableDelete = !this.entry.dataset.isOwner;
+      if (typeof this.entry.id === "number") {
+        this.disableDelete = !this.entry.dataset.isOwner;
+        this.datasetService
+          .getDatasetOwners(this.entry.id)
+          .pipe(untilDestroyed(this))
+          .subscribe((data: number[]) => {
+            this.owners = data;
+            if (this.currentUid !== undefined && this.owners.includes(this.currentUid)) {
+              this.entryLink = [DASHBOARD_USER_DATASET, String(this.entry.id)];
+            } else {
+              this.entryLink = [DASHBOARD_HUB_DATASET_RESULT_DETAIL, String(this.entry.id)];
+            }
+            setTimeout(() => this.cdr.detectChanges(), 0);
+          });
+        this.iconType = "database";
+      }
     } else if (this.entry.type === "file") {
       // not sure where to redirect
       this.iconType = "folder-open";
@@ -134,8 +147,8 @@ export class ListItemComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     this.initializeEntry();
     if (this.entry.id !== undefined && this.currentUid !== undefined) {
-      this.hubWorkflowService
-        .isWorkflowLiked(this.entry.id, this.currentUid)
+      this.hubService
+        .isLiked(this.entry.id, this.currentUid, this.entry.type)
         .pipe(untilDestroyed(this))
         .subscribe((isLiked: boolean) => {
           this.isLiked = isLiked;
@@ -148,8 +161,8 @@ export class ListItemComponent implements OnInit, OnChanges {
       this.initializeEntry();
     }
     if (this.entry.id !== undefined && this.currentUid !== undefined) {
-      this.hubWorkflowService
-        .isWorkflowLiked(this.entry.id, this.currentUid)
+      this.hubService
+        .isLiked(this.entry.id, this.currentUid, this.entry.type)
         .pipe(untilDestroyed(this))
         .subscribe((isLiked: boolean) => {
           this.isLiked = isLiked;
@@ -351,8 +364,8 @@ export class ListItemComponent implements OnInit, OnChanges {
     const instance = modalRef.componentInstance;
     if (instance) {
       if (wid !== undefined) {
-        this.hubWorkflowService
-          .getViewCount(wid)
+        this.hubService
+          .getViewCount(wid, this.entry.type)
           .pipe(untilDestroyed(this))
           .subscribe(count => {
             this.viewCount = count + 1; // hacky fix to display view correctly
@@ -367,14 +380,14 @@ export class ListItemComponent implements OnInit, OnChanges {
     }
 
     if (this.isLiked) {
-      this.hubWorkflowService
-        .postUnlikeWorkflow(workflowId, userId)
+      this.hubService
+        .postUnlike(workflowId, userId, this.entry.type)
         .pipe(untilDestroyed(this))
         .subscribe((success: boolean) => {
           if (success) {
             this.isLiked = false;
-            this.hubWorkflowService
-              .getLikeCount(workflowId)
+            this.hubService
+              .getLikeCount(workflowId, this.entry.type)
               .pipe(untilDestroyed(this))
               .subscribe((count: number) => {
                 this.likeCount = count;
@@ -382,14 +395,14 @@ export class ListItemComponent implements OnInit, OnChanges {
           }
         });
     } else {
-      this.hubWorkflowService
-        .postLikeWorkflow(workflowId, userId)
+      this.hubService
+        .postLike(workflowId, userId, this.entry.type)
         .pipe(untilDestroyed(this))
         .subscribe((success: boolean) => {
           if (success) {
             this.isLiked = true;
-            this.hubWorkflowService
-              .getLikeCount(workflowId)
+            this.hubService
+              .getLikeCount(workflowId, this.entry.type)
               .pipe(untilDestroyed(this))
               .subscribe((count: number) => {
                 this.likeCount = count;

@@ -17,6 +17,8 @@ import {
   DASHBOARD_USER_QUOTA,
   DASHBOARD_USER_WORKFLOW,
 } from "../../app-routing.constant";
+import { environment } from "../../../environments/environment";
+import { Version } from "../../../environments/version";
 
 @Component({
   selector: "texera-dashboard",
@@ -28,7 +30,9 @@ export class DashboardComponent implements OnInit {
   @ViewChild(HubComponent) hubComponent!: HubComponent;
 
   isAdmin: boolean = this.userService.isAdmin();
-  isLogin: boolean = this.userService.isLogin();
+  isLogin = this.userService.isLogin();
+  googleLogin: boolean = environment.googleLogin;
+  public gitCommitHash: string = Version.raw;
   displayForum: boolean = true;
   displayNavbar: boolean = true;
   isCollpased: boolean = false;
