@@ -11,7 +11,7 @@ import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, PhysicalOp}
  */
 trait ManualLocationConfiguration {
 
-  @JsonProperty(defaultValue = "false")
+  @JsonProperty(defaultValue = "true")
   @JsonSchemaTitle("Auto Select Node Address")
   @JsonPropertyDescription("Set to true to manually specify the node address instead of using the default RoundRobin strategy")
   var autoSelectNodeAddress: Boolean = true
