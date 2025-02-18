@@ -18,13 +18,13 @@ trait ManualLocationConfiguration {
 
   @JsonProperty(required = false)
   @JsonSchemaTitle("Designated Node Address")
-  @JsonPropertyDescription("The node address to use when manual location is enabled")
+  @JsonPropertyDescription("The node address to use when autoSelectNodeAddress is disabled")
   @JsonSchemaInject(
     strings = Array(
-      // This configuration hides `nodeAddr` when `manual` equals "false".
-      new JsonSchemaString(path = HideAnnotation.hideTarget, value = "manualLocation"),
+      // This configuration hides `nodeAddr` when `autoSelectNodeAddress` equals "true".
+      new JsonSchemaString(path = HideAnnotation.hideTarget, value = "autoSelectNodeAddress"),
       new JsonSchemaString(path = HideAnnotation.hideType, value = HideAnnotation.Type.equals),
-      new JsonSchemaString(path = HideAnnotation.hideExpectedValue, value = "false")
+      new JsonSchemaString(path = HideAnnotation.hideExpectedValue, value = "true")
     )
   )
   var nodeAddr: String = _
