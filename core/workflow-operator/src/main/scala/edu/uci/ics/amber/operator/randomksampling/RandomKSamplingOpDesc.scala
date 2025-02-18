@@ -9,16 +9,16 @@ import edu.uci.ics.amber.operator.filter.FilterOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-class RandomKSamplingOpDesc extends FilterOpDesc with ManualLocationConfiguration{
+class RandomKSamplingOpDesc extends FilterOpDesc with ManualLocationConfiguration {
 
   @JsonProperty(value = "random k sample percentage", required = true)
   @JsonPropertyDescription("random k sampling with given percentage")
   var percentage: Int = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

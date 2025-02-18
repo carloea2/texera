@@ -5,15 +5,25 @@ import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
-import edu.uci.ics.amber.core.workflow.{PartitionInfo, PhysicalOp, SchemaPropagationFunc, UnknownPartition}
-import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.core.workflow.{
+  PartitionInfo,
+  PhysicalOp,
+  SchemaPropagationFunc,
+  UnknownPartition
+}
+import edu.uci.ics.amber.operator.{
+  LogicalOp,
+  ManualLocationConfiguration,
+  PortDescription,
+  StateTransferFunc
+}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
 import scala.util.{Success, Try}
 
-class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration{
+class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration {
   @JsonProperty(
     required = true,
     defaultValue =
@@ -55,9 +65,9 @@ class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration{
   var outputColumns: List[Attribute] = List()
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     Preconditions.checkArgument(workers >= 1, "Need at least 1 worker.", Array())
     val opInfo = this.operatorInfo
     val partitionRequirement: List[Option[PartitionInfo]] = if (inputPorts != null) {
@@ -89,30 +99,30 @@ class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration{
 
     val r_operator_type = if (useTupleAPI) "r-tuple" else "r-table"
     val baseOp = (if (workers > 1) {
-      PhysicalOp
-        .oneToOnePhysicalOp(
-          workflowId,
-          executionId,
-          operatorIdentifier,
-          OpExecWithCode(code, r_operator_type)
-        )
-        .withParallelizable(true)
-        .withSuggestedWorkerNum(workers)
-    } else {
-      PhysicalOp
-        .manyToOnePhysicalOp(
-          workflowId,
-          executionId,
-          operatorIdentifier,
-          OpExecWithCode(code, r_operator_type)
-        )
-        .withParallelizable(false)
-    }.withDerivePartition(_ => UnknownPartition())
-      .withInputPorts(operatorInfo.inputPorts)
-      .withOutputPorts(operatorInfo.outputPorts)
-      .withPartitionRequirement(partitionRequirement)
-      .withIsOneToManyOp(true)
-      .withPropagateSchema(SchemaPropagationFunc(propagateSchema)))
+                    PhysicalOp
+                      .oneToOnePhysicalOp(
+                        workflowId,
+                        executionId,
+                        operatorIdentifier,
+                        OpExecWithCode(code, r_operator_type)
+                      )
+                      .withParallelizable(true)
+                      .withSuggestedWorkerNum(workers)
+                  } else {
+                    PhysicalOp
+                      .manyToOnePhysicalOp(
+                        workflowId,
+                        executionId,
+                        operatorIdentifier,
+                        OpExecWithCode(code, r_operator_type)
+                      )
+                      .withParallelizable(false)
+                  }.withDerivePartition(_ => UnknownPartition())
+                    .withInputPorts(operatorInfo.inputPorts)
+                    .withOutputPorts(operatorInfo.outputPorts)
+                    .withPartitionRequirement(partitionRequirement)
+                    .withIsOneToManyOp(true)
+                    .withPropagateSchema(SchemaPropagationFunc(propagateSchema)))
 
     applyManualLocation(baseOp)
 
@@ -150,11 +160,11 @@ class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration{
   }
 
   override def runtimeReconfiguration(
-                                       workflowId: WorkflowIdentity,
-                                       executionId: ExecutionIdentity,
-                                       oldLogicalOp: LogicalOp,
-                                       newLogicalOp: LogicalOp
-                                     ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity,
+      oldLogicalOp: LogicalOp,
+      newLogicalOp: LogicalOp
+  ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
     Success(newLogicalOp.getPhysicalOp(workflowId, executionId), None)
   }
 }

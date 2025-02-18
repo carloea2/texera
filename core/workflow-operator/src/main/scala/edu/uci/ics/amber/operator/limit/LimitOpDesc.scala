@@ -12,7 +12,7 @@ import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 
 import scala.util.{Success, Try}
 
-class LimitOpDesc extends LogicalOp with ManualLocationConfiguration{
+class LimitOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("Limit")
@@ -20,9 +20,9 @@ class LimitOpDesc extends LogicalOp with ManualLocationConfiguration{
   var limit: Int = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
@@ -51,11 +51,11 @@ class LimitOpDesc extends LogicalOp with ManualLocationConfiguration{
     )
 
   override def runtimeReconfiguration(
-                                       workflowId: WorkflowIdentity,
-                                       executionId: ExecutionIdentity,
-                                       oldLogicalOp: LogicalOp,
-                                       newLogicalOp: LogicalOp
-                                     ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity,
+      oldLogicalOp: LogicalOp,
+      newLogicalOp: LogicalOp
+  ): Try[(PhysicalOp, Option[StateTransferFunc])] = {
     val newPhysicalOp = newLogicalOp.getPhysicalOp(workflowId, executionId)
     val stateTransferFunc: StateTransferFunc = (oldOp, newOp) => {
       val oldLimitOp = oldOp.asInstanceOf[LimitOpExec]

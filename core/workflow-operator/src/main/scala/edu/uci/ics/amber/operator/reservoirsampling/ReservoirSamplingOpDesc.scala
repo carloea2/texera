@@ -9,16 +9,16 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-class ReservoirSamplingOpDesc extends LogicalOp with ManualLocationConfiguration{
+class ReservoirSamplingOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   @JsonProperty(value = "number of item sampled in reservoir sampling", required = true)
   @JsonPropertyDescription("reservoir sampling with k items being kept randomly")
   var k: Int = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

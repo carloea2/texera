@@ -21,7 +21,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
   }
 }
 """)
-class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration{
+class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration {
   @JsonProperty(value = "attribute", required = true)
   @JsonPropertyDescription("column to perform sentiment analysis on")
   @AutofillAttributeName
@@ -36,9 +36,9 @@ class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration
   var resultAttribute: String = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     if (attribute == null)
       throw new RuntimeException("sentiment analysis: attribute is null")
 

@@ -4,7 +4,11 @@ import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.Schema
-import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, PhysicalOpIdentity, WorkflowIdentity}
+import edu.uci.ics.amber.core.virtualidentity.{
+  ExecutionIdentity,
+  PhysicalOpIdentity,
+  WorkflowIdentity
+}
 import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeNameList
@@ -13,7 +17,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import javax.validation.constraints.{NotNull, Size}
 
-class AggregateOpDesc extends LogicalOp with ManualLocationConfiguration{
+class AggregateOpDesc extends LogicalOp with ManualLocationConfiguration {
   @JsonProperty(value = "aggregations", required = true)
   @JsonPropertyDescription("multiple aggregation functions")
   @NotNull(message = "aggregation cannot be null")
@@ -27,9 +31,9 @@ class AggregateOpDesc extends LogicalOp with ManualLocationConfiguration{
   var groupByKeys: List[String] = List()
 
   override def getPhysicalPlan(
-                                workflowId: WorkflowIdentity,
-                                executionId: ExecutionIdentity
-                              ): PhysicalPlan = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalPlan = {
     if (groupByKeys == null) groupByKeys = List()
     // TODO: this is supposed to be blocking but due to limitations of materialization naming on the logical operator
     // we are keeping it not annotated as blocking.

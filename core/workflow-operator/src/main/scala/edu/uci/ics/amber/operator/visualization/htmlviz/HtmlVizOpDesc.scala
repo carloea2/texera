@@ -13,18 +13,18 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
 
 /**
- * HTML Visualization operator to render any given HTML code
- * This is the description of the operator
- */
-class HtmlVizOpDesc extends LogicalOp with ManualLocationConfiguration{
+  * HTML Visualization operator to render any given HTML code
+  * This is the description of the operator
+  */
+class HtmlVizOpDesc extends LogicalOp with ManualLocationConfiguration {
   @JsonProperty(required = true)
   @JsonSchemaTitle("HTML content")
   @AutofillAttributeName var htmlContentAttrName: String = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

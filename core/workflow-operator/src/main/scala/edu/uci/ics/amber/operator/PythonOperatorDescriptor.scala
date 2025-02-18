@@ -5,11 +5,11 @@ import edu.uci.ics.amber.core.tuple.Schema
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, PortIdentity, SchemaPropagationFunc}
 
-trait PythonOperatorDescriptor extends LogicalOp with ManualLocationConfiguration{
+trait PythonOperatorDescriptor extends LogicalOp with ManualLocationConfiguration {
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val physicalOp = if (asSource()) {
       PhysicalOp.sourcePhysicalOp(
         workflowId,

@@ -12,7 +12,7 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class KeywordSearchOpDesc extends FilterOpDesc with ManualLocationConfiguration{
+class KeywordSearchOpDesc extends FilterOpDesc with ManualLocationConfiguration {
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("attribute")
@@ -26,9 +26,9 @@ class KeywordSearchOpDesc extends FilterOpDesc with ManualLocationConfiguration{
   var keyword: String = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

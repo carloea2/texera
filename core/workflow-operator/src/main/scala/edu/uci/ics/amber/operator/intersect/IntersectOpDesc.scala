@@ -6,12 +6,12 @@ import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 
-class IntersectOpDesc extends LogicalOp with ManualLocationConfiguration{
+class IntersectOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

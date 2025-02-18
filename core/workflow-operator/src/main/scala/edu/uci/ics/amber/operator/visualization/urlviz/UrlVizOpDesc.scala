@@ -13,9 +13,9 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
 
 /**
- * URL Visualization operator to render any content in given URL link
- * This is the description of the operator
- */
+  * URL Visualization operator to render any content in given URL link
+  * This is the description of the operator
+  */
 @JsonSchemaInject(json = """
  {
    "attributeTypeRules": {
@@ -25,7 +25,7 @@ import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
    }
  }
  """)
-class UrlVizOpDesc extends LogicalOp with ManualLocationConfiguration{
+class UrlVizOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("URL content")
@@ -33,9 +33,9 @@ class UrlVizOpDesc extends LogicalOp with ManualLocationConfiguration{
   val urlContentAttrName: String = ""
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .manyToOnePhysicalOp(
         workflowId,

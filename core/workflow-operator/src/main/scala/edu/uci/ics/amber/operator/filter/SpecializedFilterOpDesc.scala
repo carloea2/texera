@@ -15,9 +15,9 @@ class SpecializedFilterOpDesc extends FilterOpDesc with ManualLocationConfigurat
   var predicates: List[FilterPredicate] = List.empty
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

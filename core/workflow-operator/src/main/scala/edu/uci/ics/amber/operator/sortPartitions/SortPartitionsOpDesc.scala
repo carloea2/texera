@@ -20,7 +20,7 @@ import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
   }
 }
 """)
-class SortPartitionsOpDesc extends LogicalOp with ManualLocationConfiguration{
+class SortPartitionsOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("Attribute")
@@ -39,9 +39,9 @@ class SortPartitionsOpDesc extends LogicalOp with ManualLocationConfiguration{
   var domainMax: Long = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

@@ -12,7 +12,7 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class UnnestStringOpDesc extends FlatMapOpDesc with ManualLocationConfiguration{
+class UnnestStringOpDesc extends FlatMapOpDesc with ManualLocationConfiguration {
   @JsonProperty(value = "Delimiter", required = true, defaultValue = ",")
   @JsonPropertyDescription("string that separates the data")
   var delimiter: String = _
@@ -37,9 +37,9 @@ class UnnestStringOpDesc extends FlatMapOpDesc with ManualLocationConfiguration{
     )
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

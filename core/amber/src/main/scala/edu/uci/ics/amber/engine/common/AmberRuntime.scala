@@ -26,7 +26,7 @@ object AmberRuntime {
   }
 
   def scheduleRecurringCallThroughActorSystem(initialDelay: FiniteDuration, delay: FiniteDuration)(
-    call: => Unit
+      call: => Unit
   ): Cancellable = {
     _actorSystem.scheduler.scheduleWithFixedDelay(initialDelay, delay)(() => call)
   }
@@ -66,8 +66,7 @@ object AmberRuntime {
         .withFallback(akkaConfig)
       AmberConfig.masterNodeAddr = createMasterAddress(localIpAddress)
       createAmberSystem(masterConfig)
-    }
-    else{
+    } else {
       val masterConfig = ConfigFactory
         .parseString(s"""
         akka.remote.artery.canonical.port = 2552
@@ -108,17 +107,17 @@ object AmberRuntime {
         .withFallback(akkaConfig)
       AmberConfig.masterNodeAddr = createMasterAddress(addr)
       createAmberSystem(workerConfig)
-    }
-
-    else{val workerConfig = ConfigFactory
-      .parseString(s"""
+    } else {
+      val workerConfig = ConfigFactory
+        .parseString(s"""
         akka.remote.artery.canonical.hostname = $localIpAddress
         akka.remote.artery.canonical.port = 0
         akka.cluster.seed-nodes = [ "akka://Amber@$addr:2552" ]
         """)
-      .withFallback(akkaConfig)
+        .withFallback(akkaConfig)
       AmberConfig.masterNodeAddr = createMasterAddress(addr)
-      createAmberSystem(workerConfig)}
+      createAmberSystem(workerConfig)
+    }
   }
 
   private def createAmberSystem(actorSystemConf: Config): Unit = {

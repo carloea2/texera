@@ -11,7 +11,7 @@ import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
-class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with ManualLocationConfiguration{
+class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with ManualLocationConfiguration {
   @JsonProperty(
     required = true,
     defaultValue =
@@ -60,9 +60,9 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with ManualLocationConfi
   var outputColumns: List[Attribute] = List()
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     Preconditions.checkArgument(workers >= 1, "Need at least 1 worker.", Array())
     val physicalOp = if (workers > 1) {
       PhysicalOp

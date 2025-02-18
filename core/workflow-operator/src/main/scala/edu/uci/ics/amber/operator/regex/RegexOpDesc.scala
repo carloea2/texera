@@ -12,7 +12,7 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class RegexOpDesc extends FilterOpDesc with ManualLocationConfiguration{
+class RegexOpDesc extends FilterOpDesc with ManualLocationConfiguration {
 
   @JsonProperty(value = "attribute", required = true)
   @JsonPropertyDescription("column to search regex on")
@@ -29,9 +29,9 @@ class RegexOpDesc extends FilterOpDesc with ManualLocationConfiguration{
   var caseInsensitive: Boolean = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

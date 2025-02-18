@@ -16,7 +16,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
   * It outputs an extra column to label the tuple if it is matched or not
   * This is the description of the operator
   */
-class DictionaryMatcherOpDesc extends MapOpDesc with ManualLocationConfiguration{
+class DictionaryMatcherOpDesc extends MapOpDesc with ManualLocationConfiguration {
   @JsonProperty(value = "Dictionary", required = true)
   @JsonPropertyDescription("dictionary values separated by a comma") var dictionary: String = _
 
@@ -30,9 +30,9 @@ class DictionaryMatcherOpDesc extends MapOpDesc with ManualLocationConfiguration
   @JsonProperty(value = "Matching type", required = true) var matchingType: MatchingType = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
 
     val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
