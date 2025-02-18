@@ -58,7 +58,7 @@ export const TEXERA_FORMLY_CONFIG = {
     { name: "multischema", component: MultiSchemaTypeComponent },
     { name: "codearea", component: CodeareaCustomTemplateComponent },
     { name: "inputautocomplete", component: InputAutoCompleteComponent, wrappers: ["form-field"] },
-    { name: "inputnodeaddress", component: InputNodeAddressComponent, wrappers: ["form-field"] }
+    { name: "inputnodeaddress", component: InputNodeAddressComponent, wrappers: ["form-field"] },
   ],
   wrappers: [
     { name: "preset-wrapper", component: PresetWrapperComponent },

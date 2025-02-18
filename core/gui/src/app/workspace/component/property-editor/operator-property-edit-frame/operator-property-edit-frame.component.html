@@ -69,14 +69,15 @@
   (keyup.enter)="disconnectQuillFromText()"></div>
 
 <nz-tabset>
-  <nz-tab nzTitle="Basic Settings" *ngIf="basicFields.length > 0">
+  <nz-tab
+    nzTitle="Basic Settings"
+    *ngIf="basicFields.length > 0">
     <form
       nz-form
       nzLayout="vertical"
       *ngIf="formlyFields && formlyFormGroup"
       [formGroup]="formlyFormGroup"
-      class="property-editor-form"
-    >
+      class="property-editor-form">
       <formly-form
         (modelChange)="onFormChanges($event)"
         [fields]="basicFields"
@@ -88,19 +89,19 @@
       <texera-type-casting-display
         *ngIf="isTypeCasting"
         currentOperatorId="{{this.currentOperatorId}}"></texera-type-casting-display>
-
     </form>
   </nz-tab>
 
   <!-- Advanced 配置 -->
-  <nz-tab nzTitle="Advanced Settings" *ngIf="advancedFields.length > 0">
+  <nz-tab
+    nzTitle="Advanced Settings"
+    *ngIf="advancedFields.length > 0">
     <form
       nz-form
       nzLayout="vertical"
       *ngIf="formlyFields && formlyFormGroup"
       [formGroup]="formlyFormGroup"
-      class="property-editor-form"
-    >
+      class="property-editor-form">
       <formly-form
         (modelChange)="onFormChanges($event)"
         [fields]="advancedFields"
@@ -112,12 +113,9 @@
       <texera-type-casting-display
         *ngIf="isTypeCasting"
         currentOperatorId="{{this.currentOperatorId}}"></texera-type-casting-display>
-
     </form>
   </nz-tab>
 </nz-tabset>
-
-
 
 <button
   (click)="allowModifyOperatorLogic()"

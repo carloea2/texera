@@ -6,10 +6,9 @@ import { WorkflowWebsocketService } from "../../service/workflow-websocket/workf
 @Component({
   selector: "texera-input-node-address",
   templateUrl: "./input-node-address.component.html",
-  styleUrls: ["./input-node-address.component.scss"]
+  styleUrls: ["./input-node-address.component.scss"],
 })
 export class InputNodeAddressComponent extends FieldType<FieldTypeConfig> implements OnInit, OnDestroy {
-
   // 用于存储当前的节点地址列表
   public nodeAddresses: string[] = [];
 
@@ -26,7 +25,7 @@ export class InputNodeAddressComponent extends FieldType<FieldTypeConfig> implem
 
     // 订阅 websocket 事件，实时更新节点地址
     this.wsSubscription = this.workflowWebsocketService.websocketEvent().subscribe(event => {
-      if (event.type === 'ClusterStatusUpdateEvent') {
+      if (event.type === "ClusterStatusUpdateEvent") {
         // 更新地址列表（后端事件中包含 addresses 字段）
         this.nodeAddresses = event.addresses;
       }
@@ -39,5 +38,3 @@ export class InputNodeAddressComponent extends FieldType<FieldTypeConfig> implem
     }
   }
 }
-
-

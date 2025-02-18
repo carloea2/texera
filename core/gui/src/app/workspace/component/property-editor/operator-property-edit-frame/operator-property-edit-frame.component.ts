@@ -385,14 +385,14 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       if (mappedField.key == "nodeAddr") {
         mappedField.props = {
           ...mappedField.props,
-          tab: "AdvancedSettings"
+          tab: "AdvancedSettings",
         };
       }
 
       if (mappedField.key == "autoSelectNodeAddress") {
         mappedField.props = {
           ...mappedField.props,
-          tab: "AdvancedSettings"
+          tab: "AdvancedSettings",
         };
       }
 
@@ -694,7 +694,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     const fieldGroup = this.formlyFields?.[0]?.fieldGroup ?? [];
     this.basicFields = fieldGroup.filter(f => f.props?.tab !== "AdvancedSettings");
     this.advancedFields = fieldGroup.filter(f => f.props?.tab === "AdvancedSettings");
-
   }
 
   allowModifyOperatorLogic(): void {
