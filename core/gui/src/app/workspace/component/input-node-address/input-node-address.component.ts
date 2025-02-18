@@ -1,7 +1,8 @@
 import { Component, OnInit, OnDestroy } from "@angular/core";
 import { FieldType, FieldTypeConfig } from "@ngx-formly/core";
-import { Subscription } from "rxjs";
+import { Subject, Subscription } from "rxjs";
 import { WorkflowWebsocketService } from "../../service/workflow-websocket/workflow-websocket.service";
+import { takeUntil } from "rxjs/operators";
 
 @Component({
   selector: "texera-input-node-address",
@@ -13,6 +14,8 @@ export class InputNodeAddressComponent extends FieldType<FieldTypeConfig> implem
 
   private wsSubscription!: Subscription;
 
+  private componentDestroy = new Subject<void>();
+
   constructor(private workflowWebsocketService: WorkflowWebsocketService) {
     super();
   }
@@ -20,16 +23,18 @@ export class InputNodeAddressComponent extends FieldType<FieldTypeConfig> implem
   ngOnInit(): void {
     this.nodeAddresses = this.workflowWebsocketService.workerAddresses;
 
-    this.wsSubscription = this.workflowWebsocketService.websocketEvent().subscribe(event => {
-      if (event.type === "ClusterStatusUpdateEvent") {
-        this.nodeAddresses = event.addresses;
-      }
-    });
+    this.wsSubscription = this.workflowWebsocketService
+      .websocketEvent()
+      .pipe(takeUntil(this.componentDestroy))
+      .subscribe(event => {
+        if (event.type === "ClusterStatusUpdateEvent") {
+          this.nodeAddresses = event.addresses;
+        }
+      });
   }
 
   ngOnDestroy(): void {
-    if (this.wsSubscription) {
-      this.wsSubscription.unsubscribe();
-    }
+    this.componentDestroy.next();
+    this.componentDestroy.complete();
   }
 }
