@@ -5,7 +5,7 @@ import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchema
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
@@ -13,9 +13,9 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
 
 /**
-  * URL Visualization operator to render any content in given URL link
-  * This is the description of the operator
-  */
+ * URL Visualization operator to render any content in given URL link
+ * This is the description of the operator
+ */
 @JsonSchemaInject(json = """
  {
    "attributeTypeRules": {
@@ -25,7 +25,7 @@ import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
    }
  }
  """)
-class UrlVizOpDesc extends LogicalOp {
+class UrlVizOpDesc extends LogicalOp with ManualLocationConfiguration{
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("URL content")
@@ -33,10 +33,10 @@ class UrlVizOpDesc extends LogicalOp {
   val urlContentAttrName: String = ""
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
-    PhysicalOp
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
+    val baseOp = PhysicalOp
       .manyToOnePhysicalOp(
         workflowId,
         executionId,
@@ -54,6 +54,8 @@ class UrlVizOpDesc extends LogicalOp {
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         })
       )
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =
