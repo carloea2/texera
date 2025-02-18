@@ -2,26 +2,19 @@ package edu.uci.ics.amber.operator.symmetricDifference
 
 import com.google.common.base.Preconditions
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
-import edu.uci.ics.amber.core.workflow.{
-  HashPartition,
-  InputPort,
-  OutputPort,
-  PhysicalOp,
-  PortIdentity,
-  SchemaPropagationFunc
-}
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.core.workflow.{HashPartition, InputPort, OutputPort, PhysicalOp, PortIdentity, SchemaPropagationFunc}
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 
-class SymmetricDifferenceOpDesc extends LogicalOp {
+class SymmetricDifferenceOpDesc extends LogicalOp with ManualLocationConfiguration{
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
 
-    PhysicalOp
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -39,6 +32,8 @@ class SymmetricDifferenceOpDesc extends LogicalOp {
         val outputSchema = inputSchemas.values.head
         operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
       }))
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

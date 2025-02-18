@@ -5,12 +5,12 @@ import com.google.common.base.Preconditions
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.LogicalOp
+import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import scala.util.Random
-class SplitOpDesc extends LogicalOp {
+class SplitOpDesc extends LogicalOp with ManualLocationConfiguration{
 
   @JsonProperty(value = "split percentage", required = false, defaultValue = "80")
   @JsonPropertyDescription("percentage of data going to the upper port (default 80%)")
@@ -21,10 +21,10 @@ class SplitOpDesc extends LogicalOp {
   var seed: Int = Random.nextInt()
 
   override def getPhysicalOp(
-      workflowId: WorkflowIdentity,
-      executionId: ExecutionIdentity
-  ): PhysicalOp = {
-    PhysicalOp
+                              workflowId: WorkflowIdentity,
+                              executionId: ExecutionIdentity
+                            ): PhysicalOp = {
+    val baseOp = PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -44,6 +44,8 @@ class SplitOpDesc extends LogicalOp {
           operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
         })
       )
+
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {
