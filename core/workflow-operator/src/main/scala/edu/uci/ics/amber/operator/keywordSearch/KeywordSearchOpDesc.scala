@@ -1,16 +1,18 @@
 package edu.uci.ics.amber.operator.keywordSearch
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
-import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
-import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, InputPort, OutputPort, PhysicalOp}
+import edu.uci.ics.amber.core.workflow.PhysicalOp
 import edu.uci.ics.amber.operator.filter.FilterOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, UIWidget}
+import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
+import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class KeywordSearchOpDesc extends FilterOpDesc {
+class KeywordSearchOpDesc extends FilterOpDesc with ManualLocationConfiguration{
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("attribute")
@@ -22,17 +24,6 @@ class KeywordSearchOpDesc extends FilterOpDesc {
   @JsonSchemaTitle("keywords")
   @JsonPropertyDescription("keywords")
   var keyword: String = _
-
-  @JsonProperty(required = false)
-  @JsonSchemaTitle("nodeAddr")
-  @JsonSchemaInject(json = UIWidget.UIWidgetTextArea)
-  var nodeAddr: String = _
-
-  @JsonProperty(defaultValue = "true")
-  @JsonSchemaTitle("location preference(default)")
-  @JsonPropertyDescription("Whether use default RoundRobinPreference")
-  var UseRoundRobin: Boolean = true
-
 
   override def getPhysicalOp(
                               workflowId: WorkflowIdentity,
@@ -51,11 +42,7 @@ class KeywordSearchOpDesc extends FilterOpDesc {
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
 
-    if (!UseRoundRobin) {
-      baseOp.withLocationPreference(Some(GoToSpecificNode(nodeAddr))) // Use the actual `nodeAddr`
-    } else {
-      baseOp // Return without modifying location preference
-    }
+    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =
