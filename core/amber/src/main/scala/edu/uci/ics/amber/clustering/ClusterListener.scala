@@ -132,9 +132,6 @@ class ClusterListener extends Actor with AmberLogging {
     logger.info(
       "---------Now we have " + numWorkerNodesInCluster + s" nodes in the cluster---------"
     )
-    logger.info(
-      "+++++++Now we have " + getAllAddress
-    )
 
   }
 

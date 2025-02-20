@@ -31,8 +31,6 @@ object ExecutorDeployment {
       replayLoggingConfig: Option[FaultToleranceConfig]
   ): Unit = {
 
-    println("123321=====")
-
     val addressInfo = AddressInfo(
       controllerActorService.getClusterNodeAddresses,
       controllerActorService.self.path.address
@@ -46,17 +44,7 @@ object ExecutorDeployment {
         case PreferController =>
           addressInfo.controllerAddress
         case node: GoToSpecificNode =>
-          println("---------++")
-          println("worker id: " + workerId)
-          println("worker index: " + workerIndex)
-          addressInfo.allAddresses.foreach { address =>
-            println(s"Address: $address, Address host: ${address.host.getOrElse("None")}")
-          }
-          println("---------++")
-
           val targetAddress = AddressFromURIString(node.nodeAddr)
-
-          // 尝试在所有地址中查找匹配指定节点地址的 Address
           addressInfo.allAddresses.find(addr => addr == targetAddress) match {
             case Some(address) => address
             case None =>
