@@ -449,6 +449,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         mappedField.type = "inputautocomplete";
       }
 
+      // if the title is nodeAddr, then change it to custom inputnodeaddress input template
       if (mappedField.key == "nodeAddr") {
         mappedField.type = "inputnodeaddress";
       }
