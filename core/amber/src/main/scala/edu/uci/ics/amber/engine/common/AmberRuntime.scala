@@ -37,12 +37,7 @@ object AmberRuntime {
       val in = new BufferedReader(new InputStreamReader(query.openStream()))
       val ip = in.readLine()
       val localIp = InetAddress.getLocalHost().getHostAddress()
-      println(s"public++++++++++in.readLine(): $ip") // 打印 IP
-      println(s"private——————————InetAddress.getLocalHost().getHostAddress(): $localIp") // 打印 IP
-      //打印public++++++++++in.readLine(): 35.84.255.218
-      //private——————————InetAddress.getLocalHost().getHostAddress(): 172.31.31.180
       ip
-      //      InetAddress.getLocalHost().getHostAddress()
     } catch {
       case e: Exception => throw e
     }
@@ -88,9 +83,6 @@ object AmberRuntime {
     val addr = mainNodeAddress.getOrElse("localhost")
     var localIpAddress = "localhost"
     if (mainNodeAddress.isDefined) {
-
-      println(s"main++++++++++NodeAddress: $mainNodeAddress")
-      //打印main++++++++++NodeAddress: Some(35.84.255.218)
 
       localIpAddress = getNodeIpAddress
 

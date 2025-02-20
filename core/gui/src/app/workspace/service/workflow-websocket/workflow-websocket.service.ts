@@ -102,9 +102,6 @@ export class WorkflowWebsocketService {
       if (evt.type === "ClusterStatusUpdateEvent") {
         this.numWorkers = evt.numWorkers;
         this.workerAddresses = evt.addresses;
-
-        console.log("更新后的节点数量：", this.numWorkers);
-        console.log("节点地址列表：", this.workerAddresses);
       }
       this.isConnected = true;
       this.connectedWid = wId;
