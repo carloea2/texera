@@ -18,7 +18,7 @@ trait ManualLocationConfiguration {
   @JsonProperty(defaultValue = "true")
   @JsonSchemaTitle("Auto Select Node Address")
   @JsonPropertyDescription(
-    "Set to true to manually specify the node address instead of using the default RoundRobin strategy"
+    "Set to false to manually specify the node address instead of using the default RoundRobin strategy"
   )
   var autoSelectNodeAddress: Boolean = true
 
