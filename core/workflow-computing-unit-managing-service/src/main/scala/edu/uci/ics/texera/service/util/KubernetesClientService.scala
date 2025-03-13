@@ -7,6 +7,7 @@ import config.WorkflowComputingUnitManagingServiceConf.{
   computeUnitServiceName
 }
 import edu.uci.ics.amber.core.storage.StorageConfig
+import io.kubernetes.client.custom.Quantity
 import io.kubernetes.client.openapi.apis.CoreV1Api
 import io.kubernetes.client.openapi.models._
 import io.kubernetes.client.openapi.{ApiClient, Configuration}
@@ -120,11 +121,14 @@ object KubernetesClientService {
     * @param cuid The computing unit ID.
     * @return The newly created V1Pod object.
     */
-  def createPod(cuid: Int): V1Pod = {
+  def createPod(cuid: Int, cpuLimit: String, memoryLimit: String): V1Pod = {
     val podName = generatePodName(cuid)
     if (getPodFromLabel(poolNamespace, s"name=$podName") != null) {
       throw new Exception(s"Pod with cuid $cuid already exists")
     }
+
+    val cpu: Quantity = new Quantity(cpuLimit)
+    val memory: Quantity = new Quantity(memoryLimit)
 
     val pod: V1Pod = new V1Pod()
       .apiVersion("v1")
@@ -159,6 +163,17 @@ object KubernetesClientService {
                     new V1EnvVar().name("JDBC_USERNAME").value(StorageConfig.jdbcUsername),
                     new V1EnvVar().name("JDBC_PASSWORD").value(StorageConfig.jdbcPassword)
                   )
+                )
+                .resources(
+                  new V1ResourceRequirements()
+                    .limits(
+                      util.Map.of(
+                        "cpu",
+                        cpu,
+                        "memory",
+                        memory
+                      )
+                    ) // may want to add requests as well to make efficient use of the CPU resources
                 )
             )
           )

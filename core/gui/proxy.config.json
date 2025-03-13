@@ -4,7 +4,6 @@
     "secure":  false,
     "changeOrigin": true
   },
-
   "/api": {
     "target": "http://texera.example.com:30080",
     "secure": false,
