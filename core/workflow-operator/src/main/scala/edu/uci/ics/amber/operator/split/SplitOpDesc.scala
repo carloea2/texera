@@ -14,7 +14,6 @@ import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
 import edu.uci.ics.amber.operator.metadata.annotations.HideAnnotation
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
-import scala.util.Random
 
 class SplitOpDesc extends LogicalOp with ManualLocationConfiguration {
 

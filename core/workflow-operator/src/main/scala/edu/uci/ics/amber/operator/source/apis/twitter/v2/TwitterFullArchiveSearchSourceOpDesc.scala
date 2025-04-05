@@ -15,7 +15,9 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class TwitterFullArchiveSearchSourceOpDesc extends TwitterSourceOpDesc with ManualLocationConfiguration {
+class TwitterFullArchiveSearchSourceOpDesc
+    extends TwitterSourceOpDesc
+    with ManualLocationConfiguration {
 
   @JsonIgnore
   override val APIName: Option[String] = Some("Full Archive Search")

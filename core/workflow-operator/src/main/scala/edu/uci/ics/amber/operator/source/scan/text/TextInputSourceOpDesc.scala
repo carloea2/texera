@@ -13,7 +13,10 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class TextInputSourceOpDesc extends SourceOperatorDescriptor with TextSourceOpDesc with ManualLocationConfiguration {
+class TextInputSourceOpDesc
+    extends SourceOperatorDescriptor
+    with TextSourceOpDesc
+    with ManualLocationConfiguration {
   @JsonProperty(required = true)
   @JsonSchemaTitle("Text")
   @JsonSchemaInject(json = UIWidget.UIWidgetTextArea)

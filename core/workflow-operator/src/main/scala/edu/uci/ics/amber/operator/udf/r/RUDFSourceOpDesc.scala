@@ -68,12 +68,12 @@ class RUDFSourceOpDesc extends SourceOperatorDescriptor with ManualLocationConfi
       .withLocationPreference(None)
 
     val baseOp = (if (workers > 1) {
-      physicalOp
-        .withParallelizable(true)
-        .withSuggestedWorkerNum(workers)
-    } else {
-      physicalOp.withParallelizable(false)
-    })
+                    physicalOp
+                      .withParallelizable(true)
+                      .withSuggestedWorkerNum(workers)
+                  } else {
+                    physicalOp.withParallelizable(false)
+                  })
     applyManualLocation(baseOp)
   }
 

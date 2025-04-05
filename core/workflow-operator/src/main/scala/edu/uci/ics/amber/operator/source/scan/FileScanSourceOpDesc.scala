@@ -16,7 +16,10 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
 @JsonIgnoreProperties(value = Array("limit", "offset", "fileEncoding"))
-class FileScanSourceOpDesc extends ScanSourceOpDesc with TextSourceOpDesc with ManualLocationConfiguration {
+class FileScanSourceOpDesc
+    extends ScanSourceOpDesc
+    with TextSourceOpDesc
+    with ManualLocationConfiguration {
   @JsonProperty(defaultValue = "UTF_8", required = true)
   @JsonSchemaTitle("Encoding")
   @JsonSchemaInject(
