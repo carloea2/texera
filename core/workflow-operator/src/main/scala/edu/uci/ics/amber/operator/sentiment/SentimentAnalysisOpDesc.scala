@@ -6,7 +6,6 @@ import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.AttributeType
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
 import edu.uci.ics.amber.operator.map.MapOpDesc
 import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
@@ -21,7 +20,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
   }
 }
 """)
-class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration {
+class SentimentAnalysisOpDesc extends MapOpDesc {
   @JsonProperty(value = "attribute", required = true)
   @JsonPropertyDescription("column to perform sentiment analysis on")
   @AutofillAttributeName
@@ -42,7 +41,7 @@ class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration
     if (attribute == null)
       throw new RuntimeException("sentiment analysis: attribute is null")
 
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -64,8 +63,6 @@ class SentimentAnalysisOpDesc extends MapOpDesc with ManualLocationConfiguration
           )
         })
       )
-
-    applyManualLocation(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =
