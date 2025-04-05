@@ -13,8 +13,9 @@ import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 import edu.uci.ics.amber.operator.source.apis.twitter.TwitterSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
+import edu.uci.ics.amber.operator.ManualLocationConfiguration
 
-class TwitterFullArchiveSearchSourceOpDesc extends TwitterSourceOpDesc {
+class TwitterFullArchiveSearchSourceOpDesc extends TwitterSourceOpDesc with ManualLocationConfiguration {
 
   @JsonIgnore
   override val APIName: Option[String] = Some("Full Archive Search")
@@ -43,9 +44,9 @@ class TwitterFullArchiveSearchSourceOpDesc extends TwitterSourceOpDesc {
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
-  ): PhysicalOp =
+  ): PhysicalOp = {
     // TODO: use multiple workers
-    PhysicalOp
+    val baseOp = PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -60,6 +61,9 @@ class TwitterFullArchiveSearchSourceOpDesc extends TwitterSourceOpDesc {
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
+
+    applyManualLocation(baseOp)
+  }
 
   override def sourceSchema(): Schema = {
 
