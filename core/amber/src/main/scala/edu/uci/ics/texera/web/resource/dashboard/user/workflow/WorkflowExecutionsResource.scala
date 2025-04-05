@@ -1,23 +1,19 @@
 package edu.uci.ics.texera.web.resource.dashboard.user.workflow
 
 import edu.uci.ics.amber.core.storage.result.ExecutionResourcesMapping
-import edu.uci.ics.amber.core.storage.{DocumentFactory, VFSURIFactory}
+import edu.uci.ics.amber.core.storage.{DocumentFactory, VFSResourceType, VFSURIFactory}
 import edu.uci.ics.amber.core.tuple.Tuple
-import edu.uci.ics.amber.core.virtualidentity.{
-  ChannelMarkerIdentity,
-  ExecutionIdentity,
-  OperatorIdentity,
-  WorkflowIdentity
-}
-import edu.uci.ics.amber.core.workflow.PortIdentity
+import edu.uci.ics.amber.core.virtualidentity._
+import edu.uci.ics.amber.core.workflow.{GlobalPortIdentity, PortIdentity}
 import edu.uci.ics.amber.engine.architecture.logreplay.{ReplayDestination, ReplayLogRecord}
 import edu.uci.ics.amber.engine.common.AmberConfig
 import edu.uci.ics.amber.engine.common.storage.SequentialRecordStorage
+import edu.uci.ics.amber.util.serde.GlobalPortIdentitySerde.SerdeOps
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.jooq.generated.Tables._
 import edu.uci.ics.texera.dao.jooq.generated.tables.daos.WorkflowExecutionsDao
 import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.WorkflowExecutions
-import edu.uci.ics.texera.web.auth.SessionUser
+import edu.uci.ics.texera.auth.SessionUser
 import edu.uci.ics.texera.web.resource.dashboard.user.workflow.WorkflowExecutionsResource._
 import edu.uci.ics.texera.web.service.ExecutionsMetadataPersistService
 import io.dropwizard.auth.Auth
@@ -85,14 +81,13 @@ object WorkflowExecutionsResource {
 
   def insertOperatorPortResultUri(
       eid: ExecutionIdentity,
-      opId: OperatorIdentity,
-      portId: PortIdentity,
+      globalPortId: GlobalPortIdentity,
       uri: URI
   ): Unit = {
     if (AmberConfig.isUserSystemEnabled) {
       context
         .insertInto(OPERATOR_PORT_EXECUTIONS)
-        .values(eid.id, opId.id, portId.id, uri.toString)
+        .values(eid.id, globalPortId.serializeAsString, uri.toString)
         .execute()
     } else {
       ExecutionResourcesMapping.addResourceUri(eid, uri)
@@ -138,11 +133,37 @@ object WorkflowExecutionsResource {
         .fetchInto(classOf[String])
         .asScala
         .toList
+        .filter(uri => uri != null && uri.nonEmpty)
         .map(URI.create)
     } else {
       ExecutionResourcesMapping.getResourceURIs(eid)
     }
   }
+
+  def getConsoleMessagesUriByExecutionId(eid: ExecutionIdentity): List[URI] =
+    if (AmberConfig.isUserSystemEnabled)
+      context
+        .select(OPERATOR_EXECUTIONS.CONSOLE_MESSAGES_URI)
+        .from(OPERATOR_EXECUTIONS)
+        .where(OPERATOR_EXECUTIONS.WORKFLOW_EXECUTION_ID.eq(eid.id.toInt))
+        .fetchInto(classOf[String])
+        .asScala
+        .toList
+        .filter(uri => uri != null && uri.nonEmpty)
+        .map(URI.create)
+    else Nil
+
+  def getRuntimeStatsUriByExecutionId(eid: ExecutionIdentity): Option[URI] =
+    if (AmberConfig.isUserSystemEnabled)
+      Option(
+        context
+          .select(WORKFLOW_EXECUTIONS.RUNTIME_STATS_URI)
+          .from(WORKFLOW_EXECUTIONS)
+          .where(WORKFLOW_EXECUTIONS.EID.eq(eid.id.toInt))
+          .fetchOneInto(classOf[String])
+      ).filter(_.nonEmpty)
+        .map(URI.create)
+    else None
 
   def clearUris(eid: ExecutionIdentity): Unit = {
     if (AmberConfig.isUserSystemEnabled) {
@@ -150,16 +171,62 @@ object WorkflowExecutionsResource {
         .delete(OPERATOR_PORT_EXECUTIONS)
         .where(OPERATOR_PORT_EXECUTIONS.WORKFLOW_EXECUTION_ID.eq(eid.id.toInt))
         .execute()
+      context
+        .delete(OPERATOR_EXECUTIONS)
+        .where(OPERATOR_EXECUTIONS.WORKFLOW_EXECUTION_ID.eq(eid.id.toInt))
+        .execute()
     } else {
       ExecutionResourcesMapping.removeExecutionResources(eid)
     }
   }
 
-  def getResultUriByExecutionAndPort(
-      wid: WorkflowIdentity,
+  /**
+    * This method is mainly used for frontend requests. Given a logicalOpId and an outputPortId of an execution,
+    * this method finds the URI for a globalPortId that both: 1. matches the logicalOpId and outputPortId, and
+    * 2. is an external port. Currently the lookup is O(n), where n is the number of globalPortIds for this execution.
+    * TODO: Optimize the lookup once the frontend also has information about physical operators.
+    * TODO: Remove the case of using ExecutionResourceMapping when user system is permenantly enabled even in dev mode.
+    */
+  def getResultUriByLogicalPortId(
       eid: ExecutionIdentity,
       opId: OperatorIdentity,
       portId: PortIdentity
+  ): Option[URI] = {
+    def isMatchingExternalPortURI(uri: URI): Boolean = {
+      val (_, _, globalPortIdOption, resourceType) = VFSURIFactory.decodeURI(uri)
+      globalPortIdOption.exists { globalPortId =>
+        !globalPortId.portId.internal &&
+        globalPortId.opId.logicalOpId == opId &&
+        globalPortId.portId == portId &&
+        resourceType == VFSResourceType.RESULT
+      }
+    }
+
+    val urisOfEid: List[URI] =
+      if (AmberConfig.isUserSystemEnabled) {
+        context
+          .select(OPERATOR_PORT_EXECUTIONS.RESULT_URI)
+          .from(OPERATOR_PORT_EXECUTIONS)
+          .where(OPERATOR_PORT_EXECUTIONS.WORKFLOW_EXECUTION_ID.eq(eid.id.toInt))
+          .fetchInto(classOf[String])
+          .asScala
+          .toList
+          .map(URI.create)
+      } else {
+        ExecutionResourcesMapping.getResourceURIs(eid)
+      }
+
+    urisOfEid.find(isMatchingExternalPortURI)
+  }
+
+  /**
+    * This method trys to find a URI corresponding to the globalPortId if it exists. If user system is enabled, this
+    * method runs in O(1), otherwise O(n) where n is number of URIs in ExecutionResourceMapping.
+    * TODO: Remove the case of using ExecutionResourceMapping when user system is permenantly enabled even in dev mode.
+    */
+  def getResultUriByGlobalPortId(
+      eid: ExecutionIdentity,
+      globalPortId: GlobalPortIdentity
   ): Option[URI] = {
     if (AmberConfig.isUserSystemEnabled) {
       Option(
@@ -169,21 +236,23 @@ object WorkflowExecutionsResource {
           .where(
             OPERATOR_PORT_EXECUTIONS.WORKFLOW_EXECUTION_ID
               .eq(eid.id.toInt)
-              .and(OPERATOR_PORT_EXECUTIONS.OPERATOR_ID.eq(opId.id))
-              .and(OPERATOR_PORT_EXECUTIONS.PORT_ID.eq(portId.id))
+              .and(OPERATOR_PORT_EXECUTIONS.GLOBAL_PORT_ID.eq(globalPortId.serializeAsString))
           )
           .fetchOneInto(classOf[String])
       ).map(URI.create)
     } else {
-      Option(
-        VFSURIFactory.createResultURI(
-          wid,
-          eid,
-          opId,
-          portId
-        )
-      )
+      def isMatchingPortURI(uri: URI): Boolean = {
+        val (_, _, globalPortIdOption, resourceType) = VFSURIFactory.decodeURI(uri)
+        globalPortIdOption.exists { retrievedGlobalPortId =>
+          retrievedGlobalPortId == globalPortId &&
+          resourceType == VFSResourceType.RESULT
+        }
+      }
+      ExecutionResourcesMapping
+        .getResourceURIs(eid)
+        .find(isMatchingPortURI)
     }
+
   }
 
   case class WorkflowExecutionEntry(
@@ -416,6 +485,15 @@ class WorkflowExecutionsResource {
       .deleteFrom(WORKFLOW_EXECUTIONS)
       .where(WORKFLOW_EXECUTIONS.EID.in(eIdsList))
       .execute()
+
+    // Clear runtime statistics documents for each execution
+    request.eIds.foreach { eid =>
+      WorkflowExecutionsResource
+        .getRuntimeStatsUriByExecutionId(ExecutionIdentity(eid.longValue()))
+        .foreach { uri =>
+          DocumentFactory.openDocument(uri)._1.clear()
+        }
+    }
   }
 
   /** Name a single execution * */

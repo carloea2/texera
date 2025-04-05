@@ -143,6 +143,11 @@ import { SocialLoginModule, SocialAuthServiceConfig, GoogleSigninButtonModule } 
 import { GoogleLoginProvider } from "@abacritt/angularx-social-login";
 import { lastValueFrom } from "rxjs";
 import { HubSearchResultComponent } from "./hub/component/hub-search-result/hub-search-result.component";
+import { UserDatasetStagedObjectsListComponent } from "./dashboard/component/user/user-dataset/user-dataset-explorer/user-dataset-staged-objects-list/user-dataset-staged-objects-list.component";
+import { NzEmptyModule } from "ng-zorro-antd/empty";
+import { NzDividerModule } from "ng-zorro-antd/divider";
+import { NzProgressModule } from "ng-zorro-antd/progress";
+import { ComputingUnitSelectionComponent } from "./workspace/component/power-button/computing-unit-selection.component";
 
 registerLocaleData(en);
 
@@ -202,6 +207,7 @@ registerLocaleData(en);
     UserDatasetVersionFiletreeComponent,
     UserDatasetListItemComponent,
     UserDatasetFileRendererComponent,
+    UserDatasetStagedObjectsListComponent,
     NzModalCommentBoxComponent,
     LeftPanelComponent,
     LocalLoginComponent,
@@ -232,6 +238,7 @@ registerLocaleData(en);
     BreakpointConditionInputComponent,
     CodeDebuggerComponent,
     HubSearchResultComponent,
+    ComputingUnitSelectionComponent,
   ],
   imports: [
     BrowserModule,
@@ -293,6 +300,9 @@ registerLocaleData(en);
     TreeModule,
     SocialLoginModule,
     GoogleSigninButtonModule,
+    NzEmptyModule,
+    NzDividerModule,
+    NzProgressModule,
   ],
   providers: [
     provideNzI18n(en_US),

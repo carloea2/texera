@@ -5,13 +5,15 @@ import edu.uci.ics.amber.core.storage.DocumentFactory
 import edu.uci.ics.amber.core.tuple.AttributeTypeUtils.parseField
 import edu.uci.ics.amber.core.tuple.TupleLike
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
-import org.apache.commons.compress.archivers.{ArchiveInputStream, ArchiveStreamFactory}
 import org.apache.commons.io.IOUtils.toByteArray
-
 import java.io._
 import java.net.URI
+import java.nio.ByteBuffer
+import java.util.zip.ZipInputStream
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.IteratorHasAsScala
+import scala.util.Using
+import scala.collection.mutable.ArrayBuffer
 
 class FileScanSourceOpExec private[scan] (
     descString: String
@@ -19,15 +21,43 @@ class FileScanSourceOpExec private[scan] (
   private val desc: FileScanSourceOpDesc =
     objectMapper.readValue(descString, classOf[FileScanSourceOpDesc])
 
+  // Size of each chunk when reading large files (1GB)
+  private val BufferSizeBytes: Int = 1 * 1024 * 1024 * 1024
+
+  /**
+    * Reads an InputStream into a List of ByteBuffers.
+    * This allows handling files up to 1TB (1GB * 1000 sub-columns).
+    *
+    * @param input the input stream to read
+    * @return a List of ByteBuffers containing the data
+    */
+  private def readToByteBuffers(input: InputStream): List[ByteBuffer] = {
+    Using.resource(input) { inputStream =>
+      val buffers = ArrayBuffer.empty[ByteBuffer]
+      val buffer = new Array[Byte](BufferSizeBytes)
+
+      Iterator
+        .continually(inputStream.read(buffer))
+        .takeWhile(_ != -1)
+        .filter(_ > 0)
+        .foreach { bytesRead =>
+          val byteBuffer = ByteBuffer.allocate(bytesRead)
+          byteBuffer.put(buffer, 0, bytesRead)
+          byteBuffer.flip() // Prepare for reading
+          buffers += byteBuffer
+        }
+
+      buffers.toList
+    }
+  }
+
   @throws[IOException]
   override def produceTuple(): Iterator[TupleLike] = {
     var filenameIt: Iterator[String] = Iterator.empty
     val fileEntries: Iterator[InputStream] = {
       val is = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get)).asInputStream()
       if (desc.extract) {
-        val inputStream: ArchiveInputStream = new ArchiveStreamFactory().createArchiveInputStream(
-          new BufferedInputStream(is)
-        )
+        val inputStream = new ZipInputStream(new BufferedInputStream(is))
         val (it1, it2) = Iterator
           .continually(inputStream.getNextEntry)
           .takeWhile(_ != null)
@@ -50,7 +80,9 @@ class FileScanSourceOpExec private[scan] (
           fields.addOne(desc.attributeType match {
             case FileAttributeType.SINGLE_STRING =>
               new String(toByteArray(entry), desc.fileEncoding.getCharset)
-            case _ => parseField(toByteArray(entry), desc.attributeType.getType)
+            case _ =>
+              val buffers = readToByteBuffers(entry)
+              parseField(buffers, desc.attributeType.getType)
           })
           TupleLike(fields.toSeq: _*)
       }
@@ -73,5 +105,4 @@ class FileScanSourceOpExec private[scan] (
       )
     }
   }
-
 }

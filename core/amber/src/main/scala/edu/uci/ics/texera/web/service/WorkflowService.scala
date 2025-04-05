@@ -41,6 +41,8 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters.IterableHasAsScala
 
+import edu.uci.ics.amber.core.storage.result.iceberg.OnIceberg
+
 object WorkflowService {
   private val workflowServiceMapping = new ConcurrentHashMap[String, WorkflowService]()
   val cleanUpDeadlineInSeconds: Int = AmberConfig.executionStateCleanUpInSecs
@@ -89,16 +91,7 @@ class WorkflowService(
       WorkflowExecutionService
         .getLatestExecutionId(workflowId)
         .foreach(eid => {
-          val uris = WorkflowExecutionsResource
-            .getResultUrisByExecutionId(eid)
-          WorkflowExecutionsResource.clearUris(eid)
-          uris.foreach(uri =>
-            try {
-              DocumentFactory.openDocument(uri)._1.clear()
-            } catch {
-              case _: Throwable => // exception can be raised if the document is already cleared
-            }
-          )
+          clearExecutionResources(eid)
         })
       WorkflowService.workflowServiceMapping.remove(mkWorkflowStateId(workflowId))
       if (executionService.getValue != null) {
@@ -138,17 +131,19 @@ class WorkflowService(
   }
 
   def connectToExecution(onNext: TexeraWebSocketEvent => Unit): Disposable = {
-    var localDisposable = Disposable.empty()
-    executionService.subscribe { executionService: WorkflowExecutionService =>
-      localDisposable.dispose()
-      val subscriptions = executionService.executionStateStore.getAllStores
+    val localDisposable = new CompositeDisposable()
+    val disposable = executionService.subscribe { execService: WorkflowExecutionService =>
+      localDisposable.clear() // Clears previous subscriptions safely
+      val subscriptions = execService.executionStateStore.getAllStores
         .map(_.getWebsocketEventObservable)
         .map(evtPub =>
           evtPub.subscribe { events: Iterable[TexeraWebSocketEvent] => events.foreach(onNext) }
         )
         .toSeq
-      localDisposable = new CompositeDisposable(subscriptions: _*)
+      localDisposable.addAll(subscriptions: _*)
     }
+    // Note: this new CompositeDisposable is necessary. DO NOT OPTIMIZE.
+    new CompositeDisposable(localDisposable, disposable)
   }
 
   def disconnect(): Unit = {
@@ -179,16 +174,7 @@ class WorkflowService(
     // clean up results from previous run
     val previousExecutionId = WorkflowExecutionService.getLatestExecutionId(workflowId)
     previousExecutionId.foreach(eid => {
-      val uris = WorkflowExecutionsResource
-        .getResultUrisByExecutionId(eid)
-      WorkflowExecutionsResource.clearUris(eid)
-      uris.foreach(uri =>
-        try {
-          DocumentFactory.openDocument(uri)._1.clear()
-        } catch { // exception can happen if the resource is already cleared
-          case _: Throwable =>
-        }
-      )
+      clearExecutionResources(eid)
     }) // TODO: change this behavior after enabling cache.
 
     workflowContext.executionId = ExecutionsMetadataPersistService.insertNewExecution(
@@ -269,7 +255,6 @@ class WorkflowService(
         req,
         executionStateStore,
         errorHandler,
-        lastCompletedLogicalPlan,
         userEmailOpt,
         sessionUri
       )
@@ -293,6 +278,52 @@ class WorkflowService(
     super.unsubscribeAll()
     Option(executionService.getValue).foreach(_.unsubscribeAll())
     resultService.unsubscribeAll()
+  }
+
+  /**
+    * Cleans up all resources associated with a workflow execution.
+    *
+    * This method performs resource cleanup in the following sequence:
+    *  1. Retrieves all document URIs associated with the execution
+    *  2. Clears URI references from the execution registry
+    *  3. Safely clears all result and console message documents
+    *  4. Expires Iceberg snapshots for runtime statistics
+    *
+    * @param eid The execution identity to clean up resources for
+    */
+  private def clearExecutionResources(eid: ExecutionIdentity): Unit = {
+    // Retrieve URIs for all resources associated with this execution
+    val resultUris = WorkflowExecutionsResource.getResultUrisByExecutionId(eid)
+    val consoleMessagesUris = WorkflowExecutionsResource.getConsoleMessagesUriByExecutionId(eid)
+
+    // Remove references from registry first
+    WorkflowExecutionsResource.clearUris(eid)
+
+    // Clean up all result and console message documents
+    (resultUris ++ consoleMessagesUris).foreach { uri =>
+      try DocumentFactory.openDocument(uri)._1.clear()
+      catch {
+        case error: Throwable =>
+          logger.debug(s"Error processing document at $uri: ${error.getMessage}")
+      }
+    }
+
+    // Expire any Iceberg snapshots for runtime statistics
+    WorkflowExecutionsResource.getRuntimeStatsUriByExecutionId(eid).foreach { uri =>
+      try {
+        DocumentFactory.openDocument(uri)._1 match {
+          case iceberg: OnIceberg => iceberg.expireSnapshots()
+          case other =>
+            logger.error(
+              s"Cannot expire snapshots: document from URI [$uri] is of type ${other.getClass.getName}. " +
+                s"Expected an instance of ${classOf[OnIceberg].getName}."
+            )
+        }
+      } catch {
+        case error: Throwable =>
+          logger.debug(s"Error processing document at $uri: ${error.getMessage}")
+      }
+    }
   }
 
 }
