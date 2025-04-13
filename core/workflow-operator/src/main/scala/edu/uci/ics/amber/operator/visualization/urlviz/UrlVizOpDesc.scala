@@ -60,9 +60,9 @@ class UrlVizOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
-      "URL visualizer",
+      "URL Visualizer",
       "Render the content of URL",
-      OperatorGroupConstants.VISUALIZATION_GROUP,
+      OperatorGroupConstants.VISUALIZATION_MEDIA_GROUP,
       inputPorts = List(InputPort()),
       outputPorts = List(OutputPort(mode = OutputMode.SINGLE_SNAPSHOT))
     )

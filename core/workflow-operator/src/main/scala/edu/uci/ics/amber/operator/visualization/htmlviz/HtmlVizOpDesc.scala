@@ -49,9 +49,9 @@ class HtmlVizOpDesc extends LogicalOp with ManualLocationConfiguration {
 
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
-      "HTML visualizer",
+      "HTML Visualizer",
       "Render the result of HTML content",
-      OperatorGroupConstants.VISUALIZATION_GROUP,
+      OperatorGroupConstants.VISUALIZATION_MEDIA_GROUP,
       inputPorts = List(InputPort()),
       outputPorts = List(OutputPort(mode = OutputMode.SINGLE_SNAPSHOT))
     )
