@@ -124,7 +124,7 @@ class RUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
                     .withIsOneToManyOp(true)
                     .withPropagateSchema(SchemaPropagationFunc(propagateSchema)))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
 
   }
 

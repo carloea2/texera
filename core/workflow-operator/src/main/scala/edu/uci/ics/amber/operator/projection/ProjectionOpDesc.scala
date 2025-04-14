@@ -55,7 +55,7 @@ class ProjectionOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
         Map(operatorInfo.outputPorts.head.id -> outputSchema)
       }))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   def derivePartition()(partition: List[PartitionInfo]): PartitionInfo = {

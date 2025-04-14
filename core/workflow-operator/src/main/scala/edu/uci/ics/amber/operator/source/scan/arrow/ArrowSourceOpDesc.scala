@@ -46,7 +46,7 @@ class ArrowSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigur
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> inferSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   /**

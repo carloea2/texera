@@ -47,7 +47,7 @@ class JSONLScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConf
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def sourceSchema(): Schema = {

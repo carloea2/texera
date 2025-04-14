@@ -127,7 +127,7 @@ class PythonUDFOpDescV2 extends LogicalOp with DesignatedLocationConfigurable {
       .withIsOneToManyOp(true)
       .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

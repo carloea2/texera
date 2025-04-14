@@ -54,7 +54,7 @@ class CSVOldScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationCon
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def sourceSchema(): Schema = {

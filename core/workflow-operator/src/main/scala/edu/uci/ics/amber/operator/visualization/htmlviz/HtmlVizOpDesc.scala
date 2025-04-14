@@ -44,7 +44,7 @@ class HtmlVizOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         })
       )
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

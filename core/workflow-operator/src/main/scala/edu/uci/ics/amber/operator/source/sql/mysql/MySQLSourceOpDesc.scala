@@ -33,7 +33,7 @@ class MySQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigura
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

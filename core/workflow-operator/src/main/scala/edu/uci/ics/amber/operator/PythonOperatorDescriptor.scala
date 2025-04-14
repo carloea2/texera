@@ -45,7 +45,7 @@ trait PythonOperatorDescriptor extends LogicalOp with DesignatedLocationConfigur
       .withParallelizable(parallelizable())
       .withPropagateSchema(SchemaPropagationFunc(inputSchemas => getOutputSchemas(inputSchemas)))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   def parallelizable(): Boolean = false

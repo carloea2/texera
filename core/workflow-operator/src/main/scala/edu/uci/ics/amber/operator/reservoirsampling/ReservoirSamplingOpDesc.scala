@@ -32,7 +32,7 @@ class ReservoirSamplingOpDesc extends LogicalOp with DesignatedLocationConfigura
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

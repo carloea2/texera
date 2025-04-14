@@ -112,7 +112,7 @@ class IntervalJoinOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       )
       .withPartitionRequirement(partitionRequirement)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

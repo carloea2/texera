@@ -45,7 +45,7 @@ class TypeCastingOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
         }
       )
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

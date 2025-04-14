@@ -32,7 +32,7 @@ class RandomKSamplingOpDesc extends FilterOpDesc with DesignatedLocationConfigur
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

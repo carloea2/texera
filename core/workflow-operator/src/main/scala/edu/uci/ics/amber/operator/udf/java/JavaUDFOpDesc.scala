@@ -112,7 +112,7 @@ class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         .withSuggestedWorkerNum(workers)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
 
-      applyManualLocation(baseOp)
+      configureLocationPreference(baseOp)
     } else {
       val baseOp = PhysicalOp
         .manyToOnePhysicalOp(
@@ -129,7 +129,7 @@ class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         .withParallelizable(false)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
 
-      applyManualLocation(baseOp)
+      configureLocationPreference(baseOp)
     }
   }
 

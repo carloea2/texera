@@ -24,7 +24,7 @@ class DistinctOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       .withPartitionRequirement(List(Option(HashPartition())))
       .withDerivePartition(_ => HashPartition())
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

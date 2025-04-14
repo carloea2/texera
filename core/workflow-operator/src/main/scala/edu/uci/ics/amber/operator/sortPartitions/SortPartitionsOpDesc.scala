@@ -58,7 +58,7 @@ class SortPartitionsOpDesc extends LogicalOp with DesignatedLocationConfigurable
         List(Option(RangePartition(List(sortAttributeName), domainMin, domainMax)))
       )
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

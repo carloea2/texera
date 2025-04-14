@@ -112,7 +112,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with DesignatedLocationC
         })
       )
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

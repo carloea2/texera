@@ -30,7 +30,7 @@ class DifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
       }))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

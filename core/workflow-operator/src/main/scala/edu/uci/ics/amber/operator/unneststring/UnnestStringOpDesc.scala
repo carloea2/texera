@@ -62,6 +62,6 @@ class UnnestStringOpDesc extends FlatMapOpDesc with DesignatedLocationConfigurab
         })
       )
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 }

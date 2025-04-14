@@ -40,7 +40,7 @@ class SymmetricDifferenceOpDesc extends LogicalOp with DesignatedLocationConfigu
         operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
       }))
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

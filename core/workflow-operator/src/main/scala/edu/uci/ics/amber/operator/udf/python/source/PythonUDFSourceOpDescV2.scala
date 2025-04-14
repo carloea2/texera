@@ -59,7 +59,7 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor with DesignatedLo
     } else {
       physicalOp.withParallelizable(false)
     }
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

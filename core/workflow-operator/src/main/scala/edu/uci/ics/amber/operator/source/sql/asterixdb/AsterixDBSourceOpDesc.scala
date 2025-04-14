@@ -109,7 +109,7 @@ class AsterixDBSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfi
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

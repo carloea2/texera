@@ -74,7 +74,7 @@ class RUDFSourceOpDesc extends SourceOperatorDescriptor with DesignatedLocationC
                   } else {
                     physicalOp.withParallelizable(false)
                   })
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

@@ -86,7 +86,7 @@ class HashJoinOpDesc[K] extends LogicalOp with DesignatedLocationConfigurable {
         )
         .withParallelizable(true)
 
-    val buildPhysicalOp = applyManualLocation(initBuildPhysicalOp)
+    val buildPhysicalOp = configureLocationPreference(initBuildPhysicalOp)
 
     val probeBuildInputPort = InputPort(PortIdentity(0, internal = true))
     val probeDataInputPort =
@@ -147,7 +147,7 @@ class HashJoinOpDesc[K] extends LogicalOp with DesignatedLocationConfigurable {
           })
         )
 
-    val probePhysicalOp = applyManualLocation(initProbePhysicalOp)
+    val probePhysicalOp = configureLocationPreference(initProbePhysicalOp)
 
     PhysicalPlan(
       operators = Set(buildPhysicalOp, probePhysicalOp),

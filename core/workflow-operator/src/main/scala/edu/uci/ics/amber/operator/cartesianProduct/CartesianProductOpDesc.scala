@@ -69,7 +69,7 @@ class CartesianProductOpDesc extends LogicalOp with DesignatedLocationConfigurab
       //  can consider hash partition on larger input, broadcast smaller table to each partition
       .withParallelizable(false)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
 
   }
 

@@ -31,7 +31,7 @@ class SpecializedFilterOpDesc extends FilterOpDesc with DesignatedLocationConfig
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo = {

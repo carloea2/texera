@@ -67,7 +67,7 @@ class FileScanSourceOpDesc
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def sourceSchema(): Schema = {

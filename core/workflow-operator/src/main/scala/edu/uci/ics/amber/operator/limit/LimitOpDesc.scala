@@ -37,7 +37,7 @@ class LimitOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       .withOutputPorts(operatorInfo.outputPorts)
       .withParallelizable(false)
 
-    applyManualLocation(baseOp)
+    configureLocationPreference(baseOp)
   }
 
   override def operatorInfo: OperatorInfo =

@@ -64,7 +64,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         })
       )
 
-    val partialPhysicalOp = applyManualLocation(initPartialPhysicalOp)
+    val partialPhysicalOp = configureLocationPreference(initPartialPhysicalOp)
 
     val finalInputPort = InputPort(PortIdentity(0, internal = true))
     val finalOutputPort = OutputPort(PortIdentity(0), blocking = true)
@@ -91,7 +91,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       .withPartitionRequirement(List(Option(HashPartition(groupByKeys))))
       .withDerivePartition(_ => HashPartition(groupByKeys))
 
-    val finalPhysicalOp = applyManualLocation(initFinalPhysicalOp)
+    val finalPhysicalOp = configureLocationPreference(initFinalPhysicalOp)
 
     var plan = PhysicalPlan(
       operators = Set(partialPhysicalOp, finalPhysicalOp),
