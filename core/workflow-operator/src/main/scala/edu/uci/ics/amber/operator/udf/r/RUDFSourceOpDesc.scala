@@ -11,6 +11,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class RUDFSourceOpDesc extends SourceOperatorDescriptor with DesignatedLocationConfigurable {
 
   @JsonProperty(
@@ -67,14 +69,14 @@ class RUDFSourceOpDesc extends SourceOperatorDescriptor with DesignatedLocationC
       )
       .withLocationPreference(None)
 
-    val baseOp = (if (workers > 1) {
+    if (workers > 1) {
                     physicalOp
                       .withParallelizable(true)
                       .withSuggestedWorkerNum(workers)
                   } else {
                     physicalOp.withParallelizable(false)
-                  })
-    configureLocationPreference(baseOp)
+                  }
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo = {

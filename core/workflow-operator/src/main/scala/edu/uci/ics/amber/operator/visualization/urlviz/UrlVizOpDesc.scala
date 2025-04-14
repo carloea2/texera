@@ -5,12 +5,14 @@ import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchema
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
+
+import scala.util.chaining.scalaUtilChainingOps
 
 /**
   * URL Visualization operator to render any content in given URL link
@@ -36,7 +38,7 @@ class UrlVizOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .manyToOnePhysicalOp(
         workflowId,
         executionId,
@@ -54,8 +56,7 @@ class UrlVizOpDesc extends LogicalOp with DesignatedLocationConfigurable {
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         })
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

@@ -12,6 +12,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class TypeCastingOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true)
@@ -24,7 +26,7 @@ class TypeCastingOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
       executionId: ExecutionIdentity
   ): PhysicalOp = {
     if (typeCastingUnits == null) typeCastingUnits = List.empty
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -44,8 +46,7 @@ class TypeCastingOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         }
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo = {

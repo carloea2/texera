@@ -14,6 +14,7 @@ import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
 import edu.uci.ics.amber.operator.metadata.annotations.HideAnnotation
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
+import scala.util.chaining.scalaUtilChainingOps
 
 class SplitOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
@@ -43,7 +44,7 @@ class SplitOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -63,8 +64,7 @@ class SplitOpDesc extends LogicalOp with DesignatedLocationConfigurable {
           operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
         })
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo = {

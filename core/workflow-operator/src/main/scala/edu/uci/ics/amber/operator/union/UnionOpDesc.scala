@@ -3,8 +3,10 @@ package edu.uci.ics.amber.operator.union
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, PortIdentity}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class UnionOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
@@ -12,7 +14,7 @@ class UnionOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -21,8 +23,7 @@ class UnionOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

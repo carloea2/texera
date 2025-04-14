@@ -2,17 +2,12 @@ package edu.uci.ics.amber.operator.symmetricDifference
 
 import com.google.common.base.Preconditions
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
-import edu.uci.ics.amber.core.workflow.{
-  HashPartition,
-  InputPort,
-  OutputPort,
-  PhysicalOp,
-  PortIdentity,
-  SchemaPropagationFunc
-}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.core.workflow.{HashPartition, InputPort, OutputPort, PhysicalOp, PortIdentity, SchemaPropagationFunc}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class SymmetricDifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
@@ -21,7 +16,7 @@ class SymmetricDifferenceOpDesc extends LogicalOp with DesignatedLocationConfigu
       executionId: ExecutionIdentity
   ): PhysicalOp = {
 
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -39,8 +34,7 @@ class SymmetricDifferenceOpDesc extends LogicalOp with DesignatedLocationConfigu
         val outputSchema = inputSchemas.values.head
         operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
       }))
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

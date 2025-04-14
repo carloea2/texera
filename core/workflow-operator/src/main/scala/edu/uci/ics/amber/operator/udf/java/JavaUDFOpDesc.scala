@@ -5,22 +5,13 @@ import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
-import edu.uci.ics.amber.core.workflow.{
-  PartitionInfo,
-  PhysicalOp,
-  SchemaPropagationFunc,
-  UnknownPartition
-}
+import edu.uci.ics.amber.core.workflow.{PartitionInfo, PhysicalOp, SchemaPropagationFunc, UnknownPartition}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.{
-  LogicalOp,
-  DesignatedLocationConfigurable,
-  PortDescription,
-  StateTransferFunc
-}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp, PortDescription, StateTransferFunc}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
+import scala.util.chaining.scalaUtilChainingOps
 import scala.util.{Success, Try}
 class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(
@@ -96,7 +87,7 @@ class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
     }
 
     if (workers > 1) {
-      val baseOp = PhysicalOp
+      PhysicalOp
         .oneToOnePhysicalOp(
           workflowId,
           executionId,
@@ -111,10 +102,9 @@ class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         .withParallelizable(true)
         .withSuggestedWorkerNum(workers)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
-
-      configureLocationPreference(baseOp)
+        .pipe(configureLocationPreference)
     } else {
-      val baseOp = PhysicalOp
+      PhysicalOp
         .manyToOnePhysicalOp(
           workflowId,
           executionId,
@@ -128,8 +118,7 @@ class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         .withIsOneToManyOp(true)
         .withParallelizable(false)
         .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
-
-      configureLocationPreference(baseOp)
+        .pipe(configureLocationPreference)
     }
   }
 

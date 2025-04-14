@@ -6,10 +6,12 @@ import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc, UnknownPartition}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(
@@ -84,7 +86,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with DesignatedLocationC
         )
         .withParallelizable(false)
     }
-    val baseOp = physicalOp
+    physicalOp
       .withDerivePartition(_ => UnknownPartition())
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
@@ -111,8 +113,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp with DesignatedLocationC
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         })
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

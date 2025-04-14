@@ -12,6 +12,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class UnnestStringOpDesc extends FlatMapOpDesc with DesignatedLocationConfigurable {
   @JsonProperty(value = "Delimiter", required = true, defaultValue = ",")
   @JsonPropertyDescription("string that separates the data")
@@ -40,7 +42,7 @@ class UnnestStringOpDesc extends FlatMapOpDesc with DesignatedLocationConfigurab
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -61,7 +63,6 @@ class UnnestStringOpDesc extends FlatMapOpDesc with DesignatedLocationConfigurab
           Map(operatorInfo.outputPorts.head.id -> outputSchema)
         })
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 }
