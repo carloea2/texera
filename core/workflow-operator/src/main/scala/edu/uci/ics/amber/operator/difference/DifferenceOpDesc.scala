@@ -4,10 +4,10 @@ import com.google.common.base.Preconditions
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
+import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 
-class DifferenceOpDesc extends LogicalOp with ManualLocationConfiguration {
+class DifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,

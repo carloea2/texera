@@ -10,14 +10,14 @@ import edu.uci.ics.amber.core.tuple.AttributeTypeUtils.inferSchemaFromRows
 import edu.uci.ics.amber.core.tuple.{Attribute, AttributeType, Schema}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 import edu.uci.ics.amber.operator.source.scan.ScanSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import java.io.IOException
 import java.net.URI
 
-class ParallelCSVScanSourceOpDesc extends ScanSourceOpDesc with ManualLocationConfiguration {
+class ParallelCSVScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(defaultValue = ",")
   @JsonSchemaTitle("Delimiter")

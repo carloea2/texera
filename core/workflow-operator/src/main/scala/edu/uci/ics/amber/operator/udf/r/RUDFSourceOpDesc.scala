@@ -9,9 +9,9 @@ import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo
 import edu.uci.ics.amber.operator.source.SourceOperatorDescriptor
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.OutputPort
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
-class RUDFSourceOpDesc extends SourceOperatorDescriptor with ManualLocationConfiguration {
+class RUDFSourceOpDesc extends SourceOperatorDescriptor with DesignatedLocationConfigurable {
 
   @JsonProperty(
     required = true,

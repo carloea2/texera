@@ -10,9 +10,9 @@ import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
-class KeywordSearchOpDesc extends FilterOpDesc with ManualLocationConfiguration {
+class KeywordSearchOpDesc extends FilterOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true)
   @JsonSchemaTitle("attribute")

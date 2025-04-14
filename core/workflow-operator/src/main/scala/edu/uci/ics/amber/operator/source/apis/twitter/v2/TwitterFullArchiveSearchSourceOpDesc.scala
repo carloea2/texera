@@ -13,11 +13,11 @@ import edu.uci.ics.amber.operator.metadata.annotations.UIWidget
 import edu.uci.ics.amber.operator.source.apis.twitter.TwitterSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 class TwitterFullArchiveSearchSourceOpDesc
     extends TwitterSourceOpDesc
-    with ManualLocationConfiguration {
+    with DesignatedLocationConfigurable {
 
   @JsonIgnore
   override val APIName: Option[String] = Some("Full Archive Search")

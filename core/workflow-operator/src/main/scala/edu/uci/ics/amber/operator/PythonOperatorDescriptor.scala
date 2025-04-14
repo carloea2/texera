@@ -5,7 +5,7 @@ import edu.uci.ics.amber.core.tuple.Schema
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, PortIdentity, SchemaPropagationFunc}
 
-trait PythonOperatorDescriptor extends LogicalOp with ManualLocationConfiguration {
+trait PythonOperatorDescriptor extends LogicalOp with DesignatedLocationConfigurable {
   private def generatePythonCodeForRaisingException(ex: Throwable): String = {
     s"#EXCEPTION DURING CODE GENERATION: ${ex.getMessage}"
   }

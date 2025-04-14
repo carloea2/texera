@@ -13,7 +13,7 @@ import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, PhysicalOp}
   * Provides configuration for users manually specifying the node location.
   * When `autoSelectNodeAddress` is false and `nodeAddr` is not null, the specified node address will be used.
   */
-trait ManualLocationConfiguration {
+trait DesignatedLocationConfigurable {
 
   @JsonProperty(defaultValue = "true")
   @JsonSchemaTitle("Auto Select Node Address")

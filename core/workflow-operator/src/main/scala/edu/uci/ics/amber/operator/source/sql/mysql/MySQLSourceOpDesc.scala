@@ -8,11 +8,11 @@ import edu.uci.ics.amber.operator.source.sql.mysql.MySQLConnUtil.connect
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.OutputPort
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 import java.sql.{Connection, SQLException}
 
-class MySQLSourceOpDesc extends SQLSourceOpDesc with ManualLocationConfiguration {
+class MySQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigurable {
 
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,

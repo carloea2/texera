@@ -14,7 +14,7 @@ import edu.uci.ics.amber.core.workflow.{
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.{
   LogicalOp,
-  ManualLocationConfiguration,
+  DesignatedLocationConfigurable,
   PortDescription,
   StateTransferFunc
 }
@@ -22,7 +22,7 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
 import scala.util.{Success, Try}
-class JavaUDFOpDesc extends LogicalOp with ManualLocationConfiguration {
+class JavaUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(
     required = true,
     defaultValue =

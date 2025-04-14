@@ -12,11 +12,11 @@ import edu.uci.ics.amber.operator.source.sql.postgresql.PostgreSQLConnUtil.conne
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.OutputPort
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 import java.sql.{Connection, SQLException}
 
-class PostgreSQLSourceOpDesc extends SQLSourceOpDesc with ManualLocationConfiguration {
+class PostgreSQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty()
   @JsonSchemaTitle("Keywords to Search")

@@ -7,12 +7,12 @@ import edu.uci.ics.amber.core.tuple.Schema
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.PhysicalOp.oneToOnePhysicalOp
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 import edu.uci.ics.amber.operator.map.MapOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-class ProjectionOpDesc extends MapOpDesc with ManualLocationConfiguration {
+class ProjectionOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true, defaultValue = "false")
   @JsonSchemaTitle("Drop Option")

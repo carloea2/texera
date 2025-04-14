@@ -6,9 +6,9 @@ import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
-class SpecializedFilterOpDesc extends FilterOpDesc with ManualLocationConfiguration {
+class SpecializedFilterOpDesc extends FilterOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(value = "predicates", required = true)
   @JsonPropertyDescription("multiple predicates in OR")

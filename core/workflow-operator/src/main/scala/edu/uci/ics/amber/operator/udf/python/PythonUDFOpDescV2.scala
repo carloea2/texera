@@ -10,14 +10,14 @@ import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.{
   LogicalOp,
-  ManualLocationConfiguration,
+  DesignatedLocationConfigurable,
   PortDescription,
   StateTransferFunc
 }
 
 import scala.util.{Success, Try}
 
-class PythonUDFOpDescV2 extends LogicalOp with ManualLocationConfiguration {
+class PythonUDFOpDescV2 extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(
     required = true,
     defaultValue =

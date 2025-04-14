@@ -10,11 +10,11 @@ import edu.uci.ics.amber.core.workflow.{
   PortIdentity,
   SchemaPropagationFunc
 }
-import edu.uci.ics.amber.operator.{LogicalOp, ManualLocationConfiguration}
+import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 
-class SymmetricDifferenceOpDesc extends LogicalOp with ManualLocationConfiguration {
+class SymmetricDifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,

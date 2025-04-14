@@ -26,10 +26,10 @@ import edu.uci.ics.amber.operator.source.sql.asterixdb.AsterixDBConnUtil.{
 }
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import kong.unirest.json.JSONObject
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 @JsonIgnoreProperties(value = Array("username", "password"))
-class AsterixDBSourceOpDesc extends SQLSourceOpDesc with ManualLocationConfiguration {
+class AsterixDBSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(defaultValue = "false")
   @JsonSchemaTitle("Geo Search?")

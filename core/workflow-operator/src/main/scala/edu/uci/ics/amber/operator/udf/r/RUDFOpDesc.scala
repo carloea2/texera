@@ -13,7 +13,7 @@ import edu.uci.ics.amber.core.workflow.{
 }
 import edu.uci.ics.amber.operator.{
   LogicalOp,
-  ManualLocationConfiguration,
+  DesignatedLocationConfigurable,
   PortDescription,
   StateTransferFunc
 }
@@ -23,7 +23,7 @@ import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 
 import scala.util.{Success, Try}
 
-class RUDFOpDesc extends LogicalOp with ManualLocationConfiguration {
+class RUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(
     required = true,
     defaultValue =

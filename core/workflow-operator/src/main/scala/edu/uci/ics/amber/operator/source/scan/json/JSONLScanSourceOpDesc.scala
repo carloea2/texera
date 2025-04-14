@@ -8,7 +8,7 @@ import edu.uci.ics.amber.core.tuple.AttributeTypeUtils.inferSchemaFromRows
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 import edu.uci.ics.amber.operator.source.scan.ScanSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.{JSONToMap, objectMapper}
 
@@ -17,7 +17,7 @@ import java.net.URI
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.IteratorHasAsScala
 
-class JSONLScanSourceOpDesc extends ScanSourceOpDesc with ManualLocationConfiguration {
+class JSONLScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true)
   @JsonPropertyDescription("flatten nested objects and arrays")

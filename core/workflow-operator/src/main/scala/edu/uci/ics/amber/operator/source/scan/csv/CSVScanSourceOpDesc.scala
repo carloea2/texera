@@ -11,12 +11,12 @@ import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc}
 import edu.uci.ics.amber.operator.source.scan.ScanSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.operator.ManualLocationConfiguration
+import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 import java.io.{IOException, InputStreamReader}
 import java.net.URI
 
-class CSVScanSourceOpDesc extends ScanSourceOpDesc with ManualLocationConfiguration {
+class CSVScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(defaultValue = ",")
   @JsonSchemaTitle("Delimiter")
