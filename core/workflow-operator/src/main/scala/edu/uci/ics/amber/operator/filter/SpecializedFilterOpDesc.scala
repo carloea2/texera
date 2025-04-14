@@ -8,6 +8,8 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class SpecializedFilterOpDesc extends FilterOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(value = "predicates", required = true)
@@ -18,7 +20,7 @@ class SpecializedFilterOpDesc extends FilterOpDesc with DesignatedLocationConfig
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -30,8 +32,7 @@ class SpecializedFilterOpDesc extends FilterOpDesc with DesignatedLocationConfig
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo = {

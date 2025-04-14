@@ -4,8 +4,10 @@ import com.google.common.base.Preconditions
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class DifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
@@ -13,7 +15,7 @@ class DifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -29,8 +31,7 @@ class DifferenceOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         val outputSchema = inputSchemas.values.head
         operatorInfo.outputPorts.map(port => port.id -> outputSchema).toMap
       }))
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

@@ -11,6 +11,8 @@ import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeName
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
+import scala.util.chaining.scalaUtilChainingOps
+
 /**
   * Dictionary matcher operator matches a tuple if the specified column is in the given dictionary.
   * It outputs an extra column to label the tuple if it is matched or not
@@ -34,7 +36,7 @@ class DictionaryMatcherOpDesc extends MapOpDesc with DesignatedLocationConfigura
       executionId: ExecutionIdentity
   ): PhysicalOp = {
 
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -55,8 +57,7 @@ class DictionaryMatcherOpDesc extends MapOpDesc with DesignatedLocationConfigura
           )
         })
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =
