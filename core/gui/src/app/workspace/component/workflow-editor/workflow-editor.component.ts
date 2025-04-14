@@ -445,7 +445,11 @@ export class WorkflowEditorComponent implements AfterViewInit, OnDestroy {
           this.wrapper.setMultiSelectMode(<boolean>event[1].shiftKey);
           const elementID = event[0].model.id.toString();
           if (this.workflowActionService.getTexeraGraph().hasOperator(elementID)) {
-            this.panelservice.openPanels();
+            if (this.panelservice.isPanelOpen) {
+              this.panelservice.closePropertyPanel();
+            } else {
+              this.panelservice.openPropertyPanel();
+            }
           }
         }
       });
