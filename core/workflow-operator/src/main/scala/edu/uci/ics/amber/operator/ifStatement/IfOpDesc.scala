@@ -4,16 +4,12 @@ import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
-import edu.uci.ics.amber.core.workflow.{
-  InputPort,
-  OutputPort,
-  PhysicalOp,
-  PortIdentity,
-  SchemaPropagationFunc
-}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PhysicalOp, PortIdentity, SchemaPropagationFunc}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class IfOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(required = true)
@@ -25,7 +21,7 @@ class IfOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -46,8 +42,7 @@ class IfOpDesc extends LogicalOp with DesignatedLocationConfigurable {
             .toMap
         )
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

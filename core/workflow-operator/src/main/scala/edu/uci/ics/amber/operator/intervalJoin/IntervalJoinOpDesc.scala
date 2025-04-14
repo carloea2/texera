@@ -6,15 +6,14 @@ import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchema
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
 import edu.uci.ics.amber.core.workflow.{HashPartition, PhysicalOp, SchemaPropagationFunc}
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.metadata.annotations.{
-  AutofillAttributeName,
-  AutofillAttributeNameOnPort1
-}
+import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, AutofillAttributeNameOnPort1}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
+
+import scala.util.chaining.scalaUtilChainingOps
 
 /** This Operator have two assumptions:
   * 1. The tuples in both inputs come in ascending order
@@ -78,7 +77,7 @@ class IntervalJoinOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       Option(HashPartition(List(rightAttributeName)))
     )
 
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -111,8 +110,7 @@ class IntervalJoinOpDesc extends LogicalOp with DesignatedLocationConfigurable {
         })
       )
       .withPartitionRequirement(partitionRequirement)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

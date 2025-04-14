@@ -12,6 +12,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class KeywordSearchOpDesc extends FilterOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true)
@@ -29,7 +31,7 @@ class KeywordSearchOpDesc extends FilterOpDesc with DesignatedLocationConfigurab
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -41,8 +43,7 @@ class KeywordSearchOpDesc extends FilterOpDesc with DesignatedLocationConfigurab
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

@@ -11,6 +11,7 @@ import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 import edu.uci.ics.amber.operator.map.MapOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
+import scala.util.chaining.scalaUtilChainingOps
 
 class ProjectionOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
 
@@ -25,7 +26,7 @@ class ProjectionOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = oneToOnePhysicalOp(
+    oneToOnePhysicalOp(
       workflowId,
       executionId,
       operatorIdentifier,
@@ -54,8 +55,7 @@ class ProjectionOpDesc extends MapOpDesc with DesignatedLocationConfigurable {
 
         Map(operatorInfo.outputPorts.head.id -> outputSchema)
       }))
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   def derivePartition()(partition: List[PartitionInfo]): PartitionInfo = {
