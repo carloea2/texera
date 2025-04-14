@@ -1,11 +1,7 @@
 package edu.uci.ics.amber.operator.source.scan
 
 import com.fasterxml.jackson.annotation.{JsonIgnoreProperties, JsonProperty}
-import com.kjetland.jackson.jsonSchema.annotations.{
-  JsonSchemaInject,
-  JsonSchemaString,
-  JsonSchemaTitle
-}
+import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaString, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
@@ -14,6 +10,8 @@ import edu.uci.ics.amber.operator.metadata.annotations.HideAnnotation
 import edu.uci.ics.amber.operator.source.scan.text.TextSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
+
+import scala.util.chaining.scalaUtilChainingOps
 
 @JsonIgnoreProperties(value = Array("limit", "offset", "fileEncoding"))
 class FileScanSourceOpDesc
@@ -52,7 +50,7 @@ class FileScanSourceOpDesc
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -67,7 +65,7 @@ class FileScanSourceOpDesc
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def sourceSchema(): Schema = {

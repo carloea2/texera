@@ -16,6 +16,7 @@ import java.io._
 import java.net.URI
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.IteratorHasAsScala
+import scala.util.chaining.scalaUtilChainingOps
 
 class JSONLScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
 
@@ -31,7 +32,7 @@ class JSONLScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConf
       executionId: ExecutionIdentity
   ): PhysicalOp = {
 
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -47,7 +48,7 @@ class JSONLScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConf
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def sourceSchema(): Schema = {

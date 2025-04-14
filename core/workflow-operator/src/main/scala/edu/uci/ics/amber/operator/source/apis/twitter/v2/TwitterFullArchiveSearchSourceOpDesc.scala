@@ -1,11 +1,7 @@
 package edu.uci.ics.amber.operator.source.apis.twitter.v2
 
 import com.fasterxml.jackson.annotation.{JsonIgnore, JsonProperty}
-import com.kjetland.jackson.jsonSchema.annotations.{
-  JsonSchemaDescription,
-  JsonSchemaInject,
-  JsonSchemaTitle
-}
+import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaDescription, JsonSchemaInject, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc}
@@ -14,6 +10,8 @@ import edu.uci.ics.amber.operator.source.apis.twitter.TwitterSourceOpDesc
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class TwitterFullArchiveSearchSourceOpDesc
     extends TwitterSourceOpDesc
@@ -48,7 +46,7 @@ class TwitterFullArchiveSearchSourceOpDesc
       executionId: ExecutionIdentity
   ): PhysicalOp = {
     // TODO: use multiple workers
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -63,8 +61,7 @@ class TwitterFullArchiveSearchSourceOpDesc
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def sourceSchema(): Schema = {

@@ -12,6 +12,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class URLFetcherOpDesc extends SourceOperatorDescriptor with DesignatedLocationConfigurable {
 
   @JsonProperty(required = true)
@@ -40,7 +42,7 @@ class URLFetcherOpDesc extends SourceOperatorDescriptor with DesignatedLocationC
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -55,7 +57,7 @@ class URLFetcherOpDesc extends SourceOperatorDescriptor with DesignatedLocationC
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

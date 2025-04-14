@@ -20,6 +20,7 @@ import org.apache.arrow.vector.ipc.ArrowFileReader
 import org.apache.arrow.vector.types.pojo.{Schema => ArrowSchema}
 
 import scala.util.Using
+import scala.util.chaining.scalaUtilChainingOps
 
 @JsonIgnoreProperties(value = Array("fileEncoding"))
 class ArrowSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
@@ -31,7 +32,7 @@ class ArrowSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigur
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -46,7 +47,7 @@ class ArrowSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigur
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> inferSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   /**

@@ -15,6 +15,7 @@ import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 import java.sql.{Connection, SQLException}
+import scala.util.chaining.scalaUtilChainingOps
 
 class PostgreSQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigurable {
 
@@ -31,7 +32,7 @@ class PostgreSQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConf
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -46,7 +47,7 @@ class PostgreSQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConf
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

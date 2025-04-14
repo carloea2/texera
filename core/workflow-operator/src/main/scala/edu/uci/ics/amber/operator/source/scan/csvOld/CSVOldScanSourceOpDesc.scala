@@ -15,6 +15,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import java.io.IOException
 import java.net.URI
+import scala.util.chaining.scalaUtilChainingOps
 
 class CSVOldScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationConfigurable {
 
@@ -39,7 +40,7 @@ class CSVOldScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationCon
     if (customDelimiter.get.isEmpty) {
       customDelimiter = Option(",")
     }
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -54,7 +55,7 @@ class CSVOldScanSourceOpDesc extends ScanSourceOpDesc with DesignatedLocationCon
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def sourceSchema(): Schema = {

@@ -11,6 +11,7 @@ import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
 import java.sql.{Connection, SQLException}
+import scala.util.chaining.scalaUtilChainingOps
 
 class MySQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigurable {
 
@@ -18,7 +19,7 @@ class MySQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigura
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -33,7 +34,7 @@ class MySQLSourceOpDesc extends SQLSourceOpDesc with DesignatedLocationConfigura
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

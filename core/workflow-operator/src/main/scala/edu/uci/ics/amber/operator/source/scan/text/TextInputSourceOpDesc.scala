@@ -13,6 +13,8 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class TextInputSourceOpDesc
     extends SourceOperatorDescriptor
     with TextSourceOpDesc
@@ -26,7 +28,7 @@ class TextInputSourceOpDesc
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
@@ -41,7 +43,7 @@ class TextInputSourceOpDesc
       .withPropagateSchema(
         SchemaPropagationFunc(_ => Map(operatorInfo.outputPorts.head.id -> sourceSchema()))
       )
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def sourceSchema(): Schema =
