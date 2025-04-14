@@ -6,13 +6,14 @@ import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdenti
 import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
+import scala.util.chaining.scalaUtilChainingOps
 
 class CartesianProductOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -68,9 +69,7 @@ class CartesianProductOpDesc extends LogicalOp with DesignatedLocationConfigurab
       // TODO : refactor to parallelize this operator for better performance and scalability:
       //  can consider hash partition on larger input, broadcast smaller table to each partition
       .withParallelizable(false)
-
-    configureLocationPreference(baseOp)
-
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =

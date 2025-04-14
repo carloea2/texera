@@ -4,18 +4,15 @@ import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.Schema
-import edu.uci.ics.amber.core.virtualidentity.{
-  ExecutionIdentity,
-  PhysicalOpIdentity,
-  WorkflowIdentity
-}
+import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, PhysicalOpIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.annotations.AutofillAttributeNameList
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import javax.validation.constraints.{NotNull, Size}
+import scala.util.chaining.scalaUtilChainingOps
 
 class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
   @JsonProperty(value = "aggregations", required = true)
@@ -41,7 +38,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
     val outputPort = OutputPort(PortIdentity(internal = true))
     val partialDesc = objectMapper.writeValueAsString(this)
     val localAggregations = List(aggregations: _*)
-    val initPartialPhysicalOp = PhysicalOp
+    val partialPhysicalOp = PhysicalOp
       .oneToOnePhysicalOp(
         PhysicalOpIdentity(operatorIdentifier, "localAgg"),
         workflowId,
@@ -63,8 +60,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
           Map(PortIdentity(internal = true) -> outputSchema)
         })
       )
-
-    val partialPhysicalOp = configureLocationPreference(initPartialPhysicalOp)
+      .pipe(configureLocationPreference)
 
     val finalInputPort = InputPort(PortIdentity(0, internal = true))
     val finalOutputPort = OutputPort(PortIdentity(0), blocking = true)
@@ -72,7 +68,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
     aggregations = aggregations.map(aggr => aggr.getFinal)
     val finalDesc = objectMapper.writeValueAsString(this)
 
-    val initFinalPhysicalOp = PhysicalOp
+    val finalPhysicalOp = PhysicalOp
       .oneToOnePhysicalOp(
         PhysicalOpIdentity(operatorIdentifier, "globalAgg"),
         workflowId,
@@ -90,8 +86,7 @@ class AggregateOpDesc extends LogicalOp with DesignatedLocationConfigurable {
       )
       .withPartitionRequirement(List(Option(HashPartition(groupByKeys))))
       .withDerivePartition(_ => HashPartition(groupByKeys))
-
-    val finalPhysicalOp = configureLocationPreference(initFinalPhysicalOp)
+      .pipe(configureLocationPreference)
 
     var plan = PhysicalPlan(
       operators = Set(partialPhysicalOp, finalPhysicalOp),
