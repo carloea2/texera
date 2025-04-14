@@ -1,6 +1,10 @@
 package edu.uci.ics.amber.operator.source.sql.asterixdb
 
-import com.fasterxml.jackson.annotation.{JsonIgnoreProperties, JsonProperty, JsonPropertyDescription}
+import com.fasterxml.jackson.annotation.{
+  JsonIgnoreProperties,
+  JsonProperty,
+  JsonPropertyDescription
+}
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
@@ -9,10 +13,17 @@ import edu.uci.ics.amber.core.workflow.{PhysicalOp, SchemaPropagationFunc}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.OutputPort
 import edu.uci.ics.amber.operator.filter.FilterPredicate
-import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, AutofillAttributeNameList, UIWidget}
+import edu.uci.ics.amber.operator.metadata.annotations.{
+  AutofillAttributeName,
+  AutofillAttributeNameList,
+  UIWidget
+}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.source.sql.SQLSourceOpDesc
-import edu.uci.ics.amber.operator.source.sql.asterixdb.AsterixDBConnUtil.{fetchDataTypeFields, queryAsterixDB}
+import edu.uci.ics.amber.operator.source.sql.asterixdb.AsterixDBConnUtil.{
+  fetchDataTypeFields,
+  queryAsterixDB
+}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import kong.unirest.json.JSONObject
 import edu.uci.ics.amber.operator.DesignatedLocationConfigurable

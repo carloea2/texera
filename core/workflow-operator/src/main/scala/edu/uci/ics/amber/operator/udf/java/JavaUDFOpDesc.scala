@@ -5,9 +5,19 @@ import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
-import edu.uci.ics.amber.core.workflow.{PartitionInfo, PhysicalOp, SchemaPropagationFunc, UnknownPartition}
+import edu.uci.ics.amber.core.workflow.{
+  PartitionInfo,
+  PhysicalOp,
+  SchemaPropagationFunc,
+  UnknownPartition
+}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.operator.{
+  DesignatedLocationConfigurable,
+  LogicalOp,
+  PortDescription,
+  StateTransferFunc
+}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
 

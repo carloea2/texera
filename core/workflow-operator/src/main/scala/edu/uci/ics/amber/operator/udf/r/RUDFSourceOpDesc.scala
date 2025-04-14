@@ -70,12 +70,12 @@ class RUDFSourceOpDesc extends SourceOperatorDescriptor with DesignatedLocationC
       .withLocationPreference(None)
 
     if (workers > 1) {
-                    physicalOp
-                      .withParallelizable(true)
-                      .withSuggestedWorkerNum(workers)
-                  } else {
-                    physicalOp.withParallelizable(false)
-                  }
+      physicalOp
+        .withParallelizable(true)
+        .withSuggestedWorkerNum(workers)
+    } else {
+      physicalOp.withParallelizable(false)
+    }
       .pipe(configureLocationPreference)
   }
 

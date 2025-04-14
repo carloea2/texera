@@ -5,8 +5,18 @@ import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
 import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
-import edu.uci.ics.amber.core.workflow.{PartitionInfo, PhysicalOp, SchemaPropagationFunc, UnknownPartition}
-import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.core.workflow.{
+  PartitionInfo,
+  PhysicalOp,
+  SchemaPropagationFunc,
+  UnknownPartition
+}
+import edu.uci.ics.amber.operator.{
+  DesignatedLocationConfigurable,
+  LogicalOp,
+  PortDescription,
+  StateTransferFunc
+}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
@@ -90,30 +100,31 @@ class RUDFOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
     val r_operator_type = if (useTupleAPI) "r-tuple" else "r-table"
     if (workers > 1) {
-                    PhysicalOp
-                      .oneToOnePhysicalOp(
-                        workflowId,
-                        executionId,
-                        operatorIdentifier,
-                        OpExecWithCode(code, r_operator_type)
-                      )
-                      .withParallelizable(true)
-                      .withSuggestedWorkerNum(workers)
-                  } else {
-                    PhysicalOp
-                      .manyToOnePhysicalOp(
-                        workflowId,
-                        executionId,
-                        operatorIdentifier,
-                        OpExecWithCode(code, r_operator_type)
-                      )
-                      .withParallelizable(false)
-                  }.withDerivePartition(_ => UnknownPartition())
-                    .withInputPorts(operatorInfo.inputPorts)
-                    .withOutputPorts(operatorInfo.outputPorts)
-                    .withPartitionRequirement(partitionRequirement)
-                    .withIsOneToManyOp(true)
-                    .withPropagateSchema(SchemaPropagationFunc(propagateSchema)).pipe(configureLocationPreference)
+      PhysicalOp
+        .oneToOnePhysicalOp(
+          workflowId,
+          executionId,
+          operatorIdentifier,
+          OpExecWithCode(code, r_operator_type)
+        )
+        .withParallelizable(true)
+        .withSuggestedWorkerNum(workers)
+    } else {
+      PhysicalOp
+        .manyToOnePhysicalOp(
+          workflowId,
+          executionId,
+          operatorIdentifier,
+          OpExecWithCode(code, r_operator_type)
+        )
+        .withParallelizable(false)
+    }.withDerivePartition(_ => UnknownPartition())
+      .withInputPorts(operatorInfo.inputPorts)
+      .withOutputPorts(operatorInfo.outputPorts)
+      .withPartitionRequirement(partitionRequirement)
+      .withIsOneToManyOp(true)
+      .withPropagateSchema(SchemaPropagationFunc(propagateSchema))
+      .pipe(configureLocationPreference)
 
   }
 

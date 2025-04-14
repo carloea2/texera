@@ -41,7 +41,7 @@ trait DesignatedLocationConfigurable {
     * @param baseOp The base PhysicalOp object
     * @return The PhysicalOp object with the applied location preference if manual is enabled; otherwise, the original baseOp.
     */
-  def configureLocationPreference (baseOp: PhysicalOp): PhysicalOp = {
+  def configureLocationPreference(baseOp: PhysicalOp): PhysicalOp = {
     if (!autoSelectNodeAddress && nodeAddr != null) {
       baseOp.withLocationPreference(Some(GoToSpecificNode(nodeAddr)))
     } else {

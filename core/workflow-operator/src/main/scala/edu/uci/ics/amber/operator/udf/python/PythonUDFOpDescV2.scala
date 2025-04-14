@@ -8,7 +8,12 @@ import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
-import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.operator.{
+  DesignatedLocationConfigurable,
+  LogicalOp,
+  PortDescription,
+  StateTransferFunc
+}
 
 import scala.util.chaining.scalaUtilChainingOps
 import scala.util.{Success, Try}
