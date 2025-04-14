@@ -10,7 +10,7 @@ import edu.uci.ics.amber.operator.metadata.annotations.HideAnnotation
 import edu.uci.ics.amber.core.workflow.{GoToSpecificNode, PhysicalOp}
 
 /**
-  * Provides configuration for users manually specifying the node location.
+  * Provides configuration for users to designate a specific node location for executing operations.
   * When `autoSelectNodeAddress` is false and `nodeAddr` is not null, the specified node address will be used.
   */
 trait DesignatedLocationConfigurable {
