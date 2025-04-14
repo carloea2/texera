@@ -4,20 +4,15 @@ import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.tuple.{Attribute, AttributeType, Schema}
-import edu.uci.ics.amber.core.virtualidentity.{
-  ExecutionIdentity,
-  PhysicalOpIdentity,
-  WorkflowIdentity
-}
+import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, PhysicalOpIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.hashJoin.HashJoinOpDesc.HASH_JOIN_INTERNAL_KEY_NAME
-import edu.uci.ics.amber.operator.metadata.annotations.{
-  AutofillAttributeName,
-  AutofillAttributeNameOnPort1
-}
+import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, AutofillAttributeNameOnPort1}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
+
+import scala.util.chaining.scalaUtilChainingOps
 
 object HashJoinOpDesc {
   val HASH_JOIN_INTERNAL_KEY_NAME = "__internal__hashtable__key__"
@@ -61,7 +56,7 @@ class HashJoinOpDesc[K] extends LogicalOp with DesignatedLocationConfigurable {
     val buildInputPort = operatorInfo.inputPorts.head
     val buildOutputPort = OutputPort(PortIdentity(0, internal = true), blocking = true)
 
-    val initBuildPhysicalOp =
+    val buildPhysicalOp =
       PhysicalOp
         .oneToOnePhysicalOp(
           PhysicalOpIdentity(operatorIdentifier, "build"),
@@ -85,15 +80,14 @@ class HashJoinOpDesc[K] extends LogicalOp with DesignatedLocationConfigurable {
           )
         )
         .withParallelizable(true)
-
-    val buildPhysicalOp = configureLocationPreference(initBuildPhysicalOp)
+        .pipe(configureLocationPreference)
 
     val probeBuildInputPort = InputPort(PortIdentity(0, internal = true))
     val probeDataInputPort =
       InputPort(operatorInfo.inputPorts(1).id, dependencies = List(probeBuildInputPort.id))
     val probeOutputPort = OutputPort(PortIdentity(0))
 
-    val initProbePhysicalOp =
+    val probePhysicalOp =
       PhysicalOp
         .oneToOnePhysicalOp(
           PhysicalOpIdentity(operatorIdentifier, "probe"),
@@ -146,8 +140,7 @@ class HashJoinOpDesc[K] extends LogicalOp with DesignatedLocationConfigurable {
             Map(PortIdentity() -> outputSchema)
           })
         )
-
-    val probePhysicalOp = configureLocationPreference(initProbePhysicalOp)
+        .pipe(configureLocationPreference)
 
     PhysicalPlan(
       operators = Set(buildPhysicalOp, probePhysicalOp),
