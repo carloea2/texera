@@ -3,11 +3,13 @@ package edu.uci.ics.amber.operator.reservoirsampling
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.workflow.PhysicalOp
-import edu.uci.ics.amber.operator.{LogicalOp, DesignatedLocationConfigurable}
+import edu.uci.ics.amber.operator.{DesignatedLocationConfigurable, LogicalOp}
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
+
+import scala.util.chaining.scalaUtilChainingOps
 
 class ReservoirSamplingOpDesc extends LogicalOp with DesignatedLocationConfigurable {
 
@@ -19,7 +21,7 @@ class ReservoirSamplingOpDesc extends LogicalOp with DesignatedLocationConfigura
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -31,8 +33,7 @@ class ReservoirSamplingOpDesc extends LogicalOp with DesignatedLocationConfigura
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo = {

@@ -9,6 +9,8 @@ import edu.uci.ics.amber.operator.filter.FilterOpDesc
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
+import scala.util.chaining.scalaUtilChainingOps
+
 class RandomKSamplingOpDesc extends FilterOpDesc with DesignatedLocationConfigurable {
 
   @JsonProperty(value = "random k sample percentage", required = true)
@@ -19,7 +21,7 @@ class RandomKSamplingOpDesc extends FilterOpDesc with DesignatedLocationConfigur
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
-    val baseOp = PhysicalOp
+    PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
         executionId,
@@ -31,8 +33,7 @@ class RandomKSamplingOpDesc extends FilterOpDesc with DesignatedLocationConfigur
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
-
-    configureLocationPreference(baseOp)
+      .pipe(configureLocationPreference)
   }
 
   override def operatorInfo: OperatorInfo =
