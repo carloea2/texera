@@ -171,9 +171,7 @@ import { NzSliderModule } from "ng-zorro-antd/slider";
 import { AdminSettingsComponent } from "./dashboard/component/admin/settings/admin-settings.component";
 import { catchError, of } from "rxjs";
 import { SuggestionFrameComponent } from "./workspace/component/result-panel/suggestion-frame/suggestion-frame.component";
-// Import providers for circular dependency resolution
-import { WORKFLOW_SUGGESTION_PROVIDER } from "./workspace/service/workflow-suggestion/workflow-suggestion.provider";
-import { WORKFLOW_COMPILING_PROVIDER } from "./workspace/service/compile-workflow/workflow-compiling.provider";
+
 
 registerLocaleData(en);
 
