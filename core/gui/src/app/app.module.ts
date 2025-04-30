@@ -172,7 +172,6 @@ import { AdminSettingsComponent } from "./dashboard/component/admin/settings/adm
 import { catchError, of } from "rxjs";
 import { SuggestionFrameComponent } from "./workspace/component/result-panel/suggestion-frame/suggestion-frame.component";
 
-
 registerLocaleData(en);
 
 @NgModule({
