@@ -155,6 +155,9 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
   /** Whether we are currently waiting for the backend to return suggestions. */
   loadingSuggestions = false;
 
+  /** Whether the Copilot intention box is visible */
+  copilotEnabled: boolean = false;
+
   constructor(
     private formlyJsonschema: FormlyJsonschema,
     private workflowActionService: WorkflowActionService,
