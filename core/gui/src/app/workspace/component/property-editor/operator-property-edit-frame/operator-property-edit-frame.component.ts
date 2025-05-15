@@ -812,6 +812,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       return;
     }
 
+    this.notificationService.info("Asking copilot to fill out the properties...");
     this.loadingSuggestions = true;
 
     this.workflowSuggestionService
@@ -827,6 +828,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         // The SuggestionFrameComponent will be updated via the shared service stream, we only need
         // to clear the loading flag here.
         this.loadingSuggestions = false;
+        this.notificationService.success("Received suggestions from the copilot");
       });
   }
 }
