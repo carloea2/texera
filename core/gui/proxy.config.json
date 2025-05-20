@@ -19,6 +19,11 @@
     "secure": false,
     "changeOrigin": true
   },
+  "/api/data-cleaning-suggestion": {
+    "target": "http://0.0.0.0:9094",
+    "secure": false,
+    "changeOrigin": true
+  },
   "/api/config/**": {
     "target": "http://localhost:9094",
     "secure": false,
