@@ -173,6 +173,7 @@ import { catchError, of } from "rxjs";
 import { SuggestionFrameComponent } from "./workspace/component/result-panel/suggestion-frame/suggestion-frame.component";
 import { NzDescriptionsModule } from "ng-zorro-antd/descriptions";
 import { NgxChartsModule } from "@swimlane/ngx-charts";
+import { ColumnProfileFrameComponent } from "./workspace/component/left-panel/column-profile-frame/column-profile-frame.component";
 
 registerLocaleData(en);
 
@@ -265,6 +266,7 @@ registerLocaleData(en);
     ComputingUnitSelectionComponent,
     AdminSettingsComponent,
     SuggestionFrameComponent,
+    ColumnProfileFrameComponent,
   ],
   imports: [
     BrowserModule,

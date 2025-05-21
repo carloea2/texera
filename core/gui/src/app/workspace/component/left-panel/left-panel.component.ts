@@ -28,8 +28,10 @@ import { TimeTravelComponent } from "./time-travel/time-travel.component";
 import { SettingsComponent } from "./settings/settings.component";
 import { calculateTotalTranslate3d } from "../../../common/util/panel-dock";
 import { PanelService } from "../../service/panel/panel.service";
-import { WorkflowSuggestionComponent } from "./workflow-suggestion/workflow-suggestion.component";
+import { ColumnProfileFrameComponent } from "./column-profile-frame/column-profile-frame.component";
+import { ColumnProfileService, SelectedColumnInfo } from "../../service/column-profile/column-profile.service";
 import { GuiConfigService } from "../../../common/service/gui-config.service";
+
 @UntilDestroy()
 @Component({
   selector: "texera-left-panel",
@@ -50,8 +52,7 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
   items = [
     { component: null, title: "", icon: "", enabled: true },
     { component: OperatorMenuComponent, title: "Operators", icon: "appstore", enabled: true },
-    { component: WorkflowSuggestionComponent, title: "Suggestions", icon: "experiment", enabled: true },
-    { component: VersionsListComponent, title: "Versions", icon: "schedule", enabled: false },
+    { component: VersionsListComponent, title: "Versions", icon: "schedule", enabled: environment.userSystemEnabled },
     {
       component: SettingsComponent,
       title: "Settings",
@@ -65,6 +66,12 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
       enabled: false,
     },
     {
+      component: ColumnProfileFrameComponent,
+      title: "Column Profile",
+      icon: "profile",
+      enabled: true,
+    },
+    {
       component: TimeTravelComponent,
       title: "Time Travel",
       icon: "clock-circle",
@@ -76,10 +83,12 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
   dragPosition = { x: 0, y: 0 };
   returnPosition = { x: 0, y: 0 };
   isDocked = true;
+  public columnProfilePanelIndex = -1;
 
   constructor(
     private panelService: PanelService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private columnProfileService: ColumnProfileService
   ) {
     // Initialize items array with config values
     this.updateItemsWithConfig();
@@ -92,6 +101,31 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
 
     this.width = Number(localStorage.getItem("left-panel-width")) || this.width;
     this.height = Number(localStorage.getItem("left-panel-height")) || this.height;
+
+    this.columnProfilePanelIndex = this.items.findIndex(item => item.component === ColumnProfileFrameComponent);
+
+    this.columnProfileService
+      .getSelectedColumnStream()
+      .pipe(untilDestroyed(this))
+      .subscribe(selectedInfo => {
+        if (selectedInfo && this.columnProfilePanelIndex !== -1) {
+          const columnProfileItem = this.items[this.columnProfilePanelIndex];
+          if (columnProfileItem) {
+            columnProfileItem.title = `Profile: ${selectedInfo.columnProfile.columnName.substring(0, 10)}${selectedInfo.columnProfile.columnName.length > 10 ? "..." : ""}`;
+          }
+          this.openFrame(this.columnProfilePanelIndex, true);
+        } else if (!selectedInfo && this.currentIndex === this.columnProfilePanelIndex) {
+          const columnProfileItem = this.items[this.columnProfilePanelIndex];
+          if (columnProfileItem) {
+            columnProfileItem.title = "Column Profile";
+          }
+        } else if (this.currentIndex === this.columnProfilePanelIndex && selectedInfo === null) {
+          const columnProfileItem = this.items[this.columnProfilePanelIndex];
+          if (columnProfileItem) {
+            columnProfileItem.title = "Column Profile";
+          }
+        }
+      });
   }
 
   private updateItemsWithConfig(): void {
@@ -147,17 +181,25 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
     }
   }
 
-  openFrame(i: number) {
+  openFrame(i: number, forceOpen: boolean = false) {
     if (!i) {
       this.width = 0;
       this.height = 65;
-    } else if (!this.width) {
+    } else if (!this.width && !forceOpen) {
+    } else if (!this.width || (forceOpen && this.width < LeftPanelComponent.MIN_PANEL_WIDTH)) {
       this.width = LeftPanelComponent.MIN_PANEL_WIDTH;
       this.height = this.minPanelHeight;
     }
-    this.title = this.items[i].title;
-    this.currentComponent = this.items[i].component;
-    this.currentIndex = i;
+
+    if (i >= 0 && i < this.items.length) {
+      if (i === this.columnProfilePanelIndex && this.items[i].title.startsWith("Profile: ")) {
+        this.title = this.items[i].title;
+      } else {
+        this.title = this.items[i].title;
+      }
+      this.currentComponent = this.items[i].component;
+      this.currentIndex = i;
+    }
   }
   onDrop(event: CdkDragDrop<string[]>) {
     moveItemInArray(this.order, event.previousIndex, event.currentIndex);
