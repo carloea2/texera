@@ -167,6 +167,10 @@ import { NzDividerModule } from "ng-zorro-antd/divider";
 import { NzProgressModule } from "ng-zorro-antd/progress";
 import { ComputingUnitSelectionComponent } from "./workspace/component/power-button/computing-unit-selection.component";
 import { NzSliderModule } from "ng-zorro-antd/slider";
+import {
+  ChatAssistantMultiAgentComponent
+} from "./workspace/component/left-panel/chat-assistant-multi-agent/chat-assistant-multi-agent.component";
+
 
 registerLocaleData(en);
 
@@ -257,6 +261,7 @@ registerLocaleData(en);
     CodeDebuggerComponent,
     HubSearchResultComponent,
     ComputingUnitSelectionComponent,
+    ChatAssistantMultiAgentComponent
   ],
   imports: [
     BrowserModule,

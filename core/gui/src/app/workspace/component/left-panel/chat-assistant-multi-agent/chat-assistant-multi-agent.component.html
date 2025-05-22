@@ -1,0 +1,37 @@
+<div class="chat-container">
+  <nz-list nzBordered>
+    <nz-list-item *ngFor="let message of messages">
+      <nz-comment>
+        <nz-comment-content>
+          <h4>{{ message.sender }}</h4>
+          <p>{{ message.content }}</p>
+        </nz-comment-content>
+      </nz-comment>
+    </nz-list-item>
+  </nz-list>
+
+  <!-- Waiting indicator -->
+  <div
+    *ngIf="isWaitingForResponse"
+    class="waiting-indicator">
+    Assistant generating responses...
+  </div>
+
+  <nz-input-group [nzSuffix]="suffixTemplate">
+    <textarea
+            nz-input
+            nzAutosize
+            [nzAutosize]="{ minRows: 2, maxRows: 6 }"
+            [(ngModel)]="newMessage"
+            (keyup.enter)="sendMessage()"
+            placeholder="Type a message..."
+    ></textarea>
+  </nz-input-group>
+  <ng-template #suffixTemplate>
+    <i
+      nz-icon
+      nzType="enter"
+      nzTheme="outline"
+      (click)="sendMessage()"></i>
+  </ng-template>
+</div>

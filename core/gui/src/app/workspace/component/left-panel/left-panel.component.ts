@@ -29,6 +29,9 @@ import { TimeTravelComponent } from "./time-travel/time-travel.component";
 import { SettingsComponent } from "./settings/settings.component";
 import { calculateTotalTranslate3d } from "../../../common/util/panel-dock";
 import { PanelService } from "../../service/panel/panel.service";
+import {ChatAssistantAsyncComponent} from "./chat-assistant-async/chat-assistant-async.component";
+import { ChatAssistantStreamedComponent } from "./chat-assistant-streamed/chat-assistant-streamed.component";
+import {ChatAssistantMultiAgentComponent} from "./chat-assistant-multi-agent/chat-assistant-multi-agent.component";
 @UntilDestroy()
 @Component({
   selector: "texera-left-panel",
@@ -67,6 +70,12 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
       title: "Time Travel",
       icon: "clock-circle",
       enabled: environment.userSystemEnabled && environment.timetravelEnabled,
+    },
+    {
+      component: ChatAssistantMultiAgentComponent,
+      title: "Chat Assistant (Multi-agent)",
+      icon: "robot",
+      enabled: true,
     },
   ];
 
