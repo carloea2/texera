@@ -86,14 +86,16 @@ object AmberRuntime {
 
   def startActorWorker(clusterMode:Boolean): Unit = {
     var masterIpAddress = "localhost"
+    var nodeIpAddress = "localhost"
     var masterPort = 2552
     if (clusterMode) {
       masterIpAddress = AmberConfig.masterIpAddress
       masterPort = AmberConfig.masterPort
+      nodeIpAddress = "0.0.0.0"
     }
     val workerConfig = ConfigFactory
       .parseString(s"""
-        akka.remote.artery.canonical.hostname = $masterIpAddress
+        akka.remote.artery.canonical.hostname = $nodeIpAddress
         akka.remote.artery.canonical.port = 0
         akka.cluster.seed-nodes = [ "akka://Amber@$masterIpAddress:$masterPort" ]
         """)
