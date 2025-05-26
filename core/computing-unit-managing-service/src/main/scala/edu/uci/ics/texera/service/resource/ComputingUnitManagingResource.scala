@@ -93,7 +93,8 @@ object ComputingUnitManagingResource {
       cpuLimit: String,
       memoryLimit: String,
       gpuLimit: String,
-      jvmMemorySize: String
+      jvmMemorySize: String,
+      numNodes: Int
   )
 
   case class WorkflowComputingUnitResourceLimit(
@@ -231,7 +232,12 @@ class ComputingUnitManagingResource {
         val computingUnit = new WorkflowComputingUnit()
         val userToken = JwtAuth.jwtToken(jwtClaims(user.user, dayToMin(TOKEN_EXPIRE_TIME_IN_DAYS)))
         computingUnit.setUid(user.getUid)
-        computingUnit.setName(param.name)
+        val name = if(param.numNodes > 0){
+          param.name + "-cluster"
+        }else{
+          param.name
+        }
+        computingUnit.setName(name)
         computingUnit.setCreationTime(new Timestamp(System.currentTimeMillis()))
 
         // Insert using the DAO
@@ -241,17 +247,30 @@ class ComputingUnitManagingResource {
         val cuid = ctx.lastID().intValue()
         val insertedUnit = wcDao.fetchOneByCuid(cuid)
 
-        // Create the pod with the generated CUID
-        val pod = KubernetesClient.createPod(
-          cuid,
-          param.cpuLimit,
-          param.memoryLimit,
-          param.gpuLimit,
-          computingUnitEnvironmentVariables ++ Map(
-            EnvironmentalVariable.ENV_USER_JWT_TOKEN -> userToken,
-            EnvironmentalVariable.ENV_JAVA_OPTS -> s"-Xmx${param.jvmMemorySize}"
+        val pod = if(param.numNodes > 0){
+          KubernetesClient.createCluster(
+            cuid,
+            param.cpuLimit,
+            param.memoryLimit,
+            param.numNodes,
+            computingUnitEnvironmentVariables ++ Map(
+              EnvironmentalVariable.ENV_USER_JWT_TOKEN -> userToken,
+              EnvironmentalVariable.ENV_JAVA_OPTS -> s"-Xmx${param.jvmMemorySize}"
+            )
           )
-        )
+        }else{
+          // Create the pod with the generated CUID
+          KubernetesClient.createPod(
+            cuid,
+            param.cpuLimit,
+            param.memoryLimit,
+            param.gpuLimit,
+            computingUnitEnvironmentVariables ++ Map(
+              EnvironmentalVariable.ENV_USER_JWT_TOKEN -> userToken,
+              EnvironmentalVariable.ENV_JAVA_OPTS -> s"-Xmx${param.jvmMemorySize}"
+            )
+          )
+        }
 
         // Return the dashboard response
         DashboardWorkflowComputingUnit(
@@ -286,14 +305,28 @@ class ComputingUnitManagingResource {
         .filter(_.getTerminateTime == null) // Filter out terminated units
 
       units.map { unit =>
+        val isCluster = unit.getName.endsWith("-cluster")
         val cuid = unit.getCuid.intValue()
         val podName = KubernetesClient.generatePodName(cuid)
         val pod = KubernetesClient.getPodByName(podName)
 
+        val status = if(isCluster){
+          // master pod (Option[Pod]) + all worker pods
+          val phases = (pod.toSeq ++ KubernetesClient.getClusterPodsById(cuid))
+            .map(_.getStatus.getPhase)          // Seq[String] like Seq("Running", "Running", ...)
+
+          phases.distinct match {
+            case Seq(singlePhase) => singlePhase // all identical → return it
+            case _                => "Unknown"   // mixed or empty
+          }
+        }else{
+          pod.map(_.getStatus.getPhase).getOrElse("Unknown")
+        }
+
         DashboardWorkflowComputingUnit(
           computingUnit = unit,
           uri = KubernetesClient.generatePodURI(cuid),
-          status = pod.map(_.getStatus.getPhase).getOrElse("Unknown"),
+          status = status,
           metrics = getComputingUnitMetrics(cuid),
           resourceLimits = getComputingUnitResourceLimit(cuid)
         )
@@ -323,16 +356,20 @@ class ComputingUnitManagingResource {
         .build()
     }
 
-    KubernetesClient.deletePod(cuid)
-
-    // If successful, update the database
     withTransaction(context) { ctx =>
       val cuDao = new WorkflowComputingUnitDao(ctx.configuration())
-      val units = cuDao.fetchByCuid(cuid)
-
-      units.forEach(unit => unit.setTerminateTime(new Timestamp(System.currentTimeMillis())))
-      cuDao.update(units)
+      val cu = cuDao.fetchOneByCuid(cuid)
+      val isCluster = cu.getName.endsWith("-cluster")
+      if(isCluster){
+        KubernetesClient.deleteCluster(cuid)
+      }else{
+        KubernetesClient.deletePod(cuid)
+      }
+      // If successful, update the database
+      cu.setTerminateTime(new Timestamp(System.currentTimeMillis()))
+      cuDao.update(cu)
     }
+
     Response.ok().build()
   }
 

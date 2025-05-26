@@ -208,6 +208,28 @@
         </nz-select>
       </div>
 
+      <div class="select-unit">
+        <span>Select #Worker Nodes</span>
+        <nz-select
+          class="node-selection"
+          [(ngModel)]="selectedNumNodes">
+          <nz-option
+            *ngFor="let option of nodeOptions"
+            [nzValue]="option">
+          </nz-option>
+        </nz-select>
+      </div>
+
+      <div
+        *ngIf="selectedNumNodes > 0"
+        class="cluster-warning">
+        <nz-alert
+          nzType="warning"
+          nzMessage="Each node inherits the above CPU and memory limits."
+          nzShowIcon>
+        </nz-alert>
+      </div>
+
       <div
         *ngIf="showGpuSelection()"
         class="select-unit">

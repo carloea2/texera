@@ -21,6 +21,7 @@ package edu.uci.ics.texera.service.util
 
 import edu.uci.ics.texera.service.KubernetesConfig
 import io.fabric8.kubernetes.api.model._
+import io.fabric8.kubernetes.api.model.apps.{StatefulSet, StatefulSetBuilder, StatefulSetSpecBuilder}
 import io.fabric8.kubernetes.api.model.metrics.v1beta1.PodMetricsList
 import io.fabric8.kubernetes.client.{KubernetesClient, KubernetesClientBuilder}
 
@@ -39,8 +40,24 @@ object KubernetesClient {
 
   def generatePodName(cuid: Int): String = s"$podNamePrefix-$cuid"
 
+  def generateClusterMasterServiceName(cuid:Int) = s"${generatePodName(cuid)}-master"
+
+  def generateStatefulSetName(cuid: Int): String = s"${generatePodName(cuid)}-workers"
+
   def getPodByName(podName: String): Option[Pod] = {
     Option(client.pods().inNamespace(namespace).withName(podName).get())
+  }
+
+  def getClusterPodsById(cuid: Int): Array[Pod] = {
+    client
+      .pods()
+      .inNamespace(namespace)
+      .withLabel("type", "computing-unit")
+      .withLabel("cuid", cuid.toString)
+      .list()
+      .getItems
+      .asScala
+      .toArray
   }
 
   def getPodMetrics(cuid: Int): Map[String, String] = {
@@ -72,6 +89,118 @@ object KubernetesClient {
         }
       }
       .getOrElse(Map.empty[String, String])
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // Cluster lifecycle helpers
+  // ---------------------------------------------------------------------------
+  def createCluster(
+                     cuid: Int,
+                     cpuLimit: String,
+                     memoryLimit: String,
+                     numNodes: Int,
+                     envVars: Map[String, Any]
+                   ): Pod = {
+    val masterIp    = generatePodURI(cuid)
+    val enrichedEnv = envVars ++ Map(
+      "CLUSTERING_ENABLED"           -> "true",
+      "CLUSTERING_MASTER_IP_ADDRESS" -> masterIp
+    )
+
+    val master = createPod(cuid, cpuLimit, memoryLimit, gpuLimit = "0", enrichedEnv)
+    createClusterMasterService(cuid)
+    createStatefulSet(cuid, cpuLimit, memoryLimit, numNodes, enrichedEnv)
+    master // return master pod
+  }
+
+  def deleteCluster(cuid: Int): Unit = {
+    deletePod(cuid)
+    deleteClusterMasterService(cuid)
+    deleteStatefulSet(cuid)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Kubernetes resource creators
+  // ---------------------------------------------------------------------------
+
+  private def createClusterMasterService(cuid: Int): Service = {
+    val serviceName = generateClusterMasterServiceName(cuid)
+    val service = new ServiceBuilder()
+      .withNewMetadata()
+      .withName(serviceName)
+      .withNamespace(namespace)
+      .endMetadata()
+      .withNewSpec()
+      .withClusterIP("None")                     // headless for DNS discovery
+      .addNewPort()
+      .withPort(2552)
+      .endPort()
+      .addToSelector("type", "computing-unit")
+      .addToSelector("cuid", cuid.toString)
+      .addToSelector("role", "master")
+      .endSpec()
+      .build()
+
+    client.services().inNamespace(namespace).create(service)
+  }
+
+  private def createStatefulSet(
+                                 cuid: Int,
+                                 cpuLimit: String,
+                                 memoryLimit: String,
+                                 numNodes: Int,
+                                 envVars: Map[String, Any]
+                               ): StatefulSet = {
+    val envList = envVars.map { case (k, v) =>
+      new EnvVarBuilder().withName(k).withValue(v.toString).build()
+    }.toList.asJava
+
+    val resources = new ResourceRequirementsBuilder()
+      .addToLimits("cpu", new Quantity(cpuLimit))
+      .addToLimits("memory", new Quantity(memoryLimit))
+      .build()
+
+    val container = new ContainerBuilder()
+      .withName("computing-unit-worker")
+      .withImage(KubernetesConfig.computeUnitWorkerImageName)
+      .withImagePullPolicy(KubernetesConfig.computingUnitImagePullPolicy)
+      .addNewPort().withContainerPort(KubernetesConfig.computeUnitPortNumber).endPort()
+      .withEnv(envList)
+      .withResources(resources)
+      .build()
+
+    val sts = new StatefulSetBuilder()
+      .withNewMetadata()
+      .withName(generateStatefulSetName(cuid))
+      .withNamespace(namespace)
+      .endMetadata()
+      .withSpec(
+        new StatefulSetSpecBuilder()
+          .withServiceName(generatePodName(cuid))
+          .withReplicas(numNodes)
+          .withSelector(
+            new LabelSelectorBuilder()
+              .addToMatchLabels("type", "computing-unit")
+              .addToMatchLabels("cuid", cuid.toString)
+              .addToMatchLabels("role", "worker")
+              .build()
+          )
+          .withNewTemplate()
+          .withNewMetadata()
+          .addToLabels("type", "computing-unit")
+          .addToLabels("cuid", cuid.toString)
+          .addToLabels("role", "worker")
+          .endMetadata()
+          .withNewSpec()
+          .withContainers(container)
+          .endSpec()
+          .endTemplate()
+          .build()
+      )
+      .build()
+
+    client.apps().statefulSets().inNamespace(namespace).create(sts)
   }
 
   def createPod(
@@ -116,6 +245,7 @@ object KubernetesClient {
       .addToLabels("type", "computing-unit")
       .addToLabels("cuid", cuid.toString)
       .addToLabels("name", podName)
+      .addToLabels("role", "master")
 
     // Start building the pod spec
     val specBuilder = podBuilder
@@ -131,7 +261,7 @@ object KubernetesClient {
     val pod = specBuilder
       .addNewContainer()
       .withName("computing-unit-master")
-      .withImage(KubernetesConfig.computeUnitImageName)
+      .withImage(KubernetesConfig.computeUnitMasterImageName)
       .withImagePullPolicy(KubernetesConfig.computingUnitImagePullPolicy)
       .addNewPort()
       .withContainerPort(KubernetesConfig.computeUnitPortNumber)
@@ -150,4 +280,10 @@ object KubernetesClient {
   def deletePod(cuid: Int): Unit = {
     client.pods().inNamespace(namespace).withName(generatePodName(cuid)).delete()
   }
+
+  private def deleteClusterMasterService(cuid: Int): Unit =
+    client.services().inNamespace(namespace).withName(generateClusterMasterServiceName(cuid)).delete()
+
+  private def deleteStatefulSet(cuid: Int): Unit =
+    client.apps().statefulSets().inNamespace(namespace).withName(generateStatefulSetName(cuid)).delete()
 }

@@ -53,6 +53,7 @@ export class ComputingUnitSelectionComponent implements OnInit, OnChanges {
   selectedCpu: string = "";
   selectedGpu: string = "0"; // Default to no GPU
   selectedJvmMemorySize: string = "1G"; // Initial JVM memory size
+  selectedNumNodes: number = 0
 
   // JVM memory slider configuration
   jvmMemorySliderValue: number = 1; // Initial value in GB
@@ -65,6 +66,7 @@ export class ComputingUnitSelectionComponent implements OnInit, OnChanges {
   cpuOptions: string[] = [];
   memoryOptions: string[] = [];
   gpuOptions: string[] = []; // Add GPU options array
+  nodeOptions: number[] = [0,1,2,3,4,5,6,7,8]
 
   // Add property to track user-initiated termination
   private isUserTerminatingUnit = false;
@@ -270,7 +272,7 @@ export class ComputingUnitSelectionComponent implements OnInit, OnChanges {
     const computeJvmMemory = this.selectedJvmMemorySize;
 
     this.computingUnitService
-      .createComputingUnit(computeUnitName, computeCPU, computeMemory, computeGPU, computeJvmMemory)
+      .createComputingUnit(computeUnitName, computeCPU, computeMemory, computeGPU, computeJvmMemory, this.selectedNumNodes)
       .pipe(untilDestroyed(this))
       .subscribe({
         next: (unit: DashboardWorkflowComputingUnit) => {

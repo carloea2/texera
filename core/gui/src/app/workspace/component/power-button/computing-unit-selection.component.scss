@@ -170,8 +170,14 @@
 
 .memory-selection,
 .cpu-selection,
-.gpu-selection {
+.gpu-selection,
+.node-selection
+{
   width: 100%;
+}
+
+.cluster-warning {
+  font-size: 0.9em;
 }
 
 .jvm-memory-slider {
