@@ -94,7 +94,8 @@ object ComputingUnitManagingResource {
       memoryLimit: String,
       gpuLimit: String,
       jvmMemorySize: String,
-      numNodes: Int
+      numNodes: Int,
+      diskLimit: String
   )
 
   case class WorkflowComputingUnitResourceLimit(
@@ -252,6 +253,7 @@ class ComputingUnitManagingResource {
             cuid,
             param.cpuLimit,
             param.memoryLimit,
+            param.diskLimit,
             param.numNodes,
             computingUnitEnvironmentVariables ++ Map(
               EnvironmentalVariable.ENV_USER_JWT_TOKEN -> userToken,
@@ -259,7 +261,7 @@ class ComputingUnitManagingResource {
             )
           )
         }else{
-          // Create the pod with the generated CUID
+          // Create the pod with the generated CUID (ignoring disk limit for now)
           KubernetesClient.createPod(
             cuid,
             param.cpuLimit,
