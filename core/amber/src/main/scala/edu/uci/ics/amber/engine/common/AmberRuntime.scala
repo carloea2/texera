@@ -28,6 +28,7 @@ import edu.uci.ics.amber.engine.architecture.messaginglayer.DeadLetterMonitorAct
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.FiniteDuration
+import scala.sys.process._
 
 object AmberRuntime {
 
@@ -86,16 +87,16 @@ object AmberRuntime {
 
   def startActorWorker(clusterMode:Boolean): Unit = {
     var masterIpAddress = "localhost"
-    var nodeIpAddress = "localhost"
     var masterPort = 2552
+    var nodeIp = "localhost"
     if (clusterMode) {
       masterIpAddress = AmberConfig.masterIpAddress
       masterPort = AmberConfig.masterPort
-      nodeIpAddress = "0.0.0.0"
+      nodeIp = "hostname -i".!!.trim  // only supported by linux/unix
     }
     val workerConfig = ConfigFactory
       .parseString(s"""
-        akka.remote.artery.canonical.hostname = $nodeIpAddress
+        akka.remote.artery.canonical.hostname = $nodeIp
         akka.remote.artery.canonical.port = 0
         akka.cluster.seed-nodes = [ "akka://Amber@$masterIpAddress:$masterPort" ]
         """)
