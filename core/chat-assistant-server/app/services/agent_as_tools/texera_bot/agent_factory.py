@@ -92,15 +92,4 @@ class AgentFactory:
             ),
         )
 
-        # ── draw graphs only if missing ─────────
-        viz_path = self.settings.viz_dir
-        os.makedirs(viz_path, exist_ok=True)
-
-        if not os.path.exists(f"{viz_path}/texera_bot_manager.png"):
-            self.graph_drawer(manager, filename=f"{viz_path}/texera_bot_manager")
-        if not os.path.exists(f"{viz_path}/texera_bot_planner.png"):
-            self.graph_drawer(planner, filename=f"{viz_path}/texera_bot_planner")
-        if not os.path.exists(f"{viz_path}/texera_bot_builder.png"):
-            self.graph_drawer(builder, filename=f"{viz_path}/texera_bot_builder")
-
         return manager
