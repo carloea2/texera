@@ -1,0 +1,20 @@
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+exclude = '''
+(
+  \.venv
+  | scratches/
+)
+'''
+# give Black permission to use next-year’s style
+preview = true
+# opt-in to the specific unstable feature that breaks long literals
+enable-unstable-feature = ["string_processing"]
+
+[tool.flake8]
+max-line-length = 88
+extend-exclude = [
+    ".venv",        # ignore the project’s virtual-env folder
+    "scratches"
+]
