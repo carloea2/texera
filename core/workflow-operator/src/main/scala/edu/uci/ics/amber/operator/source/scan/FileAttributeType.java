@@ -30,7 +30,8 @@ public enum FileAttributeType {
     DOUBLE("double", AttributeType.DOUBLE),
     BOOLEAN("boolean", AttributeType.BOOLEAN),
     TIMESTAMP("timestamp", AttributeType.TIMESTAMP),
-    BINARY("binary", AttributeType.BINARY);
+    BINARY("binary", AttributeType.BINARY),
+    LARGE_BINARY("large binary", AttributeType.LARGE_BINARY);
 
 
     private final String name;

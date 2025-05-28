@@ -40,6 +40,44 @@ class FileScanSourceOpExec private[scan] (
 
   @throws[IOException]
   override def produceTuple(): Iterator[TupleLike] = {
+    if (desc.attributeType == FileAttributeType.BINARY) {
+      if (!desc.extract) {
+        val document = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get))
+        val size = document.asFile().length()
+        if (size > Integer.MAX_VALUE) {
+          throw new IOException(
+            s"File size ($size bytes) exceeds 2GB. Use LARGE_BINARY type instead."
+          )
+        }
+      } else {
+        val is = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get)).asInputStream()
+        val zipIn = new ArchiveStreamFactory()
+          .createArchiveInputStream(new BufferedInputStream(is))
+          .asInstanceOf[ZipArchiveInputStream]
+
+        var entry = zipIn.getNextEntry
+        while (entry != null) {
+          if (!entry.getName.startsWith("__MACOSX")) {
+            var size: Long = 0
+            val buffer = new Array[Byte](8192)
+            var bytesRead = zipIn.read(buffer)
+            while (bytesRead != -1) {
+              size += bytesRead
+              if (size > Integer.MAX_VALUE) {
+                zipIn.close()
+                throw new IOException(
+                  s"File ${entry.getName} size exceeds 2GB. Use LARGE_BINARY type instead."
+                )
+              }
+              bytesRead = zipIn.read(buffer)
+            }
+          }
+          entry = zipIn.getNextEntry
+        }
+        zipIn.close()
+      }
+    }
+
     val is: InputStream =
       DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get)).asInputStream()
 
