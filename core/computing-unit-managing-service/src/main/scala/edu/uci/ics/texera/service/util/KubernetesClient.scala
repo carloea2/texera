@@ -46,6 +46,10 @@ object KubernetesClient {
 
   def generateStatefulSetName(cuid: Int): String = s"${generatePodName(cuid)}-workers"
 
+  def podExists(cuid: Int): Boolean = {
+    getPodByName(generatePodName(cuid)).isDefined
+  }
+
   def getPodByName(podName: String): Option[Pod] = {
     Option(client.pods().inNamespace(namespace).withName(podName).get())
   }
@@ -250,6 +254,7 @@ object KubernetesClient {
       memoryLimit: String,
       gpuLimit: String,
       envVars: Map[String, Any],
+      shmSize: Option[String] = None,
       attachVolume: Option[Volume] = None
   ): Pod = {
     val podName = generatePodName(cuid)
@@ -290,7 +295,7 @@ object KubernetesClient {
       .addToLabels("role", "master")
 
     // -------------- CONTAINER -------------
-    val containerB = new ContainerBuilder()
+    val containerBuilder = new ContainerBuilder()
       .withName("computing-unit-master")
       .withImage(KubernetesConfig.computeUnitMasterImageName)
       .withImagePullPolicy(KubernetesConfig.computingUnitImagePullPolicy)
@@ -305,18 +310,40 @@ object KubernetesClient {
 
     // mount PVC at /data if provided
     attachVolume.foreach { v =>
-      containerB.addNewVolumeMount().withName(v.getName).withMountPath("/core/amber/user-resources").endVolumeMount()
+      containerBuilder.addNewVolumeMount().withName(v.getName).withMountPath("/core/amber/user-resources").endVolumeMount()
       specBuilder.addToVolumes(v)
     }
-
-    val container = containerB.build()
 
     // Only add runtimeClassName when using NVIDIA GPU
     if (gpuLimit != "0" && KubernetesConfig.gpuResourceKey.contains("nvidia")) {
       specBuilder.withRuntimeClassName("nvidia")
     }
 
-    // Complete the pod spec
+    // If shmSize requested, mount /dev/shm
+    shmSize.foreach { _ =>
+      containerBuilder
+        .addNewVolumeMount()
+        .withName("dshm")
+        .withMountPath("/dev/shm")
+        .endVolumeMount()
+    }
+
+    val container = containerBuilder.build()
+
+    // Add tmpfs volume if needed
+    shmSize.foreach { size =>
+      specBuilder
+        .addNewVolume()
+        .withName("dshm")
+        .withEmptyDir(
+          new EmptyDirVolumeSourceBuilder()
+            .withMedium("Memory")
+            .withSizeLimit(new Quantity(size))
+            .build()
+        )
+        .endVolume()
+    }
+
     val pod = specBuilder
       .withContainers(container)
       .withHostname(podName)
