@@ -357,7 +357,7 @@ object KubernetesClient {
   }
 
 
-  private def deleteVolume(cuid: Int): Unit = {
+  def deleteVolume(cuid: Int): Unit = {
     client.persistentVolumeClaims().inNamespace(namespace).withName(generateVolumeName(cuid)).delete()
   }
 

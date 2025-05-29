@@ -555,6 +555,7 @@ class ComputingUnitManagingResource {
         if(isCluster(unit)){
           KubernetesClient.deleteCluster(cuid)
         }else{
+          KubernetesClient.deleteVolume(cuid)
           KubernetesClient.deletePod(cuid)
         }
       }
