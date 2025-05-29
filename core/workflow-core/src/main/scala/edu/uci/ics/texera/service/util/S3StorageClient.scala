@@ -27,6 +27,7 @@ import software.amazon.awssdk.services.s3.model._
 
 import java.security.MessageDigest
 import scala.jdk.CollectionConverters._
+import java.io.InputStream
 
 /**
   * S3Storage provides an abstraction for S3-compatible storage (e.g., MinIO).
@@ -50,6 +51,12 @@ object S3StorageClient {
       )
       .build()
   }
+
+  /**
+    * Get the S3 client instance
+    * @return The S3 client
+    */
+  def getS3Client: S3Client = s3Client
 
   /**
     * Checks if a directory (prefix) exists within an S3 bucket.
@@ -137,6 +144,94 @@ object S3StorageClient {
 
       // Perform batch deletion
       s3Client.deleteObjects(deleteObjectsRequest)
+    }
+  }
+
+  /**
+    * Uploads a file to S3 using multipart upload for better performance.
+    *
+    * @param bucketName Target S3/MinIO bucket
+    * @param key The object key (path) in the bucket
+    * @param inputStream The input stream containing the file data
+    * @param fileSize The size of the file in bytes
+    * @return The ETag of the uploaded object
+    */
+  def multipartUpload(
+      bucketName: String,
+      key: String,
+      inputStream: InputStream,
+      fileSize: Long
+  ): String = {
+    // Initialize multipart upload
+    val createMultipartUploadRequest = CreateMultipartUploadRequest
+      .builder()
+      .bucket(bucketName)
+      .key(key)
+      .build()
+
+    val createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest)
+    val uploadId = createMultipartUploadResponse.uploadId()
+
+    try {
+      // Calculate part size (minimum 5MB per part)
+      val partSize =
+        Math.max(MINIMUM_NUM_OF_MULTIPART_S3_PART, fileSize / MAXIMUM_NUM_OF_MULTIPART_S3_PARTS)
+      var partNumber = 1
+      val completedParts = new java.util.ArrayList[CompletedPart]()
+
+      // Upload parts
+      var remainingBytes = fileSize
+      while (remainingBytes > 0) {
+        val currentPartSize = Math.min(partSize, remainingBytes)
+        val partData = new Array[Byte](currentPartSize.toInt)
+        val bytesRead = inputStream.read(partData, 0, currentPartSize.toInt)
+
+        if (bytesRead > 0) {
+          val uploadPartRequest = UploadPartRequest
+            .builder()
+            .bucket(bucketName)
+            .key(key)
+            .uploadId(uploadId)
+            .partNumber(partNumber)
+            .build()
+
+          val requestBody = software.amazon.awssdk.core.sync.RequestBody.fromBytes(partData)
+          val uploadPartResponse = s3Client.uploadPart(uploadPartRequest, requestBody)
+
+          val completedPart = CompletedPart
+            .builder()
+            .partNumber(partNumber)
+            .eTag(uploadPartResponse.eTag())
+            .build()
+
+          completedParts.add(completedPart)
+          partNumber += 1
+          remainingBytes -= bytesRead
+        }
+      }
+
+      // Complete multipart upload
+      val completeMultipartUploadRequest = CompleteMultipartUploadRequest
+        .builder()
+        .bucket(bucketName)
+        .key(key)
+        .uploadId(uploadId)
+        .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
+        .build()
+
+      val completeResponse = s3Client.completeMultipartUpload(completeMultipartUploadRequest)
+      completeResponse.eTag()
+    } catch {
+      case e: Exception =>
+        // Abort multipart upload on failure
+        val abortMultipartUploadRequest = AbortMultipartUploadRequest
+          .builder()
+          .bucket(bucketName)
+          .key(key)
+          .uploadId(uploadId)
+          .build()
+        s3Client.abortMultipartUpload(abortMultipartUploadRequest)
+        throw e
     }
   }
 }
