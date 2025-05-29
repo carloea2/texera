@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { Component, OnInit } from "@angular/core";
+import {Component, Input, OnChanges, OnInit, SimpleChanges} from "@angular/core";
 import { take } from "rxjs/operators";
 import { WorkflowComputingUnitManagingService } from "../../service/workflow-computing-unit/workflow-computing-unit-managing.service";
 import { DashboardWorkflowComputingUnit, WorkflowComputingUnitType } from "../../types/workflow-computing-unit";
@@ -52,17 +52,17 @@ export class ComputingUnitSelectionComponent implements OnInit {
   newComputingUnitName: string = "";
   selectedMemory: string = "";
   selectedCpu: string = "";
+  enabledGPUSelection: boolean = false;
   selectedGpu: string = "0"; // Default to no GPU
   selectedJvmMemorySize: string = "1G"; // Initial JVM memory size
   selectedComputingUnitType?: WorkflowComputingUnitType; // Selected computing unit type
-  selectedShmSize: string = "64Mi"; // Shared memory size
+  enabledShmAdjustment: boolean = false;
   shmSizeValue: number = 64; // default to 64
   shmSizeUnit: "Mi" | "Gi" = "Mi"; // default unit
   availableComputingUnitTypes: WorkflowComputingUnitType[] = [];
   localComputingUnitUri: string = ""; // URI for local computing unit
-  selectedNumNodes: number = 2
+  selectedNumNodes: number = 1;
   selectedDiskSize: string = "10";
-  isCluster: boolean = false;
 
   // JVM memory slider configuration
   jvmMemorySliderValue: number = 1; // Initial value in GB
@@ -75,7 +75,6 @@ export class ComputingUnitSelectionComponent implements OnInit {
   cpuOptions: string[] = [];
   memoryOptions: string[] = [];
   gpuOptions: string[] = []; // Add GPU options array
-  nodeOptions: number[] = [0,1,2,3,4,5,6,7,8]
 
   constructor(
     private computingUnitService: WorkflowComputingUnitManagingService,
@@ -155,6 +154,14 @@ export class ComputingUnitSelectionComponent implements OnInit {
       });
 
     this.registerWorkflowMetadataSubscription();
+  }
+
+  onNumNodesChange(value: number) {
+    this.selectedNumNodes = value;
+    if (this.isCluster()) {
+      this.enabledGPUSelection = false;
+      this.enabledShmAdjustment = false;
+    }
   }
 
   /**
@@ -304,17 +311,18 @@ export class ComputingUnitSelectionComponent implements OnInit {
         return;
       }
 
-      this.selectedShmSize = `${this.shmSizeValue}${this.shmSizeUnit}`;
-    const computeDiskSize = this.selectedDiskSize + "Gi";
+      let selectedShmSize = `${this.shmSizeValue}${this.shmSizeUnit}`;
 
       this.computingUnitService
         .createKubernetesBasedComputingUnit(
           this.newComputingUnitName,
           this.selectedCpu,
           this.selectedMemory,
-          this.selectedGpu,
+          this.enabledGPUSelection? this.selectedGpu: undefined,
           this.selectedJvmMemorySize,
-          this.selectedShmSize
+          this.enabledShmAdjustment? selectedShmSize: undefined,
+          this.selectedDiskSize + "Gi",
+          this.selectedNumNodes
         )
         .pipe(untilDestroyed(this))
         .subscribe({
@@ -649,6 +657,10 @@ export class ComputingUnitSelectionComponent implements OnInit {
   // Called when the component initializes
   updateJvmMemorySlider(): void {
     this.resetJvmMemorySlider();
+  }
+
+  isCluster():boolean {
+    return this.selectedNumNodes > 1;
   }
 
   // Find the nearest valid step value
