@@ -352,7 +352,7 @@
         nzMessage="This will start a cluster with {{ selectedNumNodes }} nodes, allocating a total
            of {{ parseResourceNumber(selectedCpu) * selectedNumNodes }}{{parseResourceUnit(selectedCpu)}} CPU,
            {{ parseResourceNumber(selectedMemory) * selectedNumNodes }}{{parseResourceUnit(selectedMemory)}} Memory,
-           and a {{ selectedDiskSize }}GiB disk shared by all nodes."
+           and a {{ selectedDiskSize }}GiB disk shared by all nodes. Advanced configurations (e.g. GPU, Shared Memory, etc.) will be ignored."
         nzShowIcon>
       </nz-alert>
     </div>
