@@ -20,17 +20,19 @@
 package edu.uci.ics.amber.operator.source.scan
 
 import edu.uci.ics.amber.core.executor.SourceOperatorExecutor
-import edu.uci.ics.amber.core.storage.DocumentFactory
+import edu.uci.ics.amber.core.storage.{DocumentFactory, StorageConfig}
 import edu.uci.ics.amber.core.tuple.AttributeTypeUtils.parseField
 import edu.uci.ics.amber.core.tuple.TupleLike
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import org.apache.commons.io.IOUtils.toByteArray
+
 import java.io._
 import java.net.URI
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.IteratorHasAsScala
 import org.apache.commons.compress.archivers.ArchiveStreamFactory
 import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream
+import edu.uci.ics.texera.service.util.{S3StorageClient, S3ReferenceCounter}
 
 class FileScanSourceOpExec private[scan] (
     descString: String
@@ -119,6 +121,27 @@ class FileScanSourceOpExec private[scan] (
               fields.addOne(fileName)
             }
             fields.addOne(desc.attributeType match {
+              case FileAttributeType.LARGE_BINARY =>
+                val bucketName = StorageConfig.s3LargeBinaryBucketName
+                val key = s"${java.util.UUID.randomUUID()}"
+                var size: Long = 0
+                val buffer = new Array[Byte](8192)
+                var bytesRead = entry.read(buffer)
+                while (bytesRead != -1) {
+                  size += bytesRead
+                  bytesRead = entry.read(buffer)
+                }
+                // Create a new input stream for the upload
+                val uploadStream =
+                  DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get)).asInputStream()
+                try {
+                  S3StorageClient.multipartUpload(bucketName, key, uploadStream, size)
+                  S3ReferenceCounter.initializeReferenceCount(bucketName, key)
+                  s"s3://$bucketName/$key"
+                } finally {
+                  uploadStream.close()
+                  entry.close()
+                }
               case FileAttributeType.SINGLE_STRING =>
                 new String(toByteArray(entry), desc.fileEncoding.getCharset)
               case _ => parseField(toByteArray(entry), desc.attributeType.getType)

@@ -57,6 +57,6 @@ public enum FileAttributeType {
     }
 
     public boolean isSingle() {
-        return this == SINGLE_STRING || this == BINARY;
+        return this == SINGLE_STRING || this == BINARY || this == LARGE_BINARY;
     }
 }

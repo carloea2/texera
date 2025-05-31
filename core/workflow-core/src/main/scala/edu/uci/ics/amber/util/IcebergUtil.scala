@@ -56,7 +56,7 @@ import java.net.URI
 object IcebergUtil {
 
   // Special prefix to identify LARGE_BINARY type in Iceberg
-  private val LARGE_BINARY_PREFIX = "LARGE_BINARY_URI:"
+  val LARGE_BINARY_PREFIX = "LARGE_BINARY_URI:"
 
   /**
     * Creates and initializes a HadoopCatalog with the given parameters.
@@ -210,7 +210,20 @@ object IcebergUtil {
   def toIcebergSchema(amberSchema: Schema): IcebergSchema = {
     val icebergFields = amberSchema.getAttributes.zipWithIndex.map {
       case (attribute, index) =>
-        Types.NestedField.optional(index + 1, attribute.getName, toIcebergType(attribute.getType))
+        attribute.getType match {
+          case AttributeType.LARGE_BINARY =>
+            Types.NestedField.optional(
+              index + 1,
+              LARGE_BINARY_PREFIX + attribute.getName,
+              Types.StringType.get()
+            )
+          case _ =>
+            Types.NestedField.optional(
+              index + 1,
+              attribute.getName,
+              toIcebergType(attribute.getType)
+            )
+        }
     }
     new IcebergSchema(icebergFields.asJava)
   }
@@ -230,8 +243,6 @@ object IcebergUtil {
       case AttributeType.BOOLEAN   => Types.BooleanType.get()
       case AttributeType.TIMESTAMP => Types.TimestampType.withoutZone()
       case AttributeType.BINARY    => Types.BinaryType.get()
-      case AttributeType.LARGE_BINARY =>
-        Types.StringType.get() // Store as string with special prefix
       case AttributeType.ANY =>
         throw new IllegalArgumentException("ANY type is not supported in Iceberg")
     }
@@ -249,22 +260,22 @@ object IcebergUtil {
     tuple.schema.getAttributes.zipWithIndex.foreach {
       case (attribute, index) =>
         val value = tuple.getField[AnyRef](index) match {
-          case null               => null
-          case ts: Timestamp      => ts.toInstant.atZone(ZoneId.systemDefault()).toLocalDateTime
-          case bytes: Array[Byte] => ByteBuffer.wrap(bytes)
-          case other              => other
-        }
-        // Add prefix to attribute name if it's LARGE_BINARY type
-        val fieldName = if (attribute.getType == AttributeType.LARGE_BINARY) {
-          // For LARGE_BINARY type, increment the reference count of the S3 object
-          value match {
-            case uri: String if uri.startsWith("s3://") =>
-              val s3Uri = new URI(uri)
+          case null                                                           => null
+          case ts: Timestamp                                                  => ts.toInstant.atZone(ZoneId.systemDefault()).toLocalDateTime
+          case bytes: Array[Byte]                                             => ByteBuffer.wrap(bytes)
+          case str: String if attribute.getType == AttributeType.LARGE_BINARY =>
+            // For LARGE_BINARY type, increment the reference count of the S3 object
+            if (str.startsWith("s3://")) {
+              val s3Uri = new URI(str)
               val bucketName = s3Uri.getHost
               val key = s3Uri.getPath.stripPrefix("/")
               S3ReferenceCounter.incrementReferenceCount(bucketName, key)
-            case _ => // Not a valid S3 URI, skip reference counting
-          }
+            }
+            str
+          case other => other
+        }
+        // Add prefix to field name if it's LARGE_BINARY type
+        val fieldName = if (attribute.getType == AttributeType.LARGE_BINARY) {
           LARGE_BINARY_PREFIX + attribute.getName
         } else {
           attribute.getName
@@ -318,15 +329,14 @@ object IcebergUtil {
       .asScala
       .map { field =>
         // Remove prefix from field name if it exists
-        val fieldName = if (field.name().startsWith(LARGE_BINARY_PREFIX)) {
-          field.name().substring(LARGE_BINARY_PREFIX.length)
+        if (field.name().startsWith(LARGE_BINARY_PREFIX)) {
+          new Attribute(
+            field.name().substring(LARGE_BINARY_PREFIX.length),
+            AttributeType.LARGE_BINARY
+          )
         } else {
-          field.name()
+          new Attribute(field.name(), fromIcebergType(field.`type`().asPrimitiveType()))
         }
-        new Attribute(
-          fieldName,
-          fromIcebergTypeWithFieldName(field.`type`().asPrimitiveType(), field.name())
-        )
       }
       .toList
 
@@ -343,22 +353,6 @@ object IcebergUtil {
       case _: Types.TimestampType => AttributeType.TIMESTAMP
       case _: Types.BinaryType    => AttributeType.BINARY
       case _                      => throw new IllegalArgumentException(s"Unsupported Iceberg type: $icebergType")
-    }
-  }
-
-  /**
-    * Converts an Iceberg `Type` to an Amber `AttributeType`, with special handling for LARGE_BINARY type.
-    * This method checks if the field name contains the LARGE_BINARY prefix to determine if it's a LARGE_BINARY type.
-    *
-    * @param icebergType The Iceberg Type.
-    * @param fieldName The name of the field.
-    * @return The corresponding Amber AttributeType.
-    */
-  def fromIcebergTypeWithFieldName(icebergType: PrimitiveType, fieldName: String): AttributeType = {
-    if (fieldName.startsWith(LARGE_BINARY_PREFIX)) {
-      AttributeType.LARGE_BINARY
-    } else {
-      fromIcebergType(icebergType)
     }
   }
 

@@ -58,9 +58,16 @@ import play.api.libs.json.Json
 import java.net.URI
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
-import scala.jdk.CollectionConverters.IterableHasAsScala
-
 import edu.uci.ics.amber.core.storage.result.iceberg.OnIceberg
+import edu.uci.ics.amber.util.IcebergUtil
+import edu.uci.ics.texera.service.util.S3ReferenceCounter
+import edu.uci.ics.texera.service.util.S3StorageClient
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
+import org.apache.iceberg.exceptions.NoSuchTableException
+
+import scala.jdk.CollectionConverters._
+import edu.uci.ics.amber.core.storage.StorageConfig
+import edu.uci.ics.amber.core.tuple.Tuple
 
 object WorkflowService {
   private val workflowServiceMapping = new ConcurrentHashMap[String, WorkflowService]()
@@ -322,12 +329,70 @@ class WorkflowService(
     // Remove references from registry first
     WorkflowExecutionsResource.deleteConsoleMessageAndExecutionResultUris(eid)
 
-    // Clean up all result and console message documents
-    (resultUris ++ consoleMessagesUris).foreach { uri =>
-      try DocumentFactory.openDocument(uri)._1.clear()
-      catch {
+    // Clean up console message documents (simple clear without S3 logic)
+    consoleMessagesUris.foreach { uri =>
+      try {
+        DocumentFactory.openDocument(uri)._1.clear()
+      } catch {
         case error: Throwable =>
-          logger.debug(s"Error processing document at $uri: ${error.getMessage}")
+          logger.debug(s"Error processing console message document at $uri: ${error.getMessage}")
+      }
+    }
+
+    // Clean up result documents with S3 reference counting for Iceberg tables
+    resultUris.foreach { uri =>
+      try {
+        val (doc, _) = DocumentFactory.openDocument(uri)
+        doc match {
+          case iceberg: OnIceberg =>
+            // For Iceberg tables, check for large binary attributes and decrement S3 reference counts
+            val table = IcebergUtil
+              .loadTableMetadata(iceberg.catalog, iceberg.tableNamespace, iceberg.tableName)
+              .getOrElse(
+                throw new NoSuchTableException(
+                  s"table ${iceberg.tableNamespace}.${iceberg.tableName} doesn't exist"
+                )
+              )
+            val schema = table.schema()
+            val largeBinaryFields = schema.columns().asScala.filter { field =>
+              field.name().startsWith(IcebergUtil.LARGE_BINARY_PREFIX)
+            }
+
+            if (largeBinaryFields.nonEmpty) {
+              // Read all records to process large binary fields
+              iceberg.get().foreach { record =>
+                largeBinaryFields.foreach { field =>
+                  record match {
+                    case r: Tuple =>
+                      val fieldValue =
+                        r.getField[Any](field.name().stripPrefix(IcebergUtil.LARGE_BINARY_PREFIX))
+                      Option(fieldValue)
+                        .collect { case s: String if s.startsWith("s3://") => s }
+                        .foreach { s3Uri =>
+                          val bucketName = StorageConfig.s3LargeBinaryBucketName
+                          val key = s3Uri.stripPrefix("s3://texera-large-binary/")
+                          val newCount = S3ReferenceCounter.decrementReferenceCount(bucketName, key)
+                          if (newCount == 0) {
+                            S3StorageClient.getS3Client.deleteObject(
+                              DeleteObjectRequest
+                                .builder()
+                                .bucket(bucketName)
+                                .key(key)
+                                .build()
+                            )
+                          }
+                        }
+                    case _ => // Skip non-Record types
+                  }
+                }
+              }
+            }
+            iceberg.clear()
+          case other => other.clear()
+        }
+      } catch {
+        case error: Throwable =>
+          logger.debug(s"Error processing result document at $uri: ${error.getMessage}")
       }
     }
 
