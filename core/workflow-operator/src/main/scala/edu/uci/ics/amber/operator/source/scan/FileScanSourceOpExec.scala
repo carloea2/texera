@@ -40,43 +40,53 @@ class FileScanSourceOpExec private[scan] (
   private val desc: FileScanSourceOpDesc =
     objectMapper.readValue(descString, classOf[FileScanSourceOpDesc])
 
+  /**
+    * Checks if the file size exceeds 2GB and throws an exception if it does.
+    * This is used to prevent loading files that are too large into memory.
+    * For files larger than 2GB, the LARGE_BINARY type should be used instead.
+    *
+    * @param stream The input stream of the file to check
+    * @param fileName Optional name of the file being checked, used in error messages
+    * @throws IOException if the file size exceeds 2GB
+    */
+  private def checkFileSize(stream: InputStream, fileName: Option[String] = None): Unit = {
+    var size: Long = 0
+    val buffer = new Array[Byte](8192)
+    var bytesRead = stream.read(buffer)
+    while (bytesRead != -1) {
+      size += bytesRead
+      if (size > Integer.MAX_VALUE) {
+        stream.close()
+        throw new IOException(
+          s"File ${fileName.map(name => s"$name ").getOrElse("")}size ($size bytes) exceeds 2GB. Use LARGE_BINARY type instead."
+        )
+      }
+      bytesRead = stream.read(buffer)
+    }
+  }
+
   @throws[IOException]
   override def produceTuple(): Iterator[TupleLike] = {
     if (desc.attributeType == FileAttributeType.BINARY) {
+      val document = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get))
+      val inputStream = document.asInputStream()
+
       if (!desc.extract) {
-        val document = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get))
-        val size = document.asFile().length()
-        if (size > Integer.MAX_VALUE) {
-          throw new IOException(
-            s"File size ($size bytes) exceeds 2GB. Use LARGE_BINARY type instead."
-          )
-        }
+        checkFileSize(inputStream)
+        inputStream.close()
       } else {
-        val is = DocumentFactory.openReadonlyDocument(new URI(desc.fileName.get)).asInputStream()
-        val zipIn = new ArchiveStreamFactory()
-          .createArchiveInputStream(new BufferedInputStream(is))
+        val zipStream = new ArchiveStreamFactory()
+          .createArchiveInputStream(new BufferedInputStream(inputStream))
           .asInstanceOf[ZipArchiveInputStream]
 
-        var entry = zipIn.getNextEntry
-        while (entry != null) {
-          if (!entry.getName.startsWith("__MACOSX")) {
-            var size: Long = 0
-            val buffer = new Array[Byte](8192)
-            var bytesRead = zipIn.read(buffer)
-            while (bytesRead != -1) {
-              size += bytesRead
-              if (size > Integer.MAX_VALUE) {
-                zipIn.close()
-                throw new IOException(
-                  s"File ${entry.getName} size exceeds 2GB. Use LARGE_BINARY type instead."
-                )
-              }
-              bytesRead = zipIn.read(buffer)
-            }
-          }
-          entry = zipIn.getNextEntry
-        }
-        zipIn.close()
+        Iterator
+          .continually(zipStream.getNextEntry)
+          .takeWhile(_ != null)
+          .filterNot(_.getName.startsWith("__MACOSX"))
+          .foreach(entry => checkFileSize(zipStream, Some(entry.getName)))
+
+        zipStream.close()
+        inputStream.close()
       }
     }
 
