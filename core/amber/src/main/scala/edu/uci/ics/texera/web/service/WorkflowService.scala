@@ -314,7 +314,10 @@ class WorkflowService(
     *  1. Retrieves all document URIs associated with the execution
     *  2. Clears URI references from the execution registry
     *  3. Safely clears all result and console message documents
-    *  4. Expires Iceberg snapshots for runtime statistics
+    *  4. For Iceberg tables with large binary fields:
+    *     - Decrements S3 reference counts for any S3 URIs
+    *     - Clears the table contents
+    *  5. Expires Iceberg snapshots for runtime statistics
     *
     * @param eid The execution identity to clean up resources for
     */
