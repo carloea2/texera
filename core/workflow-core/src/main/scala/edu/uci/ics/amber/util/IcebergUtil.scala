@@ -264,13 +264,11 @@ object IcebergUtil {
           case bytes: Array[Byte]                                             => ByteBuffer.wrap(bytes)
           case str: String if attribute.getType == AttributeType.LARGE_BINARY =>
             // For LARGE_BINARY type, increment the reference count of the S3 object
-            if (str.startsWith("s3://")) {
-              S3LargeBinaryManager
-                .incrementReferenceCount(str)
-                .getOrElse(
-                  throw new IllegalStateException(s"Failed to increment reference count for $str")
-                )
-            }
+            S3LargeBinaryManager
+              .incrementReferenceCount(str)
+              .getOrElse(
+                throw new IllegalStateException(s"Failed to increment reference count for $str")
+              )
             str
           case other => other
         }

@@ -174,14 +174,14 @@ object S3LargeBinaryManager {
     * Decrements the reference count for an S3 object and deletes it if the count reaches zero
     *
     * @param s3Uri The S3 URI of the object
-    * @return Success with the new reference count if successful, Failure otherwise
+    * @return The new reference count if successful, throws exception otherwise
     */
-  def decrementReferenceCount(s3Uri: String): Try[Long] = {
+  def decrementReferenceCount(s3Uri: String): Long = {
     if (!s3Uri.startsWith("s3://")) {
-      return Failure(new IllegalArgumentException("Invalid S3 URI format"))
+      throw new IllegalArgumentException("Invalid S3 URI format")
     }
 
-    Try {
+    try {
       val uri = new URI(s3Uri)
       val bucketName = uri.getHost
       val key = uri.getPath.stripPrefix("/")
@@ -197,6 +197,12 @@ object S3LargeBinaryManager {
         )
       }
       newCount
+    } catch {
+      case e: Exception =>
+        throw new IllegalStateException(
+          s"Failed to decrement reference count for $s3Uri: ${e.getMessage}",
+          e
+        )
     }
   }
 }

@@ -350,30 +350,33 @@ class WorkflowService(
                   s"table ${iceberg.tableNamespace}.${iceberg.tableName} doesn't exist"
                 )
               )
-            val schema = table.schema()
-            val largeBinaryFields = schema.columns().asScala.filter { field =>
-              field.name().startsWith(IcebergUtil.LARGE_BINARY_PREFIX)
-            }
 
+            // Process large binary fields if they exist
+            val largeBinaryFields = table
+              .schema()
+              .columns()
+              .asScala
+              .filter(_.name().startsWith(IcebergUtil.LARGE_BINARY_PREFIX))
             if (largeBinaryFields.nonEmpty) {
-              // Read all records to process large binary fields
               iceberg.get().foreach { record =>
-                largeBinaryFields.foreach { field =>
-                  record match {
-                    case r: Tuple =>
-                      val fieldValue =
-                        r.getField[Any](field.name().stripPrefix(IcebergUtil.LARGE_BINARY_PREFIX))
-                      Option(fieldValue)
+                record match {
+                  case r: Tuple =>
+                    largeBinaryFields.foreach { field =>
+                      val fieldName = field.name().stripPrefix(IcebergUtil.LARGE_BINARY_PREFIX)
+                      Option(r.getField[Any](fieldName))
                         .collect { case s: String if s.startsWith("s3://") => s }
                         .foreach { s3Uri =>
-                          S3LargeBinaryManager
-                            .decrementReferenceCount(s3Uri)
-                            .getOrElse(
-                              logger.error(s"Failed to decrement reference count for $s3Uri")
-                            )
+                          try {
+                            S3LargeBinaryManager.decrementReferenceCount(s3Uri)
+                          } catch {
+                            case e: Exception =>
+                              logger.error(
+                                s"Failed to decrement reference count for $s3Uri: ${e.getMessage}"
+                              )
+                          }
                         }
-                    case _ => // Skip non-Record types
-                  }
+                    }
+                  case _ => // Skip non-Record types
                 }
               }
             }
