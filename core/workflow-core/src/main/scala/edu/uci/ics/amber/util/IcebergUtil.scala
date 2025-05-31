@@ -242,6 +242,8 @@ object IcebergUtil {
       case AttributeType.BOOLEAN   => Types.BooleanType.get()
       case AttributeType.TIMESTAMP => Types.TimestampType.withoutZone()
       case AttributeType.BINARY    => Types.BinaryType.get()
+      case AttributeType.LARGE_BINARY =>
+        Types.StringType.get() // LARGE_BINARY is stored as String in Iceberg
       case AttributeType.ANY =>
         throw new IllegalArgumentException("ANY type is not supported in Iceberg")
     }
@@ -264,12 +266,16 @@ object IcebergUtil {
           case bytes: Array[Byte]                                             => ByteBuffer.wrap(bytes)
           case str: String if attribute.getType == AttributeType.LARGE_BINARY =>
             // For LARGE_BINARY type, increment the reference count of the S3 object
-            S3LargeBinaryManager
-              .incrementReferenceCount(str)
-              .getOrElse(
-                throw new IllegalStateException(s"Failed to increment reference count for $str")
-              )
-            str
+            try {
+              S3LargeBinaryManager.incrementReferenceCount(str)
+              str
+            } catch {
+              case e: Exception =>
+                throw new IllegalStateException(
+                  s"Failed to increment reference count for $str: ${e.getMessage}",
+                  e
+                )
+            }
           case other => other
         }
         // Add prefix to field name if it's LARGE_BINARY type

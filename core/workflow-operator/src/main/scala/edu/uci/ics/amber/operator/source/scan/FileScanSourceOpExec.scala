@@ -123,11 +123,12 @@ class FileScanSourceOpExec private[scan] (
             }
             fields.addOne(desc.attributeType match {
               case FileAttributeType.LARGE_BINARY =>
-                S3LargeBinaryManager
-                  .uploadFile(entry)
-                  .getOrElse(
-                    throw new IOException("Failed to upload file to S3")
-                  )
+                try {
+                  S3LargeBinaryManager.uploadFile(entry)
+                } catch {
+                  case e: Exception =>
+                    throw new IOException(s"Failed to upload file to S3: ${e.getMessage}", e)
+                }
               case FileAttributeType.SINGLE_STRING =>
                 new String(toByteArray(entry), desc.fileEncoding.getCharset)
               case _ => parseField(toByteArray(entry), desc.attributeType.getType)
