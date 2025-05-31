@@ -25,44 +25,13 @@ import org.apache.iceberg.types.Types
 import org.apache.iceberg.{Schema => IcebergSchema}
 import org.apache.iceberg.data.GenericRecord
 import org.scalatest.flatspec.AnyFlatSpec
-import org.scalatest.BeforeAndAfterEach
-import edu.uci.ics.texera.service.util.S3LargeBinaryManager
 
 import java.nio.ByteBuffer
 import java.sql.Timestamp
 import java.time.{LocalDateTime, ZoneId}
 import scala.jdk.CollectionConverters._
 
-class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
-
-  // Test implementation of S3LargeBinaryManager that tracks calls
-  private class TestS3LargeBinaryManager extends S3LargeBinaryManager {
-    private var lastIncrementedUri: String = _
-    
-    override def incrementReferenceCount(uri: String): Unit = {
-      lastIncrementedUri = uri
-    }
-    
-    def getLastIncrementedUri: String = lastIncrementedUri
-  }
-
-  private val testS3Manager = new TestS3LargeBinaryManager
-
-  override def beforeEach(): Unit = {
-    super.beforeEach()
-    // Set the test instance as the singleton instance
-    val field = classOf[S3LargeBinaryManager].getDeclaredField("instance")
-    field.setAccessible(true)
-    field.set(null, testS3Manager)
-  }
-
-  override def afterEach(): Unit = {
-    super.afterEach()
-    // Reset the singleton instance
-    val field = classOf[S3LargeBinaryManager].getDeclaredField("instance")
-    field.setAccessible(true)
-    field.set(null, null)
-  }
+class IcebergUtilSpec extends AnyFlatSpec {
 
   val texeraSchema: Schema = Schema()
     .add("test-1", AttributeType.INTEGER)
@@ -72,7 +41,6 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
     .add("test-5", AttributeType.TIMESTAMP)
     .add("test-6", AttributeType.STRING)
     .add("test-7", AttributeType.BINARY)
-    .add("test-8", AttributeType.LARGE_BINARY)
 
   val icebergSchema: IcebergSchema = new IcebergSchema(
     List(
@@ -82,8 +50,7 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
       Types.NestedField.optional(4, "test-4", Types.DoubleType.get()),
       Types.NestedField.optional(5, "test-5", Types.TimestampType.withoutZone()),
       Types.NestedField.optional(6, "test-6", Types.StringType.get()),
-      Types.NestedField.optional(7, "test-7", Types.BinaryType.get()),
-      Types.NestedField.optional(8, IcebergUtil.LARGE_BINARY_PREFIX + "test-8", Types.StringType.get())
+      Types.NestedField.optional(7, "test-7", Types.BinaryType.get())
     ).asJava
   )
 
@@ -130,8 +97,7 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
           Double.box(3.14),
           new Timestamp(10000L),
           "hello world",
-          Array[Byte](1, 2, 3, 4),
-          null  // Add null LARGE_BINARY field
+          Array[Byte](1, 2, 3, 4)
         )
       )
       .build()
@@ -145,7 +111,6 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
     assert(record.getField("test-5") == new Timestamp(10000L).toLocalDateTime)
     assert(record.getField("test-6") == "hello world")
     assert(record.getField("test-7") == ByteBuffer.wrap(Array[Byte](1, 2, 3, 4)))
-    assert(record.getField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8") == null)
 
     val tupleFromRecord = IcebergUtil.fromRecord(record, texeraSchema)
     assert(tupleFromRecord == tuple)
@@ -162,8 +127,7 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
           null, // Null Double
           null, // Null Timestamp
           "hello world", // Non-null String
-          null, // Null Binary
-          null  // Null LARGE_BINARY
+          null // Null Binary
         )
       )
       .build()
@@ -177,7 +141,6 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
     assert(record.getField("test-5") == null)
     assert(record.getField("test-6") == "hello world")
     assert(record.getField("test-7") == null)
-    assert(record.getField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8") == null)
 
     val tupleFromRecord = IcebergUtil.fromRecord(record, texeraSchema)
     assert(tupleFromRecord == tuple)
@@ -194,8 +157,7 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
           null, // Null Double
           null, // Null Timestamp
           null, // Null String
-          null, // Null Binary
-          null  // Null LARGE_BINARY
+          null // Null Binary
         )
       )
       .build()
@@ -209,7 +171,6 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
     assert(record.getField("test-5") == null)
     assert(record.getField("test-6") == null)
     assert(record.getField("test-7") == null)
-    assert(record.getField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8") == null)
 
     val tupleFromRecord = IcebergUtil.fromRecord(record, texeraSchema)
     assert(tupleFromRecord == tuple)
@@ -237,100 +198,5 @@ class IcebergUtilSpec extends AnyFlatSpec with BeforeAndAfterEach {
     assert(tuple.getField[Timestamp]("test-5") == new Timestamp(10000L))
     assert(tuple.getField[String]("test-6") == "hello world")
     assert(tuple.getField[Array[Byte]]("test-7") sameElements Array[Byte](1, 2, 3, 4))
-  }
-
-  it should "convert Texera Tuple with LARGE_BINARY to Iceberg GenericRecord correctly" in {
-    val s3Uri = "s3://test-bucket/test-object"
-    val tuple = Tuple
-      .builder(texeraSchema)
-      .addSequentially(
-        Array(
-          Int.box(42),
-          Long.box(123456789L),
-          Boolean.box(true),
-          Double.box(3.14),
-          new Timestamp(10000L),
-          "hello world",
-          Array[Byte](1, 2, 3, 4),
-          s3Uri  // LARGE_BINARY field
-        )
-      )
-      .build()
-
-    val record = IcebergUtil.toGenericRecord(toIcebergSchema(tuple.schema), tuple)
-
-    assert(record.getField("test-1") == 42)
-    assert(record.getField("test-2") == 123456789L)
-    assert(record.getField("test-3") == true)
-    assert(record.getField("test-4") == 3.14)
-    assert(record.getField("test-5") == new Timestamp(10000L).toLocalDateTime)
-    assert(record.getField("test-6") == "hello world")
-    assert(record.getField("test-7") == ByteBuffer.wrap(Array[Byte](1, 2, 3, 4)))
-    assert(record.getField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8") == s3Uri)
-
-    // Verify that incrementReferenceCount was called with the correct URI
-    assert(testS3Manager.getLastIncrementedUri == s3Uri)
-
-    val tupleFromRecord = IcebergUtil.fromRecord(record, texeraSchema)
-    assert(tupleFromRecord == tuple)
-  }
-
-  it should "convert Texera Tuple with null LARGE_BINARY to Iceberg GenericRecord correctly" in {
-    val tuple = Tuple
-      .builder(texeraSchema)
-      .addSequentially(
-        Array(
-          Int.box(42),
-          Long.box(123456789L),
-          Boolean.box(true),
-          Double.box(3.14),
-          new Timestamp(10000L),
-          "hello world",
-          Array[Byte](1, 2, 3, 4),
-          null
-        )
-      )
-      .build()
-
-    val record = IcebergUtil.toGenericRecord(toIcebergSchema(tuple.schema), tuple)
-
-    assert(record.getField("test-1") == 42)
-    assert(record.getField("test-2") == 123456789L)
-    assert(record.getField("test-3") == true)
-    assert(record.getField("test-4") == 3.14)
-    assert(record.getField("test-5") == new Timestamp(10000L).toLocalDateTime)
-    assert(record.getField("test-6") == "hello world")
-    assert(record.getField("test-7") == ByteBuffer.wrap(Array[Byte](1, 2, 3, 4)))
-    assert(record.getField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8") == null)
-
-    val tupleFromRecord = IcebergUtil.fromRecord(record, texeraSchema)
-    assert(tupleFromRecord == tuple)
-  }
-
-  it should "convert Iceberg GenericRecord with LARGE_BINARY to Texera Tuple correctly" in {
-    val s3Uri = "s3://test-bucket/test-object"
-    val record = GenericRecord.create(icebergSchema)
-    record.setField("test-1", 42)
-    record.setField("test-2", 123456789L)
-    record.setField("test-3", true)
-    record.setField("test-4", 3.14)
-    record.setField(
-      "test-5",
-      LocalDateTime.ofInstant(new Timestamp(10000L).toInstant, ZoneId.systemDefault())
-    )
-    record.setField("test-6", "hello world")
-    record.setField("test-7", ByteBuffer.wrap(Array[Byte](1, 2, 3, 4)))
-    record.setField(IcebergUtil.LARGE_BINARY_PREFIX + "test-8", s3Uri)
-
-    val tuple = IcebergUtil.fromRecord(record, texeraSchema)
-
-    assert(tuple.getField[Integer]("test-1") == 42)
-    assert(tuple.getField[Long]("test-2") == 123456789L)
-    assert(tuple.getField[Boolean]("test-3") == true)
-    assert(tuple.getField[Double]("test-4") == 3.14)
-    assert(tuple.getField[Timestamp]("test-5") == new Timestamp(10000L))
-    assert(tuple.getField[String]("test-6") == "hello world")
-    assert(tuple.getField[Array[Byte]]("test-7") sameElements Array[Byte](1, 2, 3, 4))
-    assert(tuple.getField[String]("test-8") == s3Uri)
   }
 }
