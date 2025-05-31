@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 object S3LargeBinaryManager {
 
   private val BUFFER_SIZE = 1024 * 1024 // 1MB buffer size
-  private val MIN_PART_SIZE = 10 * 1024 * 1024 // 10MB minimum part size for S3 multipart upload
+  private val MIN_PART_SIZE = StorageConfig.s3MultipartUploadPartSize // Use configured part size from StorageConfig
   private val MAX_CONCURRENT_UPLOADS = 10 // Maximum number of concurrent uploads
   private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
   private val REFERENCE_COUNT_PREFIX = "reference-counts/"
