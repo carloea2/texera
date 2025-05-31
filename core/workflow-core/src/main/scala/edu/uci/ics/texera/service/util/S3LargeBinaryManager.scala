@@ -16,10 +16,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import software.amazon.awssdk.core.sync.RequestBody
 
-import java.io.{BufferedInputStream, InputStream, RandomAccessFile}
+import java.io.{BufferedInputStream, InputStream}
 import java.net.URI
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -33,9 +31,9 @@ import scala.collection.mutable.ArrayBuffer
   */
 object S3LargeBinaryManager {
 
-  private val BUFFER_SIZE = 8 * 1024 * 1024 // 8MB buffer size
-  private val MIN_PART_SIZE = 50 * 1024 * 1024 // 50MB minimum part size for S3 multipart upload
-  private val MAX_CONCURRENT_UPLOADS = 20 // Maximum number of concurrent uploads
+  private val BUFFER_SIZE = 1024 * 1024 // 1MB buffer size
+  private val MIN_PART_SIZE = 10 * 1024 * 1024 // 10MB minimum part size for S3 multipart upload
+  private val MAX_CONCURRENT_UPLOADS = 10 // Maximum number of concurrent uploads
   private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
   private val REFERENCE_COUNT_PREFIX = "reference-counts/"
 
@@ -61,51 +59,35 @@ object S3LargeBinaryManager {
       val partSize = MIN_PART_SIZE
       var partNumber = 1
       val completedParts = new ConcurrentHashMap[Int, CompletedPart]()
+      val buffer = new Array[Byte](BUFFER_SIZE)
+      var currentPartBytes = 0L
+      var totalBytes = 0L
+
+      // Create a temporary file for the current part
+      var currentTempFile = java.io.File.createTempFile("s3-part-", ".tmp")
+      var partOutputStream = new java.io.FileOutputStream(currentTempFile)
+      var previousTempFile: java.io.File = null
       val uploadFutures = new ArrayBuffer[Future[Unit]]()
 
-      // Create a temporary file for the entire upload
-      val tempFile = java.io.File.createTempFile("s3-upload-", ".tmp")
-      val randomAccessFile = new RandomAccessFile(tempFile, "rw")
-      val channel = randomAccessFile.getChannel
-      val buffer = ByteBuffer.allocateDirect(BUFFER_SIZE)
-
       try {
-        // Read the entire input stream into the temporary file
-        var bytesRead = bufferedStream.read(buffer.array())
+        var bytesRead = bufferedStream.read(buffer)
         while (bytesRead != -1) {
-          buffer.limit(bytesRead)
-          channel.write(buffer)
-          buffer.clear()
-          bytesRead = bufferedStream.read(buffer.array())
-        }
-        channel.force(true)
-        val totalSize = randomAccessFile.length()
+          partOutputStream.write(buffer, 0, bytesRead)
+          currentPartBytes += bytesRead
+          totalBytes += bytesRead
 
-        // Calculate number of parts
-        val numParts = (totalSize + partSize - 1) / partSize
+          if (currentPartBytes >= partSize) {
+            partOutputStream.close()
 
-        // Upload parts in parallel
-        for (i <- 1 to numParts.toInt) {
-          val start = (i - 1) * partSize
-          val end = Math.min(start + partSize, totalSize)
-          val currentPartNumber = i
-          val partSize = end - start
+            // Create a new temporary file for the next part
+            previousTempFile = currentTempFile
+            currentTempFile = java.io.File.createTempFile("s3-part-", ".tmp")
+            partOutputStream = new java.io.FileOutputStream(currentTempFile)
 
-          val future: Future[Unit] = Future {
-            val partFile = java.io.File.createTempFile(s"s3-part-$currentPartNumber-", ".tmp")
-            val partChannel = new RandomAccessFile(partFile, "rw").getChannel
-            val partBuffer = ByteBuffer.allocateDirect(partSize.toInt)
-
-            try {
-              // Copy the part to a new file
-              channel.position(start)
-              channel.read(partBuffer)
-              partBuffer.flip()
-              partChannel.write(partBuffer)
-              partChannel.force(true)
-              partChannel.close()
-
-              // Upload the part
+            // Upload the part asynchronously
+            val currentPartNumber = partNumber
+            val currentPartFile = previousTempFile
+            val future: Future[Unit] = Future {
               val uploadPartResponse = S3StorageClient.getS3Client.uploadPart(
                 UploadPartRequest
                   .builder()
@@ -114,7 +96,7 @@ object S3LargeBinaryManager {
                   .uploadId(uploadId)
                   .partNumber(currentPartNumber)
                   .build(),
-                RequestBody.fromFile(partFile)
+                RequestBody.fromFile(currentPartFile)
               )
 
               completedParts.put(
@@ -125,20 +107,60 @@ object S3LargeBinaryManager {
                   .eTag(uploadPartResponse.eTag())
                   .build()
               )
-            } finally {
-              if (partFile.exists()) {
-                partFile.delete()
+
+              // Clean up the temporary file
+              if (currentPartFile.exists()) {
+                currentPartFile.delete()
               }
+              () // Explicit Unit return
             }
-            ()
+            uploadFutures += future
+
+            // Wait if we've reached the maximum number of concurrent uploads
+            if (uploadFutures.size >= MAX_CONCURRENT_UPLOADS) {
+              Await.result(Future.sequence(uploadFutures), Duration.Inf)
+              uploadFutures.clear()
+            }
+
+            partNumber += 1
+            currentPartBytes = 0
+          }
+          bytesRead = bufferedStream.read(buffer)
+        }
+
+        // Upload the last part if there's any remaining data
+        if (currentPartBytes > 0) {
+          partOutputStream.close()
+          val currentPartNumber = partNumber
+          val currentPartFile = currentTempFile
+          val future: Future[Unit] = Future {
+            val uploadPartResponse = S3StorageClient.getS3Client.uploadPart(
+              UploadPartRequest
+                .builder()
+                .bucket(bucketName)
+                .key(key)
+                .uploadId(uploadId)
+                .partNumber(currentPartNumber)
+                .build(),
+              RequestBody.fromFile(currentPartFile)
+            )
+
+            completedParts.put(
+              currentPartNumber,
+              CompletedPart
+                .builder()
+                .partNumber(currentPartNumber)
+                .eTag(uploadPartResponse.eTag())
+                .build()
+            )
+
+            // Clean up the temporary file
+            if (currentPartFile.exists()) {
+              currentPartFile.delete()
+            }
+            () // Explicit Unit return
           }
           uploadFutures += future
-
-          // Wait if we've reached the maximum number of concurrent uploads
-          if (uploadFutures.size >= MAX_CONCURRENT_UPLOADS) {
-            Await.result(Future.sequence(uploadFutures), Duration.Inf)
-            uploadFutures.clear()
-          }
         }
 
         // Wait for all remaining uploads to complete
@@ -148,7 +170,7 @@ object S3LargeBinaryManager {
 
         // Complete multipart upload
         val sortedParts = new java.util.ArrayList[CompletedPart]()
-        for (i <- 1 to numParts.toInt) {
+        for (i <- 1 to partNumber) {
           val part = completedParts.get(i)
           if (part != null) {
             sortedParts.add(part)
@@ -186,13 +208,16 @@ object S3LargeBinaryManager {
           throw e
       } finally {
         try {
-          channel.close()
-          randomAccessFile.close()
+          partOutputStream.close()
         } catch {
           case _: Exception => // Ignore close errors
         }
-        if (tempFile.exists()) {
-          tempFile.delete()
+        // Clean up all temporary files
+        if (currentTempFile != null && currentTempFile.exists()) {
+          currentTempFile.delete()
+        }
+        if (previousTempFile != null && previousTempFile.exists()) {
+          previousTempFile.delete()
         }
       }
     } finally {
