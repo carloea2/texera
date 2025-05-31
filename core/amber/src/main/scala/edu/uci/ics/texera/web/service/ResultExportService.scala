@@ -418,36 +418,38 @@ class ResultExportService(workflowIdentity: WorkflowIdentity, computingUnitId: I
 
     val field: Any = selectedRow.getField(columnIndex)
     field match {
-      case data: Array[Byte] => out.write(data)
+      case data: Array[Byte] =>
+        out.write(data)
+
       case data: String if data.startsWith("s3://") =>
-        // For LARGE_BINARY fields, stream directly from S3 to output
         val uri = new java.net.URI(data)
         val bucketName = uri.getHost
         val key = uri.getPath.stripPrefix("/")
-        
+
         val s3Client = edu.uci.ics.texera.service.util.S3StorageClient.getS3Client
         val response = s3Client.getObject(
-          software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+          software.amazon.awssdk.services.s3.model.GetObjectRequest
+            .builder()
             .bucket(bucketName)
             .key(key)
             .build()
         )
-        
-        // Stream directly from S3 to output stream
-        val buffer = new Array[Byte](8192) // 8KB buffer
+
+        val buffer = new Array[Byte](1024 * 1024) // 1MB buffer
         val inputStream = response
-        
-        try {
-          var bytesRead = inputStream.read(buffer)
-          while (bytesRead != -1) {
-            out.write(buffer, 0, bytesRead)
-            bytesRead = inputStream.read(buffer)
-          }
-        } finally {
-          inputStream.close()
+
+        var bytesRead = inputStream.read(buffer)
+        while (bytesRead != -1) {
+          out.write(buffer, 0, bytesRead)
+          bytesRead = inputStream.read(buffer)
         }
-      case data: String => out.write(data.getBytes(StandardCharsets.UTF_8))
-      case other => out.write(other.toString.getBytes(StandardCharsets.UTF_8))
+        inputStream.close()
+
+      case data: String =>
+        out.write(data.getBytes(StandardCharsets.UTF_8))
+
+      case other =>
+        out.write(other.toString.getBytes(StandardCharsets.UTF_8))
     }
   }
 
