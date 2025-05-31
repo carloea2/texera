@@ -60,13 +60,10 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import edu.uci.ics.amber.core.storage.result.iceberg.OnIceberg
 import edu.uci.ics.amber.util.IcebergUtil
-import edu.uci.ics.texera.service.util.S3ReferenceCounter
-import edu.uci.ics.texera.service.util.S3StorageClient
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
+import edu.uci.ics.texera.service.util.S3LargeBinaryManager
 import org.apache.iceberg.exceptions.NoSuchTableException
 
 import scala.jdk.CollectionConverters._
-import edu.uci.ics.amber.core.storage.StorageConfig
 import edu.uci.ics.amber.core.tuple.Tuple
 
 object WorkflowService {
@@ -369,18 +366,11 @@ class WorkflowService(
                       Option(fieldValue)
                         .collect { case s: String if s.startsWith("s3://") => s }
                         .foreach { s3Uri =>
-                          val bucketName = StorageConfig.s3LargeBinaryBucketName
-                          val key = s3Uri.stripPrefix("s3://texera-large-binary/")
-                          val newCount = S3ReferenceCounter.decrementReferenceCount(bucketName, key)
-                          if (newCount == 0) {
-                            S3StorageClient.getS3Client.deleteObject(
-                              DeleteObjectRequest
-                                .builder()
-                                .bucket(bucketName)
-                                .key(key)
-                                .build()
+                          S3LargeBinaryManager
+                            .decrementReferenceCount(s3Uri)
+                            .getOrElse(
+                              logger.error(s"Failed to decrement reference count for $s3Uri")
                             )
-                          }
                         }
                     case _ => // Skip non-Record types
                   }

@@ -47,8 +47,7 @@ import java.sql.Timestamp
 import java.time.LocalDateTime
 import java.time.ZoneId
 import scala.jdk.CollectionConverters._
-import edu.uci.ics.texera.service.util.S3ReferenceCounter
-import java.net.URI
+import edu.uci.ics.texera.service.util.S3LargeBinaryManager
 
 /**
   * Util functions to interact with Iceberg Tables
@@ -266,10 +265,11 @@ object IcebergUtil {
           case str: String if attribute.getType == AttributeType.LARGE_BINARY =>
             // For LARGE_BINARY type, increment the reference count of the S3 object
             if (str.startsWith("s3://")) {
-              val s3Uri = new URI(str)
-              val bucketName = s3Uri.getHost
-              val key = s3Uri.getPath.stripPrefix("/")
-              S3ReferenceCounter.incrementReferenceCount(bucketName, key)
+              S3LargeBinaryManager
+                .incrementReferenceCount(str)
+                .getOrElse(
+                  throw new IllegalStateException(s"Failed to increment reference count for $str")
+                )
             }
             str
           case other => other
