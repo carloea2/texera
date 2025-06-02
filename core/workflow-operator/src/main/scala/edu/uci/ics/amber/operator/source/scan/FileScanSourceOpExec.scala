@@ -58,7 +58,7 @@ class FileScanSourceOpExec private[scan] (
       if (size > Integer.MAX_VALUE) {
         stream.close()
         throw new IOException(
-          s"File ${fileName.map(name => s"$name ").getOrElse("")}size ($size bytes) exceeds 2GB. Use LARGE_BINARY type instead."
+          s"File ${fileName.map(name => s"$name ").getOrElse("")}size exceeds 2GB. Use LARGE_BINARY type instead."
         )
       }
       bytesRead = stream.read(buffer)
