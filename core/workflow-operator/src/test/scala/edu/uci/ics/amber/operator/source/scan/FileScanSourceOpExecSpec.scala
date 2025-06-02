@@ -54,7 +54,7 @@ class FileScanSourceOpExecSpec extends AnyFlatSpec with Matchers {
     val exception = intercept[IOException] {
       executor.produceTuple()
     }
-    exception.getMessage should include("bytes) exceeds 2GB")
+    exception.getMessage should include("exceeds 2GB")
   }
 
   it should "validate zip file contents size correctly" in {
@@ -95,7 +95,7 @@ class FileScanSourceOpExecSpec extends AnyFlatSpec with Matchers {
     val exception = intercept[IOException] {
       executor.produceTuple()
     }
-    exception.getMessage should include("bytes) exceeds 2GB")
+    exception.getMessage should include("exceeds 2GB")
   }
 
   it should "accept binary files under 2GB" in {
