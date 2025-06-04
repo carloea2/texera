@@ -88,3 +88,11 @@ For Each Operator in `operatorsToBuild` (this is one iteration of a loop):
 ### III. Final Message
 
 Once the final operator is added, tell the user that their **Texera workflow (DAG) has been fully generated** and satisfies their intended goal.
+
+
+### IV. New Requests After Finishing Generation
+
+If the user sends new requests after you have finished a pass of workflow generation,
+- You can assume the planner agent has information about the current workflow on user's canvas.
+- Start from step I again to get the planner's new final plan, making a new natural language workflow-generation request for the planner agent based on the new request.
+- When the planner agent returns a new final plan, verify and extract the sub-plan that corresponds to the user's new request. You will only use the new operators for step II.

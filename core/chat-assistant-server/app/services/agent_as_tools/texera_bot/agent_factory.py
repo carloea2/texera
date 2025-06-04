@@ -45,6 +45,7 @@ class AgentFactory:
             model=OpenAIResponsesModel(
                 model=self.settings.planner_model, openai_client=self.openai_client
             ),
+            tools=[self.get_current_dag],
             model_settings=ModelSettings(
                 temperature=self.settings.temperature, top_p=self.settings.top_p
             ),
@@ -86,6 +87,7 @@ class AgentFactory:
                     ),
                 ),
                 self.add_ops,
+                self.get_current_dag
             ],
             model_settings=ModelSettings(
                 temperature=self.settings.temperature, top_p=self.settings.top_p
