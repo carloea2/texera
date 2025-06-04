@@ -101,9 +101,6 @@ object KubernetesClient {
       .getOrElse(Map.empty[String, String])
   }
 
-  // ---------------------------------------------------------------------------
-  // Cluster lifecycle helpers
-  // ---------------------------------------------------------------------------
 
   def createVolume(cuid: Int, diskLimit: String): Volume = {
     val pvcName = generateVolumeName(cuid)
@@ -163,10 +160,6 @@ object KubernetesClient {
     deleteStatefulSet(cuid)
     deleteVolume(cuid)
   }
-
-  // ---------------------------------------------------------------------------
-  // Kubernetes resource creators
-  // ---------------------------------------------------------------------------
 
   private def createClusterMasterService(cuid: Int): Service = {
     val serviceName = generateClusterMasterServiceName(cuid)
@@ -305,7 +298,6 @@ object KubernetesClient {
       .addToLabels("name", podName)
       .addToLabels("role", "master")
 
-    // -------------- CONTAINER -------------
     val containerBuilder = new ContainerBuilder()
       .withName("computing-unit-master")
       .withImage(KubernetesConfig.computeUnitMasterImageName)
