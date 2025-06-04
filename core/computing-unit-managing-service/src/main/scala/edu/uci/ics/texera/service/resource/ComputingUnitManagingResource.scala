@@ -151,7 +151,8 @@ class ComputingUnitManagingResource {
       .parse(unit.getResource)
       .as[JsObject]
       .value("numNodes")
-      .as[Int] > 1
+      .asOpt[Int]
+      .getOrElse(1) > 1 // for backward compatibility
   }
 
   private def getSupportedComputingUnitTypes: List[String] = {
