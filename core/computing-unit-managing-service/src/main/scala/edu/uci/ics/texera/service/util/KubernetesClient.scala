@@ -101,7 +101,6 @@ object KubernetesClient {
       .getOrElse(Map.empty[String, String])
   }
 
-
   def createVolume(cuid: Int, diskLimit: String): Volume = {
     val pvcName = generateVolumeName(cuid)
 
