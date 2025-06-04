@@ -149,8 +149,9 @@ class ComputingUnitManagingResource {
   private def isCluster(unit: WorkflowComputingUnit): Boolean = {
     Json
       .parse(unit.getResource)
-      .as[JsObject]
-      .value("numNodes")
+      .asOpt[JsObject]
+      .getOrElse(JsObject.empty)
+      .\("numNodes")
       .asOpt[Int]
       .getOrElse(1) > 1 // for backward compatibility
   }
