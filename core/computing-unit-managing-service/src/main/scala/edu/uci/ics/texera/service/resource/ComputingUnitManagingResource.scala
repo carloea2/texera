@@ -151,7 +151,7 @@ class ComputingUnitManagingResource {
       .parse(unit.getResource)
       .asOpt[JsObject]
       .getOrElse(JsObject.empty)
-      .\("numNodes")
+      .\("numNodes") // lookup operation
       .asOpt[Int]
       .getOrElse(1) > 1 // for backward compatibility
   }
