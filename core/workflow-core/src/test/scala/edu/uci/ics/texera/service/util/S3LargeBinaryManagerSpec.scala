@@ -30,6 +30,7 @@ import java.io.ByteArrayInputStream
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import edu.uci.ics.amber.core.storage.StorageConfig
+import software.amazon.awssdk.core.ResponseInputStream
 
 class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
 
@@ -207,6 +208,53 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
     // Test decrement
     an[IllegalArgumentException] should be thrownBy {
       S3LargeBinaryManager.decrementReferenceCount(invalidUri)
+    }
+  }
+
+  it should "get object size correctly" in {
+    setupMockResponses()
+
+    val s3Uri = s"s3://$testBucket/$testKey"
+    val expectedSize = 1024L
+
+    // Save original S3Client and replace with mock
+    val originalS3Client = S3StorageClient.getS3Client
+    try {
+      // Use reflection to set the S3Client
+      val field = classOf[S3StorageClient.type].getDeclaredField("s3Client")
+      field.setAccessible(true)
+      field.set(S3StorageClient, mockS3Client)
+
+      // Mock getObject to return ResponseInputStream with expected size
+      val getObjectResponse = GetObjectResponse
+        .builder()
+        .contentLength(expectedSize)
+        .build()
+      val mockResponseStream = mock[ResponseInputStream[GetObjectResponse]]
+      doReturn(getObjectResponse).when(mockResponseStream).response()
+      doReturn(mockResponseStream)
+        .when(mockS3Client)
+        .getObject(any[GetObjectRequest])
+
+      // Test getObjectInfo
+      val size = S3LargeBinaryManager.getObjectInfo(s3Uri)
+      size shouldBe expectedSize
+
+      // Verify S3 client interaction
+      verify(mockS3Client).getObject(any[GetObjectRequest])
+    } finally {
+      // Restore original S3Client
+      val field = classOf[S3StorageClient.type].getDeclaredField("s3Client")
+      field.setAccessible(true)
+      field.set(S3StorageClient, originalS3Client)
+    }
+  }
+
+  it should "throw IllegalArgumentException for invalid S3 URI in getObjectInfo" in {
+    val invalidUri = "invalid-uri"
+
+    an[IllegalArgumentException] should be thrownBy {
+      S3LargeBinaryManager.getObjectInfo(invalidUri)
     }
   }
 }

@@ -300,4 +300,23 @@ object S3LargeBinaryManager {
       RequestBody.fromBytes(jsonBytes)
     )
   }
+
+  /**
+    * Gets the size of an S3 object
+    * @param s3Uri The S3 URI of the object in format "s3://bucket-name/key"
+    * @return The total size of the object in bytes
+    * @throws IllegalArgumentException if the S3 URI format is invalid
+    */
+  def getObjectInfo(s3Uri: String): Long = {
+    require(s3Uri.startsWith("s3://"), "Invalid S3 URI format")
+
+    val uri = new URI(s3Uri)
+    val bucketName = uri.getHost
+    val key = uri.getPath.stripPrefix("/")
+
+    S3StorageClient.getS3Client
+      .getObject(GetObjectRequest.builder().bucket(bucketName).key(key).build())
+      .response()
+      .contentLength()
+  }
 }
