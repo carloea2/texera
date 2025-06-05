@@ -23,9 +23,10 @@ import edu.uci.ics.amber.core.workflow.PhysicalOp
 import edu.uci.ics.amber.engine.common.AmberConfig
 import edu.uci.ics.amber.util.VirtualIdentityUtils
 import edu.uci.ics.amber.core.virtualidentity.ActorVirtualIdentity
+import edu.uci.ics.amber.engine.architecture.scheduling.Region
 
 case object WorkerConfig {
-  def generateWorkerConfigs(physicalOp: PhysicalOp): List[WorkerConfig] = {
+  def generateWorkerConfigs(physicalOp: PhysicalOp, region:Region): List[WorkerConfig] = {
     val workerCount = if (physicalOp.parallelizable) {
       physicalOp.suggestedWorkerNum match {
         // Keep suggested number of workers
@@ -40,7 +41,7 @@ case object WorkerConfig {
 
     (0 until workerCount).toList.map(idx =>
       WorkerConfig(
-        VirtualIdentityUtils.createWorkerIdentity(physicalOp.workflowId, physicalOp.id, idx)
+        VirtualIdentityUtils.createWorkerIdentity(physicalOp.workflowId, physicalOp.id, (region.id.id*10000+idx).toInt)
       )
     )
   }

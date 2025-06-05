@@ -22,5 +22,6 @@ from proto.edu.uci.ics.amber.engine.architecture.rpc import EmptyReturn, EmptyRe
 class OpenExecutorHandler(ControlHandler):
 
     async def open_executor(self, req: EmptyRequest) -> EmptyReturn:
-        self.context.executor_manager.executor.open()
+        if not self.context.executor_manager.state_loaded:
+            self.context.executor_manager.executor.open()
         return EmptyReturn()

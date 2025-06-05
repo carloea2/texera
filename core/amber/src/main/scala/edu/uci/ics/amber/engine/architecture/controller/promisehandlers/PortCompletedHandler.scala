@@ -22,18 +22,17 @@ package edu.uci.ics.amber.engine.architecture.controller.promisehandlers
 import com.twitter.util.Future
 import edu.uci.ics.amber.core.WorkflowRuntimeException
 import edu.uci.ics.amber.core.workflow.GlobalPortIdentity
-import edu.uci.ics.amber.engine.architecture.controller.{
-  ControllerAsyncRPCHandlerInitializer,
-  FatalError
-}
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
-  AsyncRPCContext,
-  PortCompletedRequest,
-  QueryStatisticsRequest
-}
+import akka.pattern.gracefulStop
+import cats.instances.future
+import edu.uci.ics.amber.engine.common.FutureBijection._
+import edu.uci.ics.amber.engine.architecture.controller.{ControllerAsyncRPCHandlerInitializer, FatalError}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContext, PortCompletedRequest, QueryStatisticsRequest}
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.common.virtualidentity.util.CONTROLLER
 import edu.uci.ics.amber.util.VirtualIdentityUtils
+
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.Duration
 
 /** Notify the completion of a port:
   * - For input port, it means the worker has finished consuming and processing all the data
@@ -73,17 +72,32 @@ trait PortCompletedHandler {
               if (msg.input) operatorExecution.isInputPortCompleted(msg.portId)
               else operatorExecution.isOutputPortCompleted(msg.portId)
 
+            var futureClosure: () => Future[Seq[Boolean]] = () => {Future[Seq[Boolean]](Seq())}
+
+            if(regionExecution.isCompleted){
+              futureClosure = () => {Future.collect(regionExecution.getAllOperatorExecutions.flatMap{
+                opExec =>
+                  println(s"killing operator - ${opExec._1}")
+                  opExec._2.getWorkerIds.map{
+                    workerId =>
+                      gracefulStop(cp.actorRefService.actorRefMapping(workerId), Duration(5, TimeUnit.SECONDS)).asTwitter()
+                  }
+              }.toSeq)}
+            }
+
             if (isPortCompleted) {
-              cp.workflowExecutionCoordinator
-                .executeNextRegions(cp.actorService)
-                // Since this message is sent from a worker, any exception from the above code will be returned to that worker.
-                // Additionally, a fatal error is sent to the client, indicating that the region cannot be scheduled.
-                .onFailure {
-                  case err: WorkflowRuntimeException =>
-                    sendToClient(FatalError(err, err.relatedWorkerId))
-                  case other =>
-                    sendToClient(FatalError(other, None))
-                }
+              future.map { res =>
+                cp.workflowExecutionCoordinator
+                  .executeNextRegions(futureClosure, cp.actorService)
+                  // Since this message is sent from a worker, any exception from the above code will be returned to that worker.
+                  // Additionally, a fatal error is sent to the client, indicating that the region cannot be scheduled.
+                  .onFailure {
+                    case err: WorkflowRuntimeException =>
+                      sendToClient(FatalError(err, err.relatedWorkerId))
+                    case other =>
+                      sendToClient(FatalError(other, None))
+                  }
+              }
             }
           case None => // currently "start" and "end" ports are not part of a region, thus no region can be found.
           // do nothing.

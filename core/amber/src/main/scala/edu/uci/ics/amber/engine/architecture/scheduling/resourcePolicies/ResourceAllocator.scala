@@ -70,7 +70,7 @@ class DefaultResourceAllocator(
   ): (Region, Double) = {
 
     val opToOperatorConfigMapping = region.getOperators
-      .map(physicalOp => physicalOp.id -> OperatorConfig(generateWorkerConfigs(physicalOp)))
+      .map(physicalOp => physicalOp.id -> OperatorConfig(generateWorkerConfigs(physicalOp, region)))
       .toMap
 
     operatorConfigs ++= opToOperatorConfigMapping

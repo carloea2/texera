@@ -21,11 +21,13 @@ from proto.edu.uci.ics.amber.engine.architecture.rpc import (
     EmptyReturn,
     AssignPortRequest,
 )
+from loguru import logger
 
 
 class AssignPortHandler(ControlHandler):
 
     async def assign_port(self, req: AssignPortRequest) -> EmptyReturn:
+        logger.info(req)
         if req.input:
             self.context.input_manager.add_input_port(
                 req.port_id, Schema(raw_schema=req.schema)

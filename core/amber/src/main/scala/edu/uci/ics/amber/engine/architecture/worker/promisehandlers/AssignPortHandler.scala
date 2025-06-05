@@ -35,6 +35,7 @@ trait AssignPortHandler {
 
   override def assignPort(msg: AssignPortRequest, ctx: AsyncRPCContext): Future[EmptyReturn] = {
     val schema = Schema.fromRawSchema(msg.schema)
+    logger.info(s"assign ports: $msg")
     if (msg.input) {
       dp.inputManager.addPort(msg.portId, schema)
     } else {

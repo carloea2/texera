@@ -39,7 +39,7 @@ class AkkaActorRefMappingService(actorService: AkkaActorService) extends AmberLo
 
   implicit val self: ActorRef = actorService.self
 
-  private val actorRefMapping: mutable.HashMap[ActorVirtualIdentity, ActorRef] = mutable.HashMap()
+  val actorRefMapping: mutable.HashMap[ActorVirtualIdentity, ActorRef] = mutable.HashMap()
   private val queriedActorVirtualIdentities = new mutable.HashSet[ActorVirtualIdentity]()
   private val toNotifyOnRegistration =
     new mutable.HashMap[ActorVirtualIdentity, mutable.Set[ActorRef]]()
@@ -65,6 +65,7 @@ class AkkaActorRefMappingService(actorService: AkkaActorService) extends AmberLo
     } else {
       val stash = messageStash.getOrElseUpdate(id, new mutable.Queue[NetworkMessage]())
       stash.enqueue(msg)
+      logger.info(s"cannot resolve actorref for $id, thus $msg is not sent.")
       retrieveActorRef(id, Set())
     }
   }
@@ -83,7 +84,9 @@ class AkkaActorRefMappingService(actorService: AkkaActorService) extends AmberLo
       if (messageStash.contains(id)) {
         val stash = messageStash(id)
         while (stash.nonEmpty) {
-          ref ! stash.dequeue()
+          val msg = stash.dequeue()
+          logger.info(s"resending $msg to $id")
+          ref ! msg
         }
       }
     }

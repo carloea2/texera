@@ -34,6 +34,7 @@ class ExecutorManager:
         self.executor: Optional[Operator] = None
         self.operator_module_name: Optional[str] = None
         self.executor_version: int = 0  # incremental only
+        self.state_loaded = False
 
     @cached_property
     def fs(self) -> FS:

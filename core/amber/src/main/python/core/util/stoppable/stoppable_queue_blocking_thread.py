@@ -65,7 +65,7 @@ class StoppableQueueBlockingRunnable(Runnable, Stoppable):
                 self.receive(self.interruptible_get())
         except StoppableQueueBlockingRunnable.InterruptRunnable:
             # surpassed the expected interruption
-            logger.debug(f"{self.name}-interrupting")
+            logger.info(f"{self.name}-interrupting")
         finally:
             self.post_stop()
 

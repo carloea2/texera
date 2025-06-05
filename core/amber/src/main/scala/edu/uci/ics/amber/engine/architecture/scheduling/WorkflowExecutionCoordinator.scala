@@ -21,11 +21,11 @@ package edu.uci.ics.amber.engine.architecture.scheduling
 
 import com.twitter.util.Future
 import com.typesafe.scalalogging.LazyLogging
+import edu.uci.ics.amber.core.workflow.{GlobalPortIdentity, PhysicalLink}
 import edu.uci.ics.amber.engine.architecture.common.AkkaActorService
 import edu.uci.ics.amber.engine.architecture.controller.ControllerConfig
 import edu.uci.ics.amber.engine.architecture.controller.execution.WorkflowExecution
 import edu.uci.ics.amber.engine.common.rpc.AsyncRPCClient
-import edu.uci.ics.amber.core.workflow.{GlobalPortIdentity, PhysicalLink}
 
 import scala.collection.mutable
 
@@ -45,15 +45,21 @@ class WorkflowExecutionCoordinator(
   /**
     * Each invocation will execute the next batch of Regions that are ready to be executed, if there are any.
     */
-  def executeNextRegions(actorService: AkkaActorService): Future[Unit] = {
+  def executeNextRegions(prevRegionCleanUp:() => Future[Seq[Boolean]], actorService: AkkaActorService): Future[Unit] = {
     if (workflowExecution.getRunningRegionExecutions.nonEmpty) {
       return Future(())
     }
-    Future
-      .collect({
-        val nextRegions = getNextRegions()
-        executedRegions.append(nextRegions)
-        nextRegions
+    val nextRegions = getNextRegions()
+    executedRegions.append(nextRegions)
+
+    var future: Future[Seq[Boolean]] = Future(Seq.empty)
+
+    if(nextRegions.nonEmpty){
+      future = prevRegionCleanUp()
+    }
+    val f = future.flatMap {
+      ret =>
+        Future.collect(nextRegions
           .map(region => {
             workflowExecution.initRegionExecution(region)
             regionExecutionCoordinators(region.id) = new RegionExecutionCoordinator(
@@ -64,10 +70,9 @@ class WorkflowExecutionCoordinator(
             )
             regionExecutionCoordinators(region.id)
           })
-          .map(_.execute(actorService))
-          .toSeq
-      })
-      .unit
+          .map(_.execute(actorService)).toSeq)
+    }
+    f.unit
   }
 
   def getRegionOfLink(link: PhysicalLink): Region = {

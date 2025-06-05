@@ -70,25 +70,23 @@ class RegionExecutionCoordinator(
 
     region.getOperators.foreach(physicalOp => {
       // Check for existing execution for this operator
-      val existOpExecution =
-        workflowExecution.getAllRegionExecutions.exists(_.hasOperatorExecution(physicalOp.id))
+//      val existOpExecution =
+//        workflowExecution.getAllRegionExecutions.exists(_.hasOperatorExecution(physicalOp.id))
 
       // Initialize operator execution, reusing existing execution if available
       val operatorExecution = regionExecution.initOperatorExecution(
         physicalOp.id,
-        if (existOpExecution) Some(workflowExecution.getLatestOperatorExecution(physicalOp.id))
-        else None
+        None
       )
 
       // If no existing execution, build the operator with specified config
-      if (!existOpExecution) {
-        buildOperator(
-          actorService,
-          physicalOp,
-          resourceConfig.operatorConfigs(physicalOp.id),
-          operatorExecution
-        )
-      }
+      println(s"building operator - ${physicalOp.id}")
+      buildOperator(
+        actorService,
+        physicalOp,
+        resourceConfig.operatorConfigs(physicalOp.id),
+        operatorExecution
+      )
     })
 
     // update UI
@@ -199,7 +197,7 @@ class RegionExecutionCoordinator(
               case _ => None
             }
           inputPortMapping ++ outputPortMapping
-        }
+        }.filter(x => region.ports.contains(x._1) || !x._1.input)
         .flatMap {
           case (globalPortId, (storageUri, schema)) =>
             resourceConfig.operatorConfigs(globalPortId.opId).workerConfigs.map(_.workerId).map {

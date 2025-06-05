@@ -130,6 +130,16 @@ class MainLoop(StoppableQueueBlockingRunnable):
         self.context.statistics_manager.initialize_worker_start_time(time.time_ns())
 
     @overrides
+    def post_stop(self) -> None:
+        import pickle
+        import re
+        s = self.context.worker_id
+        if re.search(r'-\d+$', s):
+            s = s.rsplit('-', 1)[0]
+        with open(f'{s}.pkl', 'wb') as f:
+            pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
+
+    @overrides
     def receive(self, next_entry: QueueElement) -> None:
         """
         Main entry point of the DataProcessor. Upon receipt of an next_entry,

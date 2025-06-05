@@ -39,6 +39,7 @@ trait InitializeExecutorHandler {
       req: InitializeExecutorRequest,
       ctx: AsyncRPCContext
   ): Future[EmptyReturn] = {
+    println(s"initializing - ${actorId}")
     dp.serializationManager.setOpInitialization(req)
     val workerIdx = VirtualIdentityUtils.getWorkerIndex(actorId)
     val workerCount = req.totalWorkerCount

@@ -17,7 +17,7 @@
 
 from overrides import overrides
 from threading import Thread, Event
-
+from loguru import logger
 from core.models.internal_queue import InternalQueue
 from core.runnables import MainLoop, NetworkReceiver, NetworkSender, Heartbeat
 from core.util.runnable.runnable import Runnable
@@ -45,29 +45,31 @@ class PythonWorker(Runnable, Stoppable):
 
     @overrides
     def run(self) -> None:
-        network_sender_thread = Thread(
+        self.network_sender_thread = Thread(
             target=self._network_sender.run, name="network_sender"
         )
-        main_loop_thread = Thread(target=self._main_loop.run, name="main_loop_thread")
+        self.main_loop_thread = Thread(target=self._main_loop.run, name="main_loop_thread")
 
-        heartbeat_thread = Thread(
+        self.heartbeat_thread = Thread(
             target=self._heartbeat.run,
             name="heartbeat_thread",
         )
 
-        network_sender_thread.start()
-        main_loop_thread.start()
-        heartbeat_thread.start()
-        main_loop_thread.join()
-        network_sender_thread.join()
+        self.network_sender_thread.start()
+        self.main_loop_thread.start()
+        self.heartbeat_thread.start()
+        self.main_loop_thread.join()
+        self.network_sender_thread.join()
 
         # if everything finishes, the heartbeat should stop
         self._stop_event.set()
 
-        heartbeat_thread.join()
+        self.heartbeat_thread.join()
 
     @overrides
     def stop(self):
         self._main_loop.stop()
+        self.main_loop_thread.join()
         self._network_sender.stop()
+        self.network_sender_thread.join()
         self._heartbeat.stop()
