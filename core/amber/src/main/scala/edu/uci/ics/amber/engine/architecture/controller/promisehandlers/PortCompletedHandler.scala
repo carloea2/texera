@@ -23,7 +23,6 @@ import com.twitter.util.Future
 import edu.uci.ics.amber.core.WorkflowRuntimeException
 import edu.uci.ics.amber.core.workflow.GlobalPortIdentity
 import akka.pattern.gracefulStop
-import cats.instances.future
 import edu.uci.ics.amber.engine.common.FutureBijection._
 import edu.uci.ics.amber.engine.architecture.controller.{ControllerAsyncRPCHandlerInitializer, FatalError}
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContext, PortCompletedRequest, QueryStatisticsRequest}
@@ -48,9 +47,6 @@ trait PortCompletedHandler {
       msg: PortCompletedRequest,
       ctx: AsyncRPCContext
   ): Future[EmptyReturn] = {
-    controllerInterface
-      .controllerInitiateQueryStatistics(QueryStatisticsRequest(scala.Seq(ctx.sender)), CONTROLLER)
-      .map { _ =>
         val globalPortId = GlobalPortIdentity(
           VirtualIdentityUtils.getPhysicalOpId(ctx.sender),
           msg.portId,
@@ -86,7 +82,9 @@ trait PortCompletedHandler {
             }
 
             if (isPortCompleted) {
-              future.map { res =>
+              controllerInterface
+                .controllerInitiateQueryStatistics(QueryStatisticsRequest(scala.Seq(ctx.sender)), CONTROLLER)
+                .map { res =>
                 cp.workflowExecutionCoordinator
                   .executeNextRegions(futureClosure, cp.actorService)
                   // Since this message is sent from a worker, any exception from the above code will be returned to that worker.
@@ -103,7 +101,7 @@ trait PortCompletedHandler {
           // do nothing.
         }
         EmptyReturn()
-      }
+
   }
 
 }

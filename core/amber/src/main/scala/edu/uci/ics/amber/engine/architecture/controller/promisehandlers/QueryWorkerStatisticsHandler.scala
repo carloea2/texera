@@ -78,8 +78,9 @@ trait QueryWorkerStatisticsHandler {
             cp.workflowExecution.getAllRegionExecutionsStats
           )
         )
-      )
-    EmptyReturn()
+      ).map{
+      _ => EmptyReturn()
+      }
   }
 
 }

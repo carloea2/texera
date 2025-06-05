@@ -26,6 +26,7 @@ import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerStatistics
 import edu.uci.ics.amber.engine.common.executionruntimestate.OperatorMetrics
 import edu.uci.ics.amber.core.virtualidentity.PhysicalOpIdentity
 import edu.uci.ics.amber.core.workflow.PhysicalLink
+import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.WorkflowAggregatedState.COMPLETED
 
 import scala.collection.mutable
 
@@ -120,13 +121,15 @@ case class RegionExecution(region: Region) {
   def isCompleted: Boolean = getState == WorkflowAggregatedState.COMPLETED
 
   def getState: WorkflowAggregatedState = {
-    if (
-      region.getPorts.forall(globalPortId => {
-        val operatorExecution = this.getOperatorExecution(globalPortId.opId)
-        if (globalPortId.input) operatorExecution.isInputPortCompleted(globalPortId.portId)
-        else operatorExecution.isOutputPortCompleted(globalPortId.portId)
-      })
-    ) {
+    val allPortsCompleted = region.getPorts.forall(globalPortId => {
+      val operatorExecution = this.getOperatorExecution(globalPortId.opId)
+      if (globalPortId.input) operatorExecution.isInputPortCompleted(globalPortId.portId)
+      else operatorExecution.isOutputPortCompleted(globalPortId.portId)
+    })
+    val allOperatorsCompleted = region.getOperators.forall(
+      op => this.getOperatorExecution(op.id).getState == COMPLETED
+    )
+    if (allPortsCompleted && allOperatorsCompleted) {
       WorkflowAggregatedState.COMPLETED
     } else {
       WorkflowAggregatedState.RUNNING
