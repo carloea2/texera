@@ -223,11 +223,17 @@ class IcebergUtilSpec extends AnyFlatSpec with MockitoSugar {
 
     // Verify the schema structure
     assert(record.findField("regular-field") != null)
-    assert(record.findField(IcebergUtil.LARGE_BINARY_PREFIX + "large-binary-field") != null)
+    assert(
+      record.findField(
+        AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX + "large-binary-field"
+      ) != null
+    )
 
     // Verify the field types
     val regularField = record.findField("regular-field")
-    val largeBinaryField = record.findField(IcebergUtil.LARGE_BINARY_PREFIX + "large-binary-field")
+    val largeBinaryField = record.findField(
+      AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX + "large-binary-field"
+    )
 
     assert(regularField.`type`() == Types.StringType.get())
     assert(largeBinaryField.`type`() == Types.StringType.get())

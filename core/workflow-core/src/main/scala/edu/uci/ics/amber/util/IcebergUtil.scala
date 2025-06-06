@@ -54,9 +54,6 @@ import edu.uci.ics.texera.service.util.S3LargeBinaryManager
   */
 object IcebergUtil {
 
-  // Special prefix to identify LARGE_BINARY type in Iceberg
-  val LARGE_BINARY_PREFIX = "LARGE_BINARY_URI:"
-
   /**
     * Creates and initializes a HadoopCatalog with the given parameters.
     * - Uses an empty Hadoop `Configuration`, meaning the local file system (or `file:/`) will be used by default
@@ -213,7 +210,7 @@ object IcebergUtil {
           case AttributeType.LARGE_BINARY =>
             Types.NestedField.optional(
               index + 1,
-              LARGE_BINARY_PREFIX + attribute.getName,
+              AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX + attribute.getName,
               Types.StringType.get()
             )
           case _ =>
@@ -280,7 +277,7 @@ object IcebergUtil {
         }
         // Add prefix to field name if it's LARGE_BINARY type
         val fieldName = if (attribute.getType == AttributeType.LARGE_BINARY) {
-          LARGE_BINARY_PREFIX + attribute.getName
+          AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX + attribute.getName
         } else {
           attribute.getName
         }
@@ -301,7 +298,7 @@ object IcebergUtil {
     val fieldValues = amberSchema.getAttributes.map { attribute =>
       // Check if this is a LARGE_BINARY field by looking for the prefix in the schema
       val fieldName = if (attribute.getType == AttributeType.LARGE_BINARY) {
-        LARGE_BINARY_PREFIX + attribute.getName
+        AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX + attribute.getName
       } else {
         attribute.getName
       }
@@ -333,9 +330,11 @@ object IcebergUtil {
       .asScala
       .map { field =>
         // Remove prefix from field name if it exists
-        if (field.name().startsWith(LARGE_BINARY_PREFIX)) {
+        if (field.name().startsWith(AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX)) {
           new Attribute(
-            field.name().substring(LARGE_BINARY_PREFIX.length),
+            field
+              .name()
+              .substring(AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX.length),
             AttributeType.LARGE_BINARY
           )
         } else {

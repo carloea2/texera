@@ -108,4 +108,29 @@ class AttributeTypeSpec extends AnyFunSpec {
       )
     }
   }
+
+  describe("AttributeType.validateAttributeName") {
+    it("should accept valid attribute names") {
+      // Valid attribute names should not throw any exception
+      AttributeType.validateAttributeName("valid_name")
+      AttributeType.validateAttributeName("another_valid_name")
+      AttributeType.validateAttributeName("name_with_numbers_123")
+    }
+
+    it("should throw IllegalArgumentException for attribute names starting with reserved prefix") {
+      val reservedPrefix = AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX
+      
+      // Test with exact prefix
+      val exception1 = intercept[IllegalArgumentException] {
+        AttributeType.validateAttributeName(reservedPrefix)
+      }
+      assert(exception1.getMessage.contains("Attribute name cannot start with the reserved prefix"))
+
+      // Test with prefix followed by additional text
+      val exception2 = intercept[IllegalArgumentException] {
+        AttributeType.validateAttributeName(reservedPrefix + "some_text")
+      }
+      assert(exception2.getMessage.contains("Attribute name cannot start with the reserved prefix"))
+    }
+  }
 }

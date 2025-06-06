@@ -65,6 +65,7 @@ import org.apache.iceberg.exceptions.NoSuchTableException
 
 import scala.jdk.CollectionConverters._
 import edu.uci.ics.amber.core.tuple.Tuple
+import edu.uci.ics.amber.core.tuple.AttributeType
 
 object WorkflowService {
   private val workflowServiceMapping = new ConcurrentHashMap[String, WorkflowService]()
@@ -359,13 +360,17 @@ class WorkflowService(
               .schema()
               .columns()
               .asScala
-              .filter(_.name().startsWith(IcebergUtil.LARGE_BINARY_PREFIX))
+              .filter(
+                _.name().startsWith(AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX)
+              )
             if (largeBinaryFields.nonEmpty) {
               iceberg.get().foreach { record =>
                 record match {
                   case r: Tuple =>
                     largeBinaryFields.foreach { field =>
-                      val fieldName = field.name().stripPrefix(IcebergUtil.LARGE_BINARY_PREFIX)
+                      val fieldName = field
+                        .name()
+                        .stripPrefix(AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX)
                       Option(r.getField[Any](fieldName))
                         .collect { case s: String if s.startsWith("s3://") => s }
                         .foreach { s3Uri =>
