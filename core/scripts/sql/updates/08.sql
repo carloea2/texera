@@ -47,6 +47,42 @@ BEGIN
             BEFORE UPDATE ON s3_reference_counts
             FOR EACH ROW
             EXECUTE FUNCTION update_updated_at_column();
+
+        -- Function to increment reference count
+        CREATE OR REPLACE FUNCTION increment_s3_reference_count(s3_uri_param TEXT)
+        RETURNS INT AS $BODY$
+        DECLARE
+            new_count INT;
+        BEGIN
+            INSERT INTO s3_reference_counts (s3_uri, reference_count)
+            VALUES (s3_uri_param, 1)
+            ON CONFLICT (s3_uri) 
+            DO UPDATE SET reference_count = s3_reference_counts.reference_count + 1
+            RETURNING reference_count INTO new_count;
+            
+            RETURN new_count;
+        END;
+        $BODY$ LANGUAGE plpgsql;
+
+        -- Function to decrement reference count
+        CREATE OR REPLACE FUNCTION decrement_s3_reference_count(s3_uri_param TEXT)
+        RETURNS INT AS $BODY$
+        DECLARE
+            new_count INT;
+        BEGIN
+            UPDATE s3_reference_counts
+            SET reference_count = GREATEST(0, reference_count - 1)
+            WHERE s3_uri = s3_uri_param
+            RETURNING reference_count INTO new_count;
+
+            -- If count becomes 0, delete the record
+            IF new_count = 0 THEN
+                DELETE FROM s3_reference_counts WHERE s3_uri = s3_uri_param;
+            END IF;
+
+            RETURN COALESCE(new_count, 0);
+        END;
+        $BODY$ LANGUAGE plpgsql;
     END IF;
 END
 $$;

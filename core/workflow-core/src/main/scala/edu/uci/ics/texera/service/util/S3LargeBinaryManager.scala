@@ -27,13 +27,15 @@ import software.amazon.awssdk.services.s3.model.{
   CreateMultipartUploadRequest,
   DeleteObjectRequest,
   UploadPartRequest,
-  GetObjectRequest,
-  PutObjectRequest
+  GetObjectRequest
 }
 import edu.uci.ics.amber.core.storage.StorageConfig
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import software.amazon.awssdk.core.sync.RequestBody
+import edu.uci.ics.texera.dao.SqlServer
+import edu.uci.ics.texera.dao.jooq.generated.tables.daos.S3ReferenceCountsDao
+import edu.uci.ics.texera.dao.jooq.generated.tables.{S3ReferenceCounts => S3ReferenceCountsTable}
 
 import java.io.{BufferedInputStream, InputStream}
 import java.net.URI
@@ -56,7 +58,6 @@ object S3LargeBinaryManager {
     StorageConfig.s3MultipartUploadPartSize // Use configured part size from StorageConfig
   private val MAX_CONCURRENT_UPLOADS = 10 // Maximum number of concurrent uploads
   private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
-  private val REFERENCE_COUNT_PREFIX = "reference-counts/"
 
   /**
     * Uploads a file to S3 using multipart upload for better performance and reliability.
@@ -203,9 +204,6 @@ object S3LargeBinaryManager {
             .build()
         )
 
-        val referenceCountKey = s"$REFERENCE_COUNT_PREFIX$key"
-        saveReferenceCount(bucketName, referenceCountKey, 0)
-
         s"s3://$bucketName/$key"
       } catch {
         case e: Exception =>
@@ -234,17 +232,34 @@ object S3LargeBinaryManager {
     * Increments the reference count for an S3 object
     *
     * @param s3Uri The S3 URI of the object
+    * @throws IllegalArgumentException if the S3 URI format is invalid
     */
   def incrementReferenceCount(s3Uri: String): Unit = {
     require(s3Uri.startsWith("s3://"), "Invalid S3 URI format")
 
-    val uri = new URI(s3Uri)
-    val bucketName = uri.getHost
-    val key = uri.getPath.stripPrefix("/")
-    val referenceCountKey = s"$REFERENCE_COUNT_PREFIX$key"
+    val dsl = SqlServer.getInstance().createDSLContext()
+    SqlServer.withTransaction(dsl) { ctx =>
+      val dao = new S3ReferenceCountsDao(ctx.configuration())
 
-    val currentCount = loadReferenceCount(bucketName, referenceCountKey)
-    saveReferenceCount(bucketName, referenceCountKey, currentCount + 1)
+      dao
+        .fetchOptionalByS3Uri(s3Uri)
+        .ifPresentOrElse(
+          record => {
+            record.setReferenceCount(record.getReferenceCount + 1)
+            dao.update(record)
+          },
+          () => {
+            ctx
+              .insertInto(S3ReferenceCountsTable.S3_REFERENCE_COUNTS)
+              .columns(
+                S3ReferenceCountsTable.S3_REFERENCE_COUNTS.S3_URI,
+                S3ReferenceCountsTable.S3_REFERENCE_COUNTS.REFERENCE_COUNT
+              )
+              .values(s3Uri, 1)
+              .execute()
+          }
+        )
+    }
   }
 
   /**
@@ -252,28 +267,40 @@ object S3LargeBinaryManager {
     *
     * @param s3Uri The S3 URI of the object
     * @return The new reference count
+    * @throws IllegalArgumentException if the S3 URI format is invalid
     */
   def decrementReferenceCount(s3Uri: String): Long = {
     require(s3Uri.startsWith("s3://"), "Invalid S3 URI format")
 
-    val uri = new URI(s3Uri)
-    val bucketName = uri.getHost
-    val key = uri.getPath.stripPrefix("/")
-    val referenceCountKey = s"$REFERENCE_COUNT_PREFIX$key"
+    val dsl = SqlServer.getInstance().createDSLContext()
+    SqlServer.withTransaction(dsl) { ctx =>
+      val dao = new S3ReferenceCountsDao(ctx.configuration())
 
-    val currentCount = loadReferenceCount(bucketName, referenceCountKey)
-    val newCount = Math.max(0, currentCount - 1)
-    saveReferenceCount(bucketName, referenceCountKey, newCount)
+      val record = dao.fetchOptionalByS3Uri(s3Uri)
+      if (record.isPresent) {
+        val currentRecord = record.get()
+        val newCount = currentRecord.getReferenceCount - 1
 
-    if (newCount == 0) {
-      S3StorageClient.getS3Client.deleteObject(
-        DeleteObjectRequest.builder().bucket(bucketName).key(key).build()
-      )
-      S3StorageClient.getS3Client.deleteObject(
-        DeleteObjectRequest.builder().bucket(bucketName).key(referenceCountKey).build()
-      )
+        if (newCount <= 0) {
+          dao.deleteById(s3Uri)
+
+          val uri = new URI(s3Uri)
+          val bucketName = uri.getHost
+          val key = uri.getPath.stripPrefix("/")
+
+          S3StorageClient.getS3Client.deleteObject(
+            DeleteObjectRequest.builder().bucket(bucketName).key(key).build()
+          )
+          0
+        } else {
+          currentRecord.setReferenceCount(newCount)
+          dao.update(currentRecord)
+          newCount
+        }
+      } else {
+        0
+      }
     }
-    newCount
   }
 
   private def loadReferenceCount(bucketName: String, referenceCountKey: String): Int = {
@@ -287,18 +314,6 @@ object S3LargeBinaryManager {
     } catch {
       case _: Exception => 0
     }
-  }
-
-  private def saveReferenceCount(
-      bucketName: String,
-      referenceCountKey: String,
-      count: Int
-  ): Unit = {
-    val jsonBytes = objectMapper.writeValueAsBytes(count)
-    S3StorageClient.getS3Client.putObject(
-      PutObjectRequest.builder().bucket(bucketName).key(referenceCountKey).build(),
-      RequestBody.fromBytes(jsonBytes)
-    )
   }
 
   /**

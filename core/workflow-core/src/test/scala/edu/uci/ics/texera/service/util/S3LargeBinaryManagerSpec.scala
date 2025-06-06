@@ -21,6 +21,7 @@ package edu.uci.ics.texera.service.util
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.BeforeAndAfterAll
 import org.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.any
 import software.amazon.awssdk.services.s3.S3Client
@@ -31,8 +32,15 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import edu.uci.ics.amber.core.storage.StorageConfig
 import software.amazon.awssdk.core.ResponseInputStream
+import edu.uci.ics.texera.dao.MockTexeraDB
+import edu.uci.ics.texera.dao.SqlServer
 
-class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSugar {
+class S3LargeBinaryManagerSpec
+    extends AnyFlatSpec
+    with Matchers
+    with MockitoSugar
+    with MockTexeraDB
+    with BeforeAndAfterAll {
 
   // Mock S3Client
   private val mockS3Client = mock[S3Client]
@@ -41,6 +49,27 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
   private val testUploadId = "test-upload-id"
   private val testETag = "test-etag"
   private val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    initializeDBAndReplaceDSLContext()
+
+    // Create s3_reference_counts table in texera_db schema
+    val dsl = SqlServer.getInstance().createDSLContext()
+    dsl.execute("""
+      CREATE TABLE IF NOT EXISTS texera_db.s3_reference_counts (
+        s3_uri TEXT PRIMARY KEY,
+        reference_count INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    """)
+  }
+
+  override def afterAll(): Unit = {
+    shutdownDB()
+    super.afterAll()
+  }
 
   // Setup mock responses
   private def setupMockResponses(): Unit = {
@@ -85,6 +114,19 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
     doReturn(putObjectResponse)
       .when(mockS3Client)
       .putObject(any[PutObjectRequest], any[RequestBody])
+
+    // Mock getObject response for object size
+    val getObjectResponseSize = GetObjectResponse
+      .builder()
+      .contentLength(1024L)
+      .build()
+    val responseStream = new ResponseInputStream[GetObjectResponse](
+      getObjectResponseSize,
+      new ByteArrayInputStream(Array.empty[Byte])
+    )
+    doReturn(responseStream)
+      .when(mockS3Client)
+      .getObject(any[GetObjectRequest])
   }
 
   "S3LargeBinaryManager" should "upload a file successfully" in {
@@ -125,7 +167,6 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
     setupMockResponses()
 
     val s3Uri = s"s3://$testBucket/$testKey"
-    val referenceCountKey = s"reference-counts/$testKey"
 
     // Save original S3Client and replace with mock
     val originalS3Client = S3StorageClient.getS3Client
@@ -135,24 +176,12 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
       field.setAccessible(true)
       field.set(S3StorageClient, mockS3Client)
 
-      // Mock getObject to return 0 as current count
-      val getObjectResponse = GetObjectResponse
-        .builder()
-        .build()
-      doReturn(getObjectResponse)
-        .when(mockS3Client)
-        .getObject(any[GetObjectRequest])
-
       // Test increment
       S3LargeBinaryManager.incrementReferenceCount(s3Uri)
-      verify(mockS3Client).getObject(any[GetObjectRequest])
-      verify(mockS3Client, times(2)).putObject(any[PutObjectRequest], any[RequestBody])
 
       // Test decrement
       val newCount = S3LargeBinaryManager.decrementReferenceCount(s3Uri)
       newCount shouldBe 0
-      verify(mockS3Client, times(2)).getObject(any[GetObjectRequest])
-      verify(mockS3Client, times(3)).putObject(any[PutObjectRequest], any[RequestBody])
     } finally {
       // Restore original S3Client
       val field = classOf[S3StorageClient.type].getDeclaredField("s3Client")
@@ -165,7 +194,6 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
     setupMockResponses()
 
     val s3Uri = s"s3://$testBucket/$testKey"
-    val referenceCountKey = s"reference-counts/$testKey"
 
     // Save original S3Client and replace with mock
     val originalS3Client = S3StorageClient.getS3Client
@@ -175,20 +203,12 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
       field.setAccessible(true)
       field.set(S3StorageClient, mockS3Client)
 
-      // Mock getObject to return 1 as current count
-      val getObjectResponse = GetObjectResponse
-        .builder()
-        .build()
-      doReturn(getObjectResponse)
-        .when(mockS3Client)
-        .getObject(any[GetObjectRequest])
-
       // Decrement count to zero
       val newCount = S3LargeBinaryManager.decrementReferenceCount(s3Uri)
       newCount shouldBe 0
 
       // Verify delete operations
-      verify(mockS3Client, times(4)).deleteObject(any[DeleteObjectRequest])
+      verify(mockS3Client).deleteObject(any[DeleteObjectRequest])
     } finally {
       // Restore original S3Client
       val field = classOf[S3StorageClient.type].getDeclaredField("s3Client")
@@ -224,17 +244,6 @@ class S3LargeBinaryManagerSpec extends AnyFlatSpec with Matchers with MockitoSug
       val field = classOf[S3StorageClient.type].getDeclaredField("s3Client")
       field.setAccessible(true)
       field.set(S3StorageClient, mockS3Client)
-
-      // Mock getObject to return ResponseInputStream with expected size
-      val getObjectResponse = GetObjectResponse
-        .builder()
-        .contentLength(expectedSize)
-        .build()
-      val mockResponseStream = mock[ResponseInputStream[GetObjectResponse]]
-      doReturn(getObjectResponse).when(mockResponseStream).response()
-      doReturn(mockResponseStream)
-        .when(mockS3Client)
-        .getObject(any[GetObjectRequest])
 
       // Test getObjectInfo
       val size = S3LargeBinaryManager.getObjectInfo(s3Uri)
