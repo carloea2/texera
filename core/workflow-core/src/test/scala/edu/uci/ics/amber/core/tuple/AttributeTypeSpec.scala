@@ -119,7 +119,7 @@ class AttributeTypeSpec extends AnyFunSpec {
 
     it("should throw IllegalArgumentException for attribute names starting with reserved prefix") {
       val reservedPrefix = AttributeType.TEXERA_LARGE_BINARY_TYPE_ATTRIBUTE_NAME_PREFIX
-      
+
       // Test with exact prefix
       val exception1 = intercept[IllegalArgumentException] {
         AttributeType.validateAttributeName(reservedPrefix)

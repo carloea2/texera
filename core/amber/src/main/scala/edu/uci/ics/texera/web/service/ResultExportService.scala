@@ -22,7 +22,7 @@ package edu.uci.ics.texera.web.service
 import com.github.tototoshi.csv.CSVWriter
 import edu.uci.ics.amber.core.storage.{DocumentFactory, EnvironmentalVariable}
 import edu.uci.ics.amber.core.storage.model.VirtualDocument
-import edu.uci.ics.amber.core.tuple.Tuple
+import edu.uci.ics.amber.core.tuple.{AttributeType, Tuple}
 import edu.uci.ics.amber.core.virtualidentity.{OperatorIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.PortIdentity
 import edu.uci.ics.amber.util.ArrowUtils
@@ -417,11 +417,14 @@ class ResultExportService(workflowIdentity: WorkflowIdentity, computingUnitId: I
     }
 
     val field: Any = selectedRow.getField(columnIndex)
+    val attributeName = selectedRow.getSchema.getAttributeNames(columnIndex)
+    val attributeType = selectedRow.getSchema.getAttribute(attributeName).getType
+
     field match {
       case data: Array[Byte] =>
         out.write(data)
 
-      case data: String if data.startsWith("s3://") =>
+      case data: String if attributeType == AttributeType.LARGE_BINARY =>
         val uri = new java.net.URI(data)
         val bucketName = uri.getHost
         val key = uri.getPath.stripPrefix("/")
