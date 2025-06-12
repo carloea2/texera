@@ -29,7 +29,7 @@ import { SettingsComponent } from "./settings/settings.component";
 import { calculateTotalTranslate3d } from "../../../common/util/panel-dock";
 import { PanelService } from "../../service/panel/panel.service";
 import { GuiConfigService } from "../../../common/service/gui-config.service";
-import {ChatAssistantMultiAgentComponent} from "./chat-assistant-multi-agent/chat-assistant-multi-agent.component";
+import { ChatAssistantMultiAgentComponent } from "./chat-assistant-multi-agent/chat-assistant-multi-agent.component";
 @UntilDestroy()
 @Component({
   selector: "texera-left-panel",

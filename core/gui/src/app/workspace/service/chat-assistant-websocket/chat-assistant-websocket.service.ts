@@ -1,22 +1,22 @@
-import {Injectable} from "@angular/core";
-import {webSocket, WebSocketSubject} from "rxjs/webSocket";
-import {interval, Observable, Subject, Subscription, timer} from "rxjs";
-import {delayWhen, filter, map, retryWhen, tap} from "rxjs/operators";
-import {OperatorMetadataService} from "../operator-metadata/operator-metadata.service";
-import {WorkflowActionService} from "../workflow-graph/model/workflow-action.service";
+import { Injectable } from "@angular/core";
+import { webSocket, WebSocketSubject } from "rxjs/webSocket";
+import { interval, Observable, Subject, Subscription, timer } from "rxjs";
+import { delayWhen, filter, map, retryWhen, tap } from "rxjs/operators";
+import { OperatorMetadataService } from "../operator-metadata/operator-metadata.service";
+import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
 
 export type PythonWSRequestTypeMap = {
-  CreateSessionRequest: {};                   // NEW
+  CreateSessionRequest: {}; // NEW
   HeartBeatRequest: {};
   ChatUserMessageRequest: {
     message: string;
   };
   OperatorSchemaResponse: { schema: string; requestId: string };
-  AddOperatorAndLinksResponse: {status: string, requestId: string};
+  AddOperatorAndLinksResponse: { status: string; requestId: string };
 };
 
 export type PythonWSEventTypeMap = {
-  CreateSessionResponse: { sessionId: string };   // NEW
+  CreateSessionResponse: { sessionId: string }; // NEW
   HeartBeatResponse: {};
   ChatStreamResponseEvent: {
     delta: string;
@@ -31,13 +31,12 @@ export type PythonWSEventTypeMap = {
   };
 };
 
-
 // helper type definitions to generate the request and event types
 type ValueOf<T> = T[keyof T];
 type CustomUnionType<T> = ValueOf<{
   [P in keyof T]: {
-  type: P;
-} & T[P];
+    type: P;
+  } & T[P];
 }>;
 
 export type PythonWSRequestTypes = keyof PythonWSRequestTypeMap;
@@ -46,12 +45,11 @@ export type PythonWSRequest = CustomUnionType<PythonWSRequestTypeMap>;
 export type PythonWSEventTypes = keyof PythonWSEventTypeMap;
 export type PythonWSEvent = CustomUnionType<PythonWSEventTypeMap>;
 
-
 export const WS_HEARTBEAT_INTERVAL_MS = 10000;
 export const WS_RECONNECT_INTERVAL_MS = 3000;
 
 @Injectable({
-  providedIn: "root"
+  providedIn: "root",
 })
 export class ChatAssistantWebsocketService {
   private static readonly WS_ENDPOINT = "ws://localhost:8001/ws";
@@ -59,29 +57,26 @@ export class ChatAssistantWebsocketService {
   private wsWithReconnectSubscription?: Subscription;
   private webSocketResponseSubject: Subject<PythonWSEvent> = new Subject<PythonWSEvent>();
 
-  private sessionId?: string;          // ← NEW
+  private sessionId?: string; // ← NEW
   public isConnected = false;
 
-  constructor(private operatorMetadataService: OperatorMetadataService,
-              private workflowActionService: WorkflowActionService) {
+  constructor(
+    private operatorMetadataService: OperatorMetadataService,
+    private workflowActionService: WorkflowActionService
+  ) {
     // Send heartbeat periodically
     interval(WS_HEARTBEAT_INTERVAL_MS).subscribe(() => {
       this.send("HeartBeatRequest", {});
     });
-    this.subscribeToEvent("CreateSessionResponse")
-        .subscribe(evt => {
-          console.log("New sessionId:", evt.sessionId);
-          this.sessionId = evt.sessionId;
-        });
-    this.subscribeToEvent("HeartBeatResponse")
-        .subscribe((heartBeatResponse) => console.log(heartBeatResponse));
-    this.subscribeToEvent("getOperatorSchema")
-        .subscribe((getOperatorSchemaRequest) => {
-          this.handleGetOperatorSchema(getOperatorSchemaRequest);
-        });
-    this.subscribeToEvent("addOperatorAndLinks").subscribe((evt) =>
-        this.handleAddOperatorAndLinks(evt)
-    );
+    this.subscribeToEvent("CreateSessionResponse").subscribe(evt => {
+      console.log("New sessionId:", evt.sessionId);
+      this.sessionId = evt.sessionId;
+    });
+    this.subscribeToEvent("HeartBeatResponse").subscribe(heartBeatResponse => console.log(heartBeatResponse));
+    this.subscribeToEvent("getOperatorSchema").subscribe(getOperatorSchemaRequest => {
+      this.handleGetOperatorSchema(getOperatorSchemaRequest);
+    });
+    this.subscribeToEvent("addOperatorAndLinks").subscribe(evt => this.handleAddOperatorAndLinks(evt));
   }
 
   public websocketEvent(): Observable<PythonWSEvent> {
@@ -91,16 +86,13 @@ export class ChatAssistantWebsocketService {
   // Subscribe to a particular type of event
   public subscribeToEvent<T extends PythonWSEventTypes>(type: T): Observable<{ type: T } & PythonWSEventTypeMap[T]> {
     return this.websocketEvent().pipe(
-        filter(event => event.type === type),
-        map(event => event as {type: T} & PythonWSEventTypeMap[T])
+      filter(event => event.type === type),
+      map(event => event as { type: T } & PythonWSEventTypeMap[T])
     );
   }
 
   // Send a request to the Python server
-  public send<T extends PythonWSRequestTypes>(
-      type: T,
-      payload: PythonWSRequestTypeMap[T]
-  ): void {
+  public send<T extends PythonWSRequestTypes>(type: T, payload: PythonWSRequestTypeMap[T]): void {
     if (!this.websocket) {
       console.warn("WebSocket not connected; cannot send request:", payload);
       return;
@@ -108,9 +100,7 @@ export class ChatAssistantWebsocketService {
 
     // Only attach the sessionId for per-chat requests
     const needsSid = !["CreateSessionRequest", "HeartBeatRequest"].includes(type);
-    const augmented = needsSid && this.sessionId
-        ? { sessionId: this.sessionId, ...payload }
-        : payload;
+    const augmented = needsSid && this.sessionId ? { sessionId: this.sessionId, ...payload } : payload;
 
     const request = { type, ...augmented } as any as PythonWSRequest;
     console.log("Sending", request);
@@ -127,39 +117,38 @@ export class ChatAssistantWebsocketService {
     this.websocket = webSocket<PythonWSEvent | PythonWSRequest>(websocketUrl);
 
     // ask server for a logical chat session
-    this.send("CreateSessionRequest", {});               // ← NEW
+    this.send("CreateSessionRequest", {}); // ← NEW
 
     // setup reconnection logic
     const wsWithReconnect = this.websocket.pipe(
-        retryWhen(errors =>
-            errors.pipe(
-                tap(_ => (this.isConnected = false)), // update connection status
-                tap(_ =>
-                    console.log(`websocket connection lost, reconnecting in ${WS_RECONNECT_INTERVAL_MS / 1000} seconds`)
-                ),
-                delayWhen(_ => timer(WS_RECONNECT_INTERVAL_MS)), // reconnect after delay
-                tap(_ => {
-                  this.send("HeartBeatRequest", {}); // try to send heartbeat immediately after reconnect
-                })
-            )
+      retryWhen(errors =>
+        errors.pipe(
+          tap((_: unknown) => (this.isConnected = false)), // update connection status
+          tap((_: unknown) =>
+            console.log(`websocket connection lost, reconnecting in ${WS_RECONNECT_INTERVAL_MS / 1000} seconds`)
+          ),
+          delayWhen(_ => timer(WS_RECONNECT_INTERVAL_MS)), // reconnect after delay
+          tap((_: unknown) => {
+            this.send("HeartBeatRequest", {}); // try to send heartbeat immediately after reconnect
+          })
         )
-    )
+      )
+    );
     // set up event listener on re-connectable websocket observable
     this.wsWithReconnectSubscription = wsWithReconnect.subscribe({
-      next: (event) => {
+      next: event => {
         this.webSocketResponseSubject.next(event as PythonWSEvent);
         this.isConnected = true;
       },
-      error: (err) => {
+      error: (err: unknown) => {
         console.error("WebSocket error:", err);
         this.isConnected = false;
       },
-      complete: () => {
+      complete: (_: unknown) => {
         console.log("WebSocket connection closed.");
         this.isConnected = false;
-      }
+      },
     });
-
   }
 
   /**
@@ -173,7 +162,7 @@ export class ChatAssistantWebsocketService {
     // Send the response back to the Python server.
     const response = {
       schema: operatorSchema,
-      requestId: event.requestId
+      requestId: event.requestId,
     };
     // Use next() to send the message over the WebSocket.
     this.send("OperatorSchemaResponse", response);
@@ -187,9 +176,7 @@ export class ChatAssistantWebsocketService {
     if (!this.operatorMetadataService.operatorTypeExists(operatorType)) {
       return "operatorType does not exist in Texera, please generate operator again";
     }
-    return JSON.stringify(
-        this.operatorMetadataService.getOperatorSchema(operatorType)
-    );
+    return JSON.stringify(this.operatorMetadataService.getOperatorSchema(operatorType));
   }
 
   private handleAddOperatorAndLinks(evt: {
@@ -200,10 +187,7 @@ export class ChatAssistantWebsocketService {
   }) {
     let status = "success";
     try {
-      this.workflowActionService.addOperatorsAndLinks(
-          [evt.operatorAndPosition],
-          evt.links
-      );
+      this.workflowActionService.addOperatorsAndLinks([evt.operatorAndPosition], evt.links);
       this.workflowActionService.autoLayoutWorkflow();
     } catch (e) {
       console.error(e);

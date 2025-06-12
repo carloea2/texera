@@ -309,11 +309,11 @@ export class OperatorMenuService {
       // check if the fields in a normal serialized string exist after converting the JSON string
       // if not, throw an error, which is propagated and produces an alert for the user
       if (
-          !elementsInClipboard.has("operators") &&
-          !elementsInClipboard.has("operatorPositions") &&
-          !elementsInClipboard.has("links") &&
-          !elementsInClipboard.has("groups") &&
-          !elementsInClipboard.has("commentBoxes")
+        !elementsInClipboard.has("operators") &&
+        !elementsInClipboard.has("operatorPositions") &&
+        !elementsInClipboard.has("links") &&
+        !elementsInClipboard.has("groups") &&
+        !elementsInClipboard.has("commentBoxes")
       ) {
         throw new Error("You haven't copied any element yet.");
       }
@@ -331,7 +331,7 @@ export class OperatorMenuService {
     // the fields "links" and "operatorPositions" should exist
     const linksInClipboard: OperatorLink[] = elementsInClipboard.get("links") as OperatorLink[];
     const operatorPositionsInClipboard: OperatorPositions = elementsInClipboard.get(
-        "operatorPositions"
+      "operatorPositions"
     ) as OperatorPositions;
     // get all the operators from the clipboard, which are already sorted by their layers
     let copiedOps: OperatorPredicate[] = elementsInClipboard.get("operators") as OperatorPredicate[];
@@ -346,8 +346,8 @@ export class OperatorMenuService {
           const newLinkID = this.workflowUtilService.getLinkRandomUUID();
           linksCopy[link.linkID] = {
             linkID: newLinkID,
-            source: {operatorID: "", portID: ""},
-            target: {operatorID: "", portID: ""},
+            source: { operatorID: "", portID: "" },
+            target: { operatorID: "", portID: "" },
           };
         }
 
@@ -394,7 +394,7 @@ export class OperatorMenuService {
       this.workflowActionService.addOperatorsAndLinks(operatorsAndPositions, links);
     } catch (e) {
       this.notificationService.info(
-          "Some of the links that you selected don't have operators attached to both ends of them. These links won't be pasted, since links can't exist without operators."
+        "Some of the links that you selected don't have operators attached to both ends of them. These links won't be pasted, since links can't exist without operators."
       );
     }
 
