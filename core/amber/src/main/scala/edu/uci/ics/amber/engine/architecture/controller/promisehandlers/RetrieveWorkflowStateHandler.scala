@@ -45,7 +45,7 @@ trait RetrieveWorkflowStateHandler {
       ctx: AsyncRPCContext
   ): Future[RetrieveWorkflowStateResponse] = {
     val targetOps = cp.workflowScheduler.physicalPlan.operators.map(_.id).toSeq
-    val markerMessage = PropagateEmbeddedControlMessageRequest(
+    val msg = PropagateEmbeddedControlMessageRequest(
       cp.workflowExecution.getRunningRegionExecutions
         .flatMap(_.getAllOperatorExecutions.map(_._1))
         .toSeq,
@@ -58,7 +58,7 @@ trait RetrieveWorkflowStateHandler {
     )
     controllerInterface
       .propagateEmbeddedControlMessage(
-        markerMessage,
+        msg,
         mkContext(SELF)
       )
       .map { ret =>

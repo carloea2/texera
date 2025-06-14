@@ -46,7 +46,7 @@ trait EmbeddedControlMessageHandler {
       cp.workflowExecution.getRunningRegionExecutions
         .map(_.getOperatorExecution(target))
         .flatMap(_.getWorkerIds.map { worker =>
-          worker -> createInvocation(msg.markerMethodName, msg.markerCommand, worker)
+          worker -> createInvocation(msg.methodName, msg.command, worker)
         })
     }
     // step 2: packing all control commands into one compound command.
@@ -81,7 +81,7 @@ trait EmbeddedControlMessageHandler {
 
     val finalScope = channelScope ++ controlChannels
 
-    // step 4: start prop, send marker through control channel with the compound command from sources.
+    // step 4: start prop, send ECM through control channel with the compound command from sources.
     msg.sourceOpToStartProp.foreach { source =>
       cp.workflowExecution.getLatestOperatorExecution(source).getWorkerIds.foreach { worker =>
         sendECM(
@@ -94,7 +94,7 @@ trait EmbeddedControlMessageHandler {
       }
     }
 
-    // step 5: wait for the marker propagation.
+    // step 5: wait for the ECM propagation.
     Future.collect(futures.toList).map { ret =>
       cp.logManager.markAsReplayDestination(msg.id)
       PropagateEmbeddedControlMessageResponse(ret.map(x => (x._1.name, x._2)).toMap)

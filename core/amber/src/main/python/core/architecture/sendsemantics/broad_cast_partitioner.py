@@ -51,7 +51,7 @@ class BroadcastPartitioner(Partitioner):
 
     @overrides
     def flush(
-        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+        self, to: ActorVirtualIdentity, ecm: EmbeddedControlMessage
     ) -> Iterator[typing.Union[EmbeddedControlMessage, typing.List[Tuple]]]:
         if len(self.batch) > 0:
             for receiver in self.receivers:
@@ -60,7 +60,7 @@ class BroadcastPartitioner(Partitioner):
         self.reset()
         for receiver in self.receivers:
             if receiver == to:
-                yield marker
+                yield ecm
 
     @overrides
     def flush_state(

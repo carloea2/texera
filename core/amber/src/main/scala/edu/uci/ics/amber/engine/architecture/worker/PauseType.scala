@@ -31,4 +31,4 @@ object OperatorLogicPause extends PauseType
 
 object SchedulerTimeSlotExpiredPause extends PauseType
 
-case class EpochMarkerPause(id: EmbeddedControlMessageIdentity) extends PauseType
+case class ECMPause(id: EmbeddedControlMessageIdentity) extends PauseType

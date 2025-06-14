@@ -75,13 +75,13 @@ class RangeBasedShufflePartitioner(Partitioner):
 
     @overrides
     def flush(
-        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+        self, to: ActorVirtualIdentity, ecm: EmbeddedControlMessage
     ) -> Iterator[typing.Union[EmbeddedControlMessage, typing.List[Tuple]]]:
         for receiver, batch in self.receivers:
             if receiver == to:
                 if len(batch) > 0:
                     yield batch
-                yield marker
+                yield ecm
 
     @overrides
     def flush_state(

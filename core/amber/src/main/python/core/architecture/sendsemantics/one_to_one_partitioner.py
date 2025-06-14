@@ -52,12 +52,12 @@ class OneToOnePartitioner(Partitioner):
 
     @overrides
     def flush(
-        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+        self, to: ActorVirtualIdentity, ecm: EmbeddedControlMessage
     ) -> Iterator[typing.Union[EmbeddedControlMessage, typing.List[Tuple]]]:
         if len(self.batch) > 0:
             yield self.batch
         self.reset()
-        yield marker
+        yield ecm
 
     @overrides
     def flush_state(

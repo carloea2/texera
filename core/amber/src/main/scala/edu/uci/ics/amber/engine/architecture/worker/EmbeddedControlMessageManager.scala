@@ -46,7 +46,7 @@ class EmbeddedControlMessageManager(
   val checkpoints = new mutable.HashMap[EmbeddedControlMessageIdentity, CheckpointState]()
 
   /**
-    * Determines if an epoch ECM is fully received from all relevant senders within its scope.
+    * Determines if an ECM is fully received from all relevant senders within its scope.
     * This method checks if the ECM, based on its type, has been received from all necessary channels.
     * For ECMs requiring alignment, it verifies receipt from all senders in the scope. For non-aligned ECMs,
     * it checks if it's the first received ECM. Post verification, it cleans up the ECMs.
@@ -54,7 +54,7 @@ class EmbeddedControlMessageManager(
     * @return Boolean indicating if the ECM is completely received from all senders
     *         within the scope. Returns true if the ECM is aligned, otherwise false.
     */
-  def isMarkerAligned(
+  def ecmAligned(
       from: ChannelIdentity,
       ecm: EmbeddedControlMessage
   ): Boolean = {

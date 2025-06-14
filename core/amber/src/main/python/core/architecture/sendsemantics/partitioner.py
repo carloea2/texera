@@ -37,7 +37,7 @@ class Partitioner(ABC):
         pass
 
     def flush(
-        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+        self, to: ActorVirtualIdentity, ecm: EmbeddedControlMessage
     ) -> Iterator[typing.Union[EmbeddedControlMessage, typing.List[Tuple]]]:
         pass
 

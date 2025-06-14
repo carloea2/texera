@@ -208,39 +208,38 @@ class DataProcessor(
 
   def processECM(
       channelId: ChannelIdentity,
-      marker: EmbeddedControlMessage,
+      ecm: EmbeddedControlMessage,
       logManager: ReplayLogManager
   ): Unit = {
     inputManager.currentChannelId = channelId
-    val markerId = marker.id
-    val command = marker.commandMapping.get(actorId.name)
-    logger.info(s"receive marker from $channelId, id = $markerId, cmd = $command")
-    if (marker.ecmType != NO_ALIGNMENT) {
-      pauseManager.pauseInputChannel(EpochMarkerPause(markerId), List(channelId))
+    val command = ecm.commandMapping.get(actorId.name)
+    logger.info(s"receive ECM from $channelId, id = ${ecm.id}, cmd = $command")
+    if (ecm.ecmType != NO_ALIGNMENT) {
+      pauseManager.pauseInputChannel(ECMPause(ecm.id), List(channelId))
     }
-    if (ecmManager.isMarkerAligned(channelId, marker)) {
-      logManager.markAsReplayDestination(markerId)
-      // invoke the control command carried with the epoch marker
-      logger.info(s"process marker from $channelId, id = $markerId, cmd = $command")
+    if (ecmManager.ecmAligned(channelId, ecm)) {
+      logManager.markAsReplayDestination(ecm.id)
+      // invoke the control command carried with the ECM
+      logger.info(s"process ECM from $channelId, id = ${ecm.id}, cmd = $command")
       if (command.isDefined) {
         asyncRPCServer.receive(command.get, channelId.fromWorkerId)
       }
-      // if this worker is not the final destination of the marker, pass it downstream
-      val downstreamChannelsInScope = marker.scope.filter(_.fromWorkerId == actorId).toSet
+      // if this worker is not the final destination of the ECM, pass it downstream
+      val downstreamChannelsInScope = ecm.scope.filter(_.fromWorkerId == actorId).toSet
       if (downstreamChannelsInScope.nonEmpty) {
         outputManager.flush(Some(downstreamChannelsInScope))
         outputGateway.getActiveChannels.foreach { activeChannelId =>
           if (downstreamChannelsInScope.contains(activeChannelId)) {
             logger.info(
-              s"send marker to $activeChannelId, id = $markerId, cmd = $command"
+              s"send ECM to $activeChannelId, id = ${ecm.id}, cmd = $command"
             )
-            outputGateway.sendTo(activeChannelId, marker)
+            outputGateway.sendTo(activeChannelId, ecm)
           }
         }
       }
       // unblock input channels
-      if (marker.ecmType != NO_ALIGNMENT) {
-        pauseManager.resume(EpochMarkerPause(markerId))
+      if (ecm.ecmType != NO_ALIGNMENT) {
+        pauseManager.resume(ECMPause(ecm.id))
       }
     }
   }
