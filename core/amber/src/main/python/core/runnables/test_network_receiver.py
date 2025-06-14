@@ -159,7 +159,7 @@ class TestNetworkReceiver:
         assert element.tag == channel_id
 
     @pytest.mark.timeout(10)
-    def test_network_receiver_can_receive_channel_marker(
+    def test_network_receiver_can_receive_ecm(
         self,
         output_queue,
         input_queue,
@@ -169,7 +169,7 @@ class TestNetworkReceiver:
         network_sender_thread.start()
         worker_id = ActorVirtualIdentity(name="test")
         channel_id = ChannelIdentity(worker_id, worker_id, False)
-        marker_id = EmbeddedControlMessageIdentity("test_marker")
+        ecm_id = EmbeddedControlMessageIdentity("test_ecm")
         scope = [channel_id]
         rpc_context = AsyncRpcContext(worker_id, worker_id)
         command_mapping = {
@@ -184,7 +184,7 @@ class TestNetworkReceiver:
             EmbeddedControlMessageElement(
                 tag=channel_id,
                 payload=EmbeddedControlMessage(
-                    marker_id,
+                    ecm_id,
                     EmbeddedControlMessageType.ALL_ALIGNMENT,
                     scope,
                     command_mapping,
@@ -194,7 +194,7 @@ class TestNetworkReceiver:
         element: DataElement = output_queue.get()
         assert isinstance(element.payload, EmbeddedControlMessage)
         assert element.payload.ecm_type == EmbeddedControlMessageType.ALL_ALIGNMENT
-        assert element.payload.id == marker_id
+        assert element.payload.id == ecm_id
         assert element.payload.command_mapping == command_mapping
         assert element.payload.scope == scope
         assert element.tag == channel_id

@@ -336,7 +336,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 ) in self.context.output_manager.get_output_channel_ids():
                     if active_channel_id in downstream_channels_in_scope:
                         logger.info(
-                            f"send marker to {active_channel_id},"
+                            f"send ECM to {active_channel_id},"
                             f" id = {ecm.id}, cmd = {command}"
                         )
                         self._send_ecm(active_channel_id, ecm)
@@ -388,7 +388,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
     def _process_data_element(self, data_element: DataElement) -> None:
         """
-        Upon receipt of a DataElement, unpack it into Tuples and Markers,
+        Upon receipt of a DataElement, unpack it into Tuples and States,
         and process them one by one.
 
         :param data_element: DataElement, a batch of data.

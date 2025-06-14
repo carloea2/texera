@@ -129,7 +129,7 @@ private class AmberProducer(
       case "State" =>
         assert(root.getRowCount == 1)
         outputPort.sendTo(to, StateFrame(State(Some(ArrowUtils.getTexeraTuple(0, root)))))
-      case "ChannelMarker" =>
+      case "ECM" =>
         assert(root.getRowCount == 1)
         outputPort.sendTo(
           to,

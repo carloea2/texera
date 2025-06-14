@@ -1165,15 +1165,15 @@ class TestMainLoop:
                 "NoOperation", EmptyRequest(), AsyncRpcContext(), 98
             )
         }
-        test_marker = EmbeddedControlMessage(
-            "test_marker", EmbeddedControlMessageType.ALL_ALIGNMENT, scope, command_mapping
+        test_ecm = EmbeddedControlMessage(
+            "test_ecm", EmbeddedControlMessageType.ALL_ALIGNMENT, scope, command_mapping
         )
         input_queue.put(
-            EmbeddedControlMessageElement(tag=mock_control_input_channel, payload=test_marker)
+            EmbeddedControlMessageElement(tag=mock_control_input_channel, payload=test_ecm)
         )
         input_queue.put(mock_binary_data_element)
         input_queue.put(
-            EmbeddedControlMessageElement(tag=mock_data_input_channel, payload=test_marker)
+            EmbeddedControlMessageElement(tag=mock_data_input_channel, payload=test_ecm)
         )
         output_data_element: DataElement = output_queue.get()
         assert output_data_element.tag == mock_data_output_channel

@@ -139,7 +139,7 @@ class DataProcessor(
     if (outputTuple == null) return
     outputTuple match {
       case FinalizeExecutor() =>
-        sendChannelMarkerToDataChannels(METHOD_END_CHANNEL, PORT_ALIGNMENT)
+        sendECMToDataChannels(METHOD_END_CHANNEL, PORT_ALIGNMENT)
         // Send Completed signal to worker actor.
         executor.close()
         adaptiveBatchingMonitor.stopAdaptiveBatching()
@@ -245,7 +245,7 @@ class DataProcessor(
     }
   }
 
-  def sendChannelMarkerToDataChannels(
+  def sendECMToDataChannels(
       method: MethodDescriptor[EmptyRequest, EmptyReturn],
       alignment: EmbeddedControlMessageType
   ): Unit = {

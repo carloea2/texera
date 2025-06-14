@@ -121,7 +121,7 @@ class InputPortMaterializationReaderThread(
   }
 
   /**
-    * Puts a ECM into the internal queue.
+    * Puts an ECM into the internal queue.
     */
   private def emitECM(
       method: MethodDescriptor[EmptyRequest, EmptyReturn],

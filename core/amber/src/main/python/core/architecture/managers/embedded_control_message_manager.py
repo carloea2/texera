@@ -36,7 +36,7 @@ class EmbeddedControlMessageManager:
         self, from_channel: ChannelIdentity, ecm: EmbeddedControlMessage
     ) -> bool:
         """
-        Checks whether a ECM has been received from all expected
+        Checks whether an ECM has been received from all expected
         input channels, determining whether further processing can proceed.
 
         Args:

@@ -122,8 +122,8 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
     def run(self) -> None:
         """
         Main execution logic that reads tuples from the materialized storage and
-        enqueues them in batches. It first emits a start marker and, when finished,
-        emits an end marker. Use the same partitioner implementation as that in
+        enqueues them in batches. It first emits a StartChannel ECM and, when finished,
+        emits an EndChannel ECM. Use the same partitioner implementation as that in
         output manager, where a tuple is batched by the partitioner and only
         selected as the input of this worker according to the partitioner.
         """
@@ -131,7 +131,7 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
             self.materialization, self.tuple_schema = DocumentFactory.open_document(
                 self.uri
             )
-            self.emit_channel_marker("StartChannel", EmbeddedControlMessageType.NO_ALIGNMENT)
+            self.emit_ecm("StartChannel", EmbeddedControlMessageType.NO_ALIGNMENT)
             storage_iterator = self.materialization.get()
 
             # Iterate and process tuples.
@@ -142,7 +142,7 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
                 # a batch-based iterator.
                 for data_frame in self.tuple_to_batch_with_filter(tup):
                     self.emit_payload(data_frame)
-            self.emit_channel_marker("EndChannel", EmbeddedControlMessageType.PORT_ALIGNMENT)
+            self.emit_ecm("EndChannel", EmbeddedControlMessageType.PORT_ALIGNMENT)
         except Exception as err:
             logger.exception(err)
 
@@ -150,15 +150,15 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
         """Sets the stop flag so the run loop may terminate."""
         self._stopped = True
 
-    def emit_channel_marker(
+    def emit_ecm(
         self, method_name: str, alignment: EmbeddedControlMessageType
     ) -> None:
         """
-        Emit a channel marker (StartChannel or EndChannel), and
+        Emit an ECM (StartChannel or EndChannel), and
         flush the remaining data batches if any. This mimics the
         iterator logic of that in output manager.
         """
-        marker_payload = EmbeddedControlMessage(
+        ecm = EmbeddedControlMessage(
             EmbeddedControlMessageIdentity(method_name),
             alignment,
             [],
@@ -172,7 +172,7 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
             },
         )
 
-        for payload in self.partitioner.flush(self.worker_actor_id, marker_payload):
+        for payload in self.partitioner.flush(self.worker_actor_id, ecm):
             final_payload = (
                 payload
                 if isinstance(payload, EmbeddedControlMessage)

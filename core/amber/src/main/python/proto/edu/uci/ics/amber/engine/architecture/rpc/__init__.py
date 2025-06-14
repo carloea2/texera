@@ -176,8 +176,8 @@ class PropagateEmbeddedControlMessageRequest(betterproto.Message):
     ecm_type: "EmbeddedControlMessageType" = betterproto.enum_field(3)
     scope: List["___core__.PhysicalOpIdentity"] = betterproto.message_field(4)
     target_ops: List["___core__.PhysicalOpIdentity"] = betterproto.message_field(5)
-    marker_command: "ControlRequest" = betterproto.message_field(6)
-    marker_method_name: str = betterproto.string_field(7)
+    command: "ControlRequest" = betterproto.message_field(6)
+    method_name: str = betterproto.string_field(7)
 
 
 @dataclass(eq=False, repr=False)

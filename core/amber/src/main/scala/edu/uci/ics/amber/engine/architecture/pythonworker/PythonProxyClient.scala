@@ -135,7 +135,7 @@ class PythonProxyClient(portNumberPromise: Promise[Int], val actorId: ActorVirtu
       ecm: EmbeddedControlMessage,
       from: ChannelIdentity
   ): Unit = {
-    val descriptor = FlightDescriptor.command(PythonDataHeader(from, "ChannelMarker").toByteArray)
+    val descriptor = FlightDescriptor.command(PythonDataHeader(from, "ECM").toByteArray)
     val flightListener = new SyncPutListener
 
     val field = new Field("payload", FieldType.nullable(new ArrowType.Binary), null)

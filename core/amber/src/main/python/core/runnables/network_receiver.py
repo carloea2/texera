@@ -97,7 +97,7 @@ class NetworkReceiver(Runnable, Stoppable):
                 lambda _: DataFrame(table),
                 "State",
                 lambda _: StateFrame(State(table)),
-                "ChannelMarker",
+                "ECM",
                 lambda _: EmbeddedControlMessage().parse(table["payload"][0].as_py()),
             )
             if isinstance(payload, EmbeddedControlMessage):

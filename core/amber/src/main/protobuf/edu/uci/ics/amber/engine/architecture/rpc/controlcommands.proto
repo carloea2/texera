@@ -108,8 +108,8 @@ message PropagateEmbeddedControlMessageRequest {
   EmbeddedControlMessageType ecm_type = 3;
   repeated core.PhysicalOpIdentity scope = 4;
   repeated core.PhysicalOpIdentity targetOps = 5;
-  ControlRequest markerCommand = 6;
-  string markerMethodName = 7;
+  ControlRequest command = 6;
+  string methodName = 7;
 }
 
 message TakeGlobalCheckpointRequest {
