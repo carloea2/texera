@@ -222,8 +222,8 @@ class OutputManager:
             )
         )
 
-    def emit_channel_marker(
-        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+    def emit_ecm(
+        self, to: ActorVirtualIdentity, ecm: EmbeddedControlMessage
     ) -> Iterable[Union[DataPayload, EmbeddedControlMessage]]:
         return chain(
             *(
@@ -233,7 +233,7 @@ class OutputManager:
                         if isinstance(payload, EmbeddedControlMessage)
                         else self.tuple_to_frame(payload)
                     )
-                    for payload in partitioner.flush(to, marker)
+                    for payload in partitioner.flush(to, ecm)
                 )
                 for partitioner in self._partitioners.values()
             )
@@ -253,7 +253,7 @@ class OutputManager:
                             else self.tuple_to_frame(payload)
                         ),
                     )
-                    for receiver, payload in partitioner.flush_marker(state)
+                    for receiver, payload in partitioner.flush_state(state)
                 )
                 for partitioner in self._partitioners.values()
             )
