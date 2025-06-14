@@ -22,52 +22,24 @@ package edu.uci.ics.amber.engine.architecture.worker
 import com.softwaremill.macwire.wire
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.state.State
-import edu.uci.ics.amber.core.tuple.{
-  FinalizeExecutor,
-  FinalizePort,
-  SchemaEnforceable,
-  Tuple,
-  TupleLike
-}
+import edu.uci.ics.amber.core.tuple.{FinalizeExecutor, FinalizePort, SchemaEnforceable, Tuple, TupleLike}
 import edu.uci.ics.amber.engine.architecture.common.AmberProcessor
 import edu.uci.ics.amber.engine.architecture.logreplay.ReplayLogManager
-import edu.uci.ics.amber.engine.architecture.messaginglayer.{
-  InputManager,
-  OutputManager,
-  WorkerTimerService
-}
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.ChannelMarkerType.{
-  NO_ALIGNMENT,
-  PORT_ALIGNMENT,
-  ALL_ALIGNMENT
-}
+import edu.uci.ics.amber.engine.architecture.messaginglayer.{InputManager, OutputManager, WorkerTimerService}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.{NO_ALIGNMENT, PORT_ALIGNMENT}
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands._
-import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{
-  DPInputQueueElement,
-  MainThreadDelegateMessage
-}
+import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{DPInputQueueElement, MainThreadDelegateMessage}
 import edu.uci.ics.amber.engine.architecture.worker.managers.SerializationManager
-import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{
-  COMPLETED,
-  READY,
-  RUNNING
-}
+import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{COMPLETED, READY, RUNNING}
 import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerStatistics
 import edu.uci.ics.amber.engine.common.ambermessage._
 import edu.uci.ics.amber.engine.common.statetransition.WorkerStateManager
 import edu.uci.ics.amber.engine.common.virtualidentity.util.CONTROLLER
 import edu.uci.ics.amber.error.ErrorUtils.{mkConsoleMessage, safely}
-import edu.uci.ics.amber.core.virtualidentity.{
-  ActorVirtualIdentity,
-  ChannelIdentity,
-  ChannelMarkerIdentity
-}
+import edu.uci.ics.amber.core.virtualidentity.{ActorVirtualIdentity, ChannelIdentity, EmbeddedControlMessageIdentity}
 import edu.uci.ics.amber.core.workflow.PortIdentity
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
-import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.{
-  METHOD_END_CHANNEL,
-  METHOD_START_CHANNEL
-}
+import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_CHANNEL
 import io.grpc.MethodDescriptor
 
 import java.util.concurrent.LinkedBlockingQueue
@@ -93,8 +65,8 @@ class DataProcessor(
   val stateManager: WorkerStateManager = new WorkerStateManager(actorId)
   val inputManager: InputManager = new InputManager(actorId, inputMessageQueue)
   val outputManager: OutputManager = new OutputManager(actorId, outputGateway)
-  val channelMarkerManager: ChannelMarkerManager =
-    new ChannelMarkerManager(actorId, inputGateway, inputManager)
+  val ecmManager: EmbeddedControlMessageManager =
+    new EmbeddedControlMessageManager(actorId, inputGateway, inputManager)
   val serializationManager: SerializationManager = new SerializationManager(actorId)
 
   def getQueuedCredit(channelId: ChannelIdentity): Long = {
@@ -234,19 +206,19 @@ class DataProcessor(
     statisticsManager.increaseDataProcessingTime(System.nanoTime() - dataProcessingStartTime)
   }
 
-  def processChannelMarker(
+  def processECM(
       channelId: ChannelIdentity,
-      marker: ChannelMarkerPayload,
+      marker: EmbeddedControlMessage,
       logManager: ReplayLogManager
   ): Unit = {
     inputManager.currentChannelId = channelId
     val markerId = marker.id
     val command = marker.commandMapping.get(actorId.name)
     logger.info(s"receive marker from $channelId, id = $markerId, cmd = $command")
-    if (marker.markerType != NO_ALIGNMENT) {
+    if (marker.ecmType != NO_ALIGNMENT) {
       pauseManager.pauseInputChannel(EpochMarkerPause(markerId), List(channelId))
     }
-    if (channelMarkerManager.isMarkerAligned(channelId, marker)) {
+    if (ecmManager.isMarkerAligned(channelId, marker)) {
       logManager.markAsReplayDestination(markerId)
       // invoke the control command carried with the epoch marker
       logger.info(s"process marker from $channelId, id = $markerId, cmd = $command")
@@ -267,7 +239,7 @@ class DataProcessor(
         }
       }
       // unblock input channels
-      if (marker.markerType != NO_ALIGNMENT) {
+      if (marker.ecmType != NO_ALIGNMENT) {
         pauseManager.resume(EpochMarkerPause(markerId))
       }
     }
@@ -275,14 +247,14 @@ class DataProcessor(
 
   def sendChannelMarkerToDataChannels(
       method: MethodDescriptor[EmptyRequest, EmptyReturn],
-      alignment: ChannelMarkerType
+      alignment: EmbeddedControlMessageType
   ): Unit = {
     outputManager.flush()
     outputGateway.getActiveChannels
       .filter(!_.isControl)
       .foreach { activeChannelId =>
-        asyncRPCClient.sendChannelMarker(
-          ChannelMarkerIdentity(method.getBareMethodName),
+        asyncRPCClient.sendECM(
+          EmbeddedControlMessageIdentity(method.getBareMethodName),
           alignment,
           Set(),
           Map(

@@ -24,7 +24,7 @@ from core.models.internal_queue import (
     InternalQueue,
     ControlElement,
     DataElement,
-    ChannelMarkerElement,
+    EmbeddedControlMessageElement,
 )
 from core.models.payload import DataFrame
 from core.proxy import ProxyClient
@@ -33,8 +33,8 @@ from core.runnables.network_sender import NetworkSender
 from core.util.proto import set_one_of
 from proto.edu.uci.ics.amber.engine.architecture.rpc import (
     ControlInvocation,
-    ChannelMarkerPayload,
-    ChannelMarkerType,
+    EmbeddedControlMessage,
+    EmbeddedControlMessageType,
     EmptyRequest,
     AsyncRpcContext,
     ControlRequest,
@@ -43,7 +43,7 @@ from proto.edu.uci.ics.amber.engine.common import ControlPayloadV2
 from proto.edu.uci.ics.amber.core import (
     ActorVirtualIdentity,
     ChannelIdentity,
-    ChannelMarkerIdentity,
+    EmbeddedControlMessageIdentity,
 )
 
 
@@ -169,7 +169,7 @@ class TestNetworkReceiver:
         network_sender_thread.start()
         worker_id = ActorVirtualIdentity(name="test")
         channel_id = ChannelIdentity(worker_id, worker_id, False)
-        marker_id = ChannelMarkerIdentity("test_marker")
+        marker_id = EmbeddedControlMessageIdentity("test_marker")
         scope = [channel_id]
         rpc_context = AsyncRpcContext(worker_id, worker_id)
         command_mapping = {
@@ -181,19 +181,19 @@ class TestNetworkReceiver:
             )
         }
         input_queue.put(
-            ChannelMarkerElement(
+            EmbeddedControlMessageElement(
                 tag=channel_id,
-                payload=ChannelMarkerPayload(
+                payload=EmbeddedControlMessage(
                     marker_id,
-                    ChannelMarkerType.ALL_ALIGNMENT,
+                    EmbeddedControlMessageType.ALL_ALIGNMENT,
                     scope,
                     command_mapping,
                 ),
             )
         )
         element: DataElement = output_queue.get()
-        assert isinstance(element.payload, ChannelMarkerPayload)
-        assert element.payload.marker_type == ChannelMarkerType.ALL_ALIGNMENT
+        assert isinstance(element.payload, EmbeddedControlMessage)
+        assert element.payload.ecm_type == EmbeddedControlMessageType.ALL_ALIGNMENT
         assert element.payload.id == marker_id
         assert element.payload.command_mapping == command_mapping
         assert element.payload.scope == scope

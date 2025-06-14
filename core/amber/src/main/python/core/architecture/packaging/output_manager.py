@@ -57,7 +57,7 @@ from proto.edu.uci.ics.amber.core import (
     PortIdentity,
     ChannelIdentity,
 )
-from proto.edu.uci.ics.amber.engine.architecture.rpc import ChannelMarkerPayload
+from proto.edu.uci.ics.amber.engine.architecture.rpc import EmbeddedControlMessage
 from proto.edu.uci.ics.amber.engine.architecture.sendsemantics import (
     HashBasedShufflePartitioning,
     OneToOnePartitioning,
@@ -223,14 +223,14 @@ class OutputManager:
         )
 
     def emit_channel_marker(
-        self, to: ActorVirtualIdentity, marker: ChannelMarkerPayload
-    ) -> Iterable[Union[DataPayload, ChannelMarkerPayload]]:
+        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+    ) -> Iterable[Union[DataPayload, EmbeddedControlMessage]]:
         return chain(
             *(
                 (
                     (
                         payload
-                        if isinstance(payload, ChannelMarkerPayload)
+                        if isinstance(payload, EmbeddedControlMessage)
                         else self.tuple_to_frame(payload)
                     )
                     for payload in partitioner.flush(to, marker)

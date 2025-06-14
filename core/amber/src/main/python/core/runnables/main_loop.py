@@ -35,7 +35,7 @@ from core.models.internal_marker import StartChannel, EndChannel
 from core.models.internal_queue import (
     DataElement,
     ControlElement,
-    ChannelMarkerElement,
+    EmbeddedControlMessageElement,
     InternalQueueElement,
 )
 from core.models.state import State
@@ -51,8 +51,8 @@ from proto.edu.uci.ics.amber.engine.architecture.rpc import (
     PortCompletedRequest,
     EmptyRequest,
     ConsoleMessageTriggeredRequest,
-    ChannelMarkerType,
-    ChannelMarkerPayload,
+    EmbeddedControlMessageType,
+    EmbeddedControlMessagePayload,
     AsyncRpcContext,
     ControlRequest,
 )
@@ -64,7 +64,7 @@ from proto.edu.uci.ics.amber.core import (
     ActorVirtualIdentity,
     PortIdentity,
     ChannelIdentity,
-    ChannelMarkerIdentity,
+    EmbeddedControlMessageIdentity,
 )
 
 
@@ -146,8 +146,8 @@ class MainLoop(StoppableQueueBlockingRunnable):
             self._process_data_element,
             ControlElement,
             self._process_control_element,
-            ChannelMarkerElement,
-            self._process_channel_marker_payload,
+            EmbeddedControlMessageElement,
+            self._process_ecm,
         )
 
     def process_control_payload(
@@ -259,7 +259,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
     def _process_start_channel(self) -> None:
         self._send_channel_marker_to_data_channels(
-            "StartChannel", ChannelMarkerType.NO_ALIGNMENT
+            "StartChannel", EmbeddedControlMessageType.NO_ALIGNMENT
         )
         self.process_input_state()
 
@@ -287,7 +287,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
             self.context.output_manager.close_port_storage_writers()
 
             self._send_channel_marker_to_data_channels(
-                "EndChannel", ChannelMarkerType.PORT_ALIGNMENT
+                "EndChannel", EmbeddedControlMessageType.PORT_ALIGNMENT
             )
 
             # Need to send port completed even if there is no downstream link
@@ -297,34 +297,32 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 )
             self.complete()
 
-    def _process_channel_marker_payload(self, marker_elem: ChannelMarkerElement):
+    def _process_ecm(self, ecm_element: EmbeddedControlMessageElement):
         """
         Processes a received channel marker payload and handles synchronization,
         command execution, and forwarding to downstream channels if applicable.
 
         Args:
-            marker_elem (ChannelMarkerElement): The received channel marker
-                element.
+            ecm_element (EmbeddedControlMessageElement): The received channel marker element.
         """
-        marker_payload = marker_elem.payload
-        marker_id = marker_payload.id
-        command = marker_payload.command_mapping.get(self.context.worker_id)
+        ecm = ecm_element.payload
+        command = ecm.command_mapping.get(self.context.worker_id)
         channel_id = self.context.current_input_channel_id
         logger.info(
             f"receive channel marker from {channel_id},"
-            f" id = {marker_id}, cmd = {command}"
+            f" id = {ecm.id}, cmd = {command}"
         )
-        if marker_payload.marker_type != ChannelMarkerType.NO_ALIGNMENT:
+        if ecm.ecm_type != EmbeddedControlMessageType.NO_ALIGNMENT:
             self.context.pause_manager.pause_input_channel(
                 PauseType.MARKER_PAUSE, channel_id
             )
 
-        if self.context.channel_marker_manager.is_marker_aligned(
-            channel_id, marker_payload
+        if self.context.ecm_manager.ecm_aligned(
+            channel_id, ecm
         ):
             logger.info(
                 f"process channel marker from {channel_id},"
-                f" id = {marker_id}, cmd = {command}"
+                f" id = {ecm.id}, cmd = {command}"
             )
 
             if command is not None:
@@ -332,7 +330,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
             downstream_channels_in_scope = {
                 scope
-                for scope in marker_payload.scope
+                for scope in ecm.scope
                 if scope.from_worker_id == ActorVirtualIdentity(self.context.worker_id)
             }
             if downstream_channels_in_scope:
@@ -342,11 +340,11 @@ class MainLoop(StoppableQueueBlockingRunnable):
                     if active_channel_id in downstream_channels_in_scope:
                         logger.info(
                             f"send marker to {active_channel_id},"
-                            f" id = {marker_id}, cmd = {command}"
+                            f" id = {ecm.id}, cmd = {command}"
                         )
-                        self._send_channel_marker(active_channel_id, marker_payload)
+                        self._send_channel_marker(active_channel_id, ecm)
 
-            if marker_payload.marker_type != ChannelMarkerType.NO_ALIGNMENT:
+            if ecm.ecm_type != EmbeddedControlMessageType.NO_ALIGNMENT:
                 self.context.pause_manager.resume(PauseType.MARKER_PAUSE)
 
             if self.context.tuple_processing_manager.current_internal_marker:
@@ -356,12 +354,12 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 }[type(self.context.tuple_processing_manager.current_internal_marker)]()
 
     def _send_channel_marker_to_data_channels(
-        self, method_name: str, alignment: ChannelMarkerType
+        self, method_name: str, alignment: EmbeddedControlMessageType
     ) -> None:
         for active_channel_id in self.context.output_manager.get_output_channel_ids():
             if not active_channel_id.is_control:
-                marker_payload = ChannelMarkerPayload(
-                    ChannelMarkerIdentity(method_name),
+                marker_payload = EmbeddedControlMessagePayload(
+                    EmbeddedControlMessageIdentity(method_name),
                     alignment,
                     [],
                     {
@@ -378,15 +376,15 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 self._send_channel_marker(active_channel_id, marker_payload)
 
     def _send_channel_marker(
-        self, channel_id: ChannelIdentity, marker_payload: ChannelMarkerPayload
+        self, channel_id: ChannelIdentity, marker_payload: EmbeddedControlMessage
     ) -> None:
         for batch in self.context.output_manager.emit_channel_marker(
             channel_id.to_worker_id, marker_payload
         ):
             tag = channel_id
             element = (
-                ChannelMarkerElement(tag=tag, payload=batch)
-                if isinstance(batch, ChannelMarkerPayload)
+                EmbeddedControlMessageElement(tag=tag, payload=batch)
+                if isinstance(batch, EmbeddedControlMessage)
                 else DataElement(tag=tag, payload=batch)
             )
             self._output_queue.put(element)

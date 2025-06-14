@@ -29,7 +29,7 @@ from proto.edu.uci.ics.amber.engine.architecture.sendsemantics import (
     Partitioning,
 )
 from proto.edu.uci.ics.amber.core import ActorVirtualIdentity
-from proto.edu.uci.ics.amber.engine.architecture.rpc import ChannelMarkerPayload
+from proto.edu.uci.ics.amber.engine.architecture.rpc import EmbeddedControlMessage
 
 
 class HashBasedShufflePartitioner(Partitioner):
@@ -61,8 +61,8 @@ class HashBasedShufflePartitioner(Partitioner):
 
     @overrides
     def flush(
-        self, to: ActorVirtualIdentity, marker: ChannelMarkerPayload
-    ) -> Iterator[typing.Union[ChannelMarkerPayload, typing.List[Tuple]]]:
+        self, to: ActorVirtualIdentity, marker: EmbeddedControlMessage
+    ) -> Iterator[typing.Union[EmbeddedControlMessage, typing.List[Tuple]]]:
         for receiver, batch in self.receivers:
             if receiver == to:
                 if len(batch) > 0:
