@@ -41,7 +41,8 @@ class EmbeddedControlMessageManager(
     inputManager: InputManager
 ) extends AmberLogging {
 
-  private val ecmReceived = new mutable.HashMap[EmbeddedControlMessageIdentity, Set[ChannelIdentity]]()
+  private val ecmReceived =
+    new mutable.HashMap[EmbeddedControlMessageIdentity, Set[ChannelIdentity]]()
 
   val checkpoints = new mutable.HashMap[EmbeddedControlMessageIdentity, CheckpointState]()
 

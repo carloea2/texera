@@ -68,9 +68,7 @@ class NetworkSender(StoppableQueueBlockingRunnable):
             raise TypeError(f"Unexpected entry {next_entry}")
 
     @logger.catch(reraise=True)
-    def _send_ecm(
-        self, to: ChannelIdentity, ecm: EmbeddedControlMessage
-    ) -> None:
+    def _send_ecm(self, to: ChannelIdentity, ecm: EmbeddedControlMessage) -> None:
         """
         Sends an ECM to the specified channel.
 

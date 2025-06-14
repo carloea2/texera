@@ -150,9 +150,7 @@ class InputPortMaterializationReaderRunnable(Runnable, Stoppable):
         """Sets the stop flag so the run loop may terminate."""
         self._stopped = True
 
-    def emit_ecm(
-        self, method_name: str, alignment: EmbeddedControlMessageType
-    ) -> None:
+    def emit_ecm(self, method_name: str, alignment: EmbeddedControlMessageType) -> None:
         """
         Emit an ECM (StartChannel or EndChannel), and
         flush the remaining data batches if any. This mimics the

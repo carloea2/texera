@@ -80,7 +80,9 @@ class InternalQueue(IQueue):
             if item.tag not in self._queue_ids:
                 self._queue.add_sub_queue(item.tag, 1 if item.tag.is_control else 2)
                 self._queue_ids.add(item.tag)
-            if isinstance(item, (DataElement, InternalMarker, EmbeddedControlMessageElement)):
+            if isinstance(
+                item, (DataElement, InternalMarker, EmbeddedControlMessageElement)
+            ):
                 self._queue.put(item.tag, item)
             elif isinstance(item, ControlElement):
                 self._queue.put(item.tag, item)

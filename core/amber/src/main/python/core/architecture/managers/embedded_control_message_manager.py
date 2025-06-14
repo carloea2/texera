@@ -49,9 +49,9 @@ class EmbeddedControlMessageManager:
         """
 
         self.ecm_received[ecm.id].add(from_channel)
-        ecm_received_from_all_channels = self.get_channels_within_scope(
-            ecm
-        ).issubset(self.ecm_received[ecm.id])
+        ecm_received_from_all_channels = self.get_channels_within_scope(ecm).issubset(
+            self.ecm_received[ecm.id]
+        )
 
         if ecm.ecm_type == EmbeddedControlMessageType.ALL_ALIGNMENT:
             ecm_completed = ecm_received_from_all_channels

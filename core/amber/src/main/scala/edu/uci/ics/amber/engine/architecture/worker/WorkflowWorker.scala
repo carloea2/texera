@@ -66,7 +66,10 @@ object WorkflowWorker {
       faultToleranceConfOpt: Option[FaultToleranceConfig] = None
   )
 
-  final case class StateRestoreConfig(readFrom: URI, replayDestination: EmbeddedControlMessageIdentity)
+  final case class StateRestoreConfig(
+      readFrom: URI,
+      replayDestination: EmbeddedControlMessageIdentity
+  )
 
   final case class FaultToleranceConfig(writeTo: URI)
 }

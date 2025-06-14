@@ -28,7 +28,11 @@ from core.models import (
     InternalQueue,
     Tuple,
 )
-from core.models.internal_queue import DataElement, ControlElement, EmbeddedControlMessageElement
+from core.models.internal_queue import (
+    DataElement,
+    ControlElement,
+    EmbeddedControlMessageElement,
+)
 from core.runnables import MainLoop
 from core.util import set_one_of
 from proto.edu.uci.ics.amber.core import (
@@ -1169,7 +1173,9 @@ class TestMainLoop:
             "test_ecm", EmbeddedControlMessageType.ALL_ALIGNMENT, scope, command_mapping
         )
         input_queue.put(
-            EmbeddedControlMessageElement(tag=mock_control_input_channel, payload=test_ecm)
+            EmbeddedControlMessageElement(
+                tag=mock_control_input_channel, payload=test_ecm
+            )
         )
         input_queue.put(mock_binary_data_element)
         input_queue.put(
