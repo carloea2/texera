@@ -62,7 +62,7 @@ class AsyncRPCHandlerInitializer(
       cmdMapping: Map[String, ControlInvocation],
       to: ChannelIdentity
   ): Unit = {
-    ctrlSource.sendECM(ecmId, ecmType, scope, cmdMapping, to)
+    ctrlSource.sendECMToChannel(ecmId, ecmType, scope, cmdMapping, to)
   }
 
   def sendToClient(clientEvent: ClientEvent): Unit = {

@@ -276,7 +276,7 @@ class DataProcessor(
     outputGateway.getActiveChannels
       .filter(!_.isControl)
       .foreach { activeChannelId =>
-        asyncRPCClient.sendECM(
+        asyncRPCClient.sendECMToChannel(
           EmbeddedControlMessageIdentity(method.getBareMethodName),
           alignment,
           Set(),

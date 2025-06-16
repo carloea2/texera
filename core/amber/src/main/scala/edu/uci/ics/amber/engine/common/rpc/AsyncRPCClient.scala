@@ -154,7 +154,7 @@ class AsyncRPCClient(
     (ControlInvocation(methodName, message, context, pid), p)
   }
 
-  def sendECM(
+  def sendECMToChannel(
       ecmId: EmbeddedControlMessageIdentity,
       ecmType: EmbeddedControlMessageType,
       scope: Set[ChannelIdentity],
