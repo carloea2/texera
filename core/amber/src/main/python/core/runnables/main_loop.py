@@ -315,7 +315,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 PauseType.ECM_PAUSE, channel_id
             )
 
-        if self.context.ecm_manager.ecm_aligned(channel_id, ecm):
+        if self.context.ecm_manager.is_ecm_aligned(channel_id, ecm):
             logger.info(
                 f"process channel ECM from {channel_id},"
                 f" id = {ecm.id}, cmd = {command}"

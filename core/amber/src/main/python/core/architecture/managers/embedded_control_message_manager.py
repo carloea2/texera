@@ -32,7 +32,7 @@ class EmbeddedControlMessageManager:
         self.input_gateway = input_gateway
         self.ecm_received: Dict[str, Set[ChannelIdentity]] = defaultdict(set)
 
-    def ecm_aligned(
+    def is_ecm_aligned(
         self, from_channel: ChannelIdentity, ecm: EmbeddedControlMessage
     ) -> bool:
         """
