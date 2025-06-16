@@ -55,7 +55,7 @@ class EmbeddedControlMessageManager(
     * @return Boolean indicating if the ECM is completely received from all senders
     *         within the scope. Returns true if the ECM is aligned, otherwise false.
     */
-  def ecmAligned(
+  def isECMAligned(
       from: ChannelIdentity,
       ecm: EmbeddedControlMessage
   ): Boolean = {

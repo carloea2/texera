@@ -241,7 +241,7 @@ class DataProcessor(
     if (ecm.ecmType != NO_ALIGNMENT) {
       pauseManager.pauseInputChannel(ECMPause(ecm.id), List(channelId))
     }
-    if (ecmManager.ecmAligned(channelId, ecm)) {
+    if (ecmManager.isECMAligned(channelId, ecm)) {
       logManager.markAsReplayDestination(ecm.id)
       // invoke the control command carried with the ECM
       logger.info(s"process ECM from $channelId, id = ${ecm.id}, cmd = $command")
