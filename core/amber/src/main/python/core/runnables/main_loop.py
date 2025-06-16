@@ -338,7 +338,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
                             f"send ECM to {active_channel_id},"
                             f" id = {ecm.id}, cmd = {command}"
                         )
-                        self._send_ecm(active_channel_id, ecm)
+                        self._send_ecm_to_channel(active_channel_id, ecm)
 
             if ecm.ecm_type != EmbeddedControlMessageType.NO_ALIGNMENT:
                 self.context.pause_manager.resume(PauseType.ECM_PAUSE)
@@ -369,9 +369,9 @@ class MainLoop(StoppableQueueBlockingRunnable):
                         )
                     },
                 )
-                self._send_ecm(active_channel_id, ecm)
+                self._send_ecm_to_channel(active_channel_id, ecm)
 
-    def _send_ecm(
+    def _send_ecm_to_channel(
         self, channel_id: ChannelIdentity, ecm: EmbeddedControlMessage
     ) -> None:
         for batch in self.context.output_manager.emit_ecm(channel_id.to_worker_id, ecm):
