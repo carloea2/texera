@@ -168,6 +168,7 @@ import { NzDividerModule } from "ng-zorro-antd/divider";
 import { NzProgressModule } from "ng-zorro-antd/progress";
 import { ComputingUnitSelectionComponent } from "./workspace/component/power-button/computing-unit-selection.component";
 import { NzSliderModule } from "ng-zorro-antd/slider";
+import { AdminSettingsComponent } from "./dashboard/component/admin/settings/admin-settings.component";
 import { catchError, of } from "rxjs";
 import { ChatAssistantMultiAgentComponent } from "./workspace/component/left-panel/chat-assistant-multi-agent/chat-assistant-multi-agent.component";
 
@@ -260,6 +261,7 @@ registerLocaleData(en);
     CodeDebuggerComponent,
     HubSearchResultComponent,
     ComputingUnitSelectionComponent,
+    AdminSettingsComponent,
     ChatAssistantMultiAgentComponent,
   ],
   imports: [
