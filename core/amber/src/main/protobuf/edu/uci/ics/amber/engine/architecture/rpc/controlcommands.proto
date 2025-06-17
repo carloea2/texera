@@ -272,3 +272,7 @@ message PrepareCheckpointRequest{
 message QueryStatisticsRequest{
   repeated core.ActorVirtualIdentity filterByWorkers = 1;
 }
+
+message EndIterationRequest{
+  core.ActorVirtualIdentity worker = 1;
+}

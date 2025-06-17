@@ -61,8 +61,8 @@ trait EndChannelHandler {
       // See documentation of isMissingOutputPort
       if (!dp.outputManager.isMissingOutputPort) {
         dp.executor match {
-          case _: LoopStartOpExec =>
-            dp.outputManager.emitMarker(EndOfIteration(actorId))
+          //case _: LoopStartOpExec =>
+            //dp.sendECMToDataChannels(EndOfIteration(actorId))
           case _ =>
             // assuming all the output ports finalize after all input ports are finalized.
             dp.outputManager.finalizeOutput()
