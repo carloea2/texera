@@ -25,6 +25,7 @@ import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContex
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
 import edu.uci.ics.amber.error.ErrorUtils.safely
+import edu.uci.ics.amber.operator.loop.LoopStartOpExec
 
 trait EndChannelHandler {
   this: DataProcessorRPCHandlerInitializer =>
@@ -59,8 +60,13 @@ trait EndChannelHandler {
       // Need this check for handling input port dependency relationships.
       // See documentation of isMissingOutputPort
       if (!dp.outputManager.isMissingOutputPort) {
-        // assuming all the output ports finalize after all input ports are finalized.
-        dp.outputManager.finalizeOutput()
+        dp.executor match {
+          case _: LoopStartOpExec =>
+            dp.outputManager.emitMarker(EndOfIteration(actorId))
+          case _ =>
+            // assuming all the output ports finalize after all input ports are finalized.
+            dp.outputManager.finalizeOutput()
+        }
       }
     }
     EmptyReturn()
