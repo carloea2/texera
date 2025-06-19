@@ -164,7 +164,7 @@ chatAssistant:
   imageName: texera/chat-assistant-service:cluster   # <─ use the cluster tag
   service:
     type: ClusterIP
-    port: 9095
+    port: 8081
   apiKey: ""
 
 # Configs of the envoy proxy, used to routerequests to the computing units
