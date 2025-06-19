@@ -17,16 +17,16 @@
 
 #!/usr/bin/env sh
 #
-# Simple loop: start uvicorn, when it stops wait 10 min and restart
+# Simple loop: start uvicorn, when it stops wait 60 mins and restart
 #
 
 while true; do
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting uvicorn…" >&2
   uvicorn main:app \
     --host 0.0.0.0 \
-    --port 8001 \
+    --port 9095 \
     --reload
 
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Uvicorn exited; restarting in 10 minutes…" >&2
-  sleep 600
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Uvicorn exited; restarting in 60 minutes…" >&2
+  sleep 3600
 done
