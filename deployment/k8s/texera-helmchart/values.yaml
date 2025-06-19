@@ -165,6 +165,7 @@ chatAssistant:
   service:
     type: ClusterIP
     port: 9095
+  apiKey: ""
 
 # Configs of the envoy proxy, used to routerequests to the computing units
 envoy:

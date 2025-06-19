@@ -24,6 +24,8 @@ spec:
             env:
               - name: STORAGE_JDBC_URL
                 value: jdbc:postgresql://{{ .Release.Name }}-postgresql:5432/texera_db?currentSchema=texera_db,public
+              - name: OPENAI_API_KEY
+                value: {{ .Values.microservices.chatAssistantService.apiKey }}
               - name: STORAGE_JDBC_PASSWORD
                 valueFrom:
                   secretKeyRef:
