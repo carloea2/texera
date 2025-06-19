@@ -23,7 +23,7 @@ import { interval, Observable, Subject, Subscription, timer } from "rxjs";
 import { delayWhen, filter, map, retryWhen, tap } from "rxjs/operators";
 import { OperatorMetadataService } from "../operator-metadata/operator-metadata.service";
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
-import {getWebsocketUrl} from "../../../common/util/url";
+import { getWebsocketUrl } from "../../../common/util/url";
 
 export type PythonWSRequestTypeMap = {
   CreateSessionRequest: {}; // NEW
