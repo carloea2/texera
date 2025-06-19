@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-{{ .Values.microservices.chatAssistantService.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-{{ .Values.microservices.chatAssistantService.name }}
+spec:
+  replicas: {{ .Values.microservices.chatAssistantService.numOfPods }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-{{ .Values.microservices.chatAssistantService.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-{{ .Values.microservices.chatAssistantService.name }}
+    spec:
+      containers:
+          - name: {{ .Values.microservices.chatAssistantService.name }}
+            image: {{ .Values.microservices.chatAssistantService.imageName }}
+            imagePullPolicy: {{ .Values.texeraImages.pullPolicy }}
+            ports:
+              - containerPort: {{ .Values.microservices.chatAssistantService.service.port }}
+            env:
+              - name: STORAGE_JDBC_URL
+                value: jdbc:postgresql://{{ .Release.Name }}-postgresql:5432/texera_db?currentSchema=texera_db,public
+              - name: STORAGE_JDBC_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .Release.Name }}-postgresql
+                    key: postgres-password
+            livenessProbe:
+              httpGet:
+                path: /api/healthcheck
+                port: {{ .Values.microservices.chatAssistantService.service.port }}
+              initialDelaySeconds: 30
+              periodSeconds: 10
+            readinessProbe:
+              httpGet:
+                path: /api/healthcheck
+                port: {{ .Values.microservices.chatAssistantService.service.port }}
+              initialDelaySeconds: 5
+              periodSeconds: 5
