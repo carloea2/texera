@@ -345,7 +345,7 @@ ingressPaths:
       servicePort: 3000
     - path: /chat-assistant
       serviceName: chat-assistant-service-svc
-      servicePort: 9095
+      servicePort: 8081
     - path: /
       serviceName: webserver-svc
       servicePort: 8080
