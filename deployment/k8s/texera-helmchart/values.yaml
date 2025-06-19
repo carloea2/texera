@@ -158,7 +158,7 @@ configService:
     port: 9094
 
 
-chatAssistant:
+chatAssistantService:
   name: chat-assistant-service
   numOfPods: 1
   imageName: texera/chat-assistant-service:cluster   # <─ use the cluster tag
