@@ -23,6 +23,7 @@ import { interval, Observable, Subject, Subscription, timer } from "rxjs";
 import { delayWhen, filter, map, retryWhen, tap } from "rxjs/operators";
 import { OperatorMetadataService } from "../operator-metadata/operator-metadata.service";
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
+import {getWebsocketUrl} from "../../../common/util/url";
 
 export type PythonWSRequestTypeMap = {
   CreateSessionRequest: {}; // NEW
@@ -71,7 +72,7 @@ export const WS_RECONNECT_INTERVAL_MS = 3000;
   providedIn: "root",
 })
 export class ChatAssistantWebsocketService {
-  private static readonly WS_ENDPOINT = "ws://localhost:8001/ws";
+  private static readonly WS_ENDPOINT = "chat-assistant";
   private websocket?: WebSocketSubject<PythonWSEvent | PythonWSRequest>;
   private wsWithReconnectSubscription?: Subscription;
   private webSocketResponseSubject: Subject<PythonWSEvent> = new Subject<PythonWSEvent>();
@@ -132,7 +133,7 @@ export class ChatAssistantWebsocketService {
   }
 
   public openWebsocket(): void {
-    const websocketUrl = ChatAssistantWebsocketService.WS_ENDPOINT;
+    const websocketUrl = getWebsocketUrl(ChatAssistantWebsocketService.WS_ENDPOINT, "");
     this.websocket = webSocket<PythonWSEvent | PythonWSRequest>(websocketUrl);
 
     // ask server for a logical chat session
