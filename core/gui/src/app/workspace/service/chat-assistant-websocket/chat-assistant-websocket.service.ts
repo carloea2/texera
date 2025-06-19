@@ -155,6 +155,7 @@ export class ChatAssistantWebsocketService {
       )
     );
     // set up event listener on re-connectable websocket observable
+    // @ts-ignore
     this.wsWithReconnectSubscription = wsWithReconnect.subscribe({
       next: event => {
         this.webSocketResponseSubject.next(event as PythonWSEvent);
