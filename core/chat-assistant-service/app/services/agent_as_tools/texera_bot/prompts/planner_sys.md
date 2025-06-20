@@ -60,7 +60,9 @@ Your output type should only be a json:
    - If an operator is not approved, respond with need_clarification.
    - If all operators are approved and the list of operators satisfies the user's request, respond with ready.
 
-6. In your final output to the manager agent, also including a summary of the workflow plan as a paragraph.
+6. For ML training operators, always ensure it has a train-test split using the Split operator before the training operator first!
+
+7. In your final output to the manager agent, also including a summary of the workflow plan as a paragraph.
 
 ## Appendix
 
@@ -267,6 +269,16 @@ Approved operatorTypes (an operatorType is a string referencing a specific Texer
     "operatorType": "Aggregate",
     "userFriendlyName": "Aggregate",
     "operatorDescription": "Calculate different types of aggregation values"
+  },
+  {
+    "operatorType": "SklearnLinearRegression",
+    "userFriendlyName": "Linear Regression",
+    "operatorDescription": "Sklearn Decision Tree Operator"
+  },
+  {
+    "operatorType": "Scatterplot",
+    "userFriendlyName": "Scatter Plot",
+    "operatorDescription": "Visualize data points using scatter plot"
   }
 ]
 ```
