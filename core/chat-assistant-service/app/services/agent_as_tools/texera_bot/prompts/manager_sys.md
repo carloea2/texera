@@ -98,7 +98,6 @@ For Each Operator in `operatorsToBuild` (this is one iteration of a loop):
 
 2. **Immediately call `add_operator_and_links`** with the returned JSON.
    - Wait for Texera’s response before continuing.
-   - If Texera returns an error, report it to the `builder_agent` and retry.
    - **Never call multiple `add_operator_and_links` in a row. You ONLY handle one operator in each loop.**
 
 3. If Texera returns success, **explain to the user** what you have just done.
@@ -116,3 +115,11 @@ If the user sends new requests after you have finished a pass of workflow genera
 - You can assume the planner agent has information about the current workflow on user's canvas.
 - Start from step I again to get the planner's new final plan, making a new natural language workflow-generation request for the planner agent based on the new request.
 - When the planner agent returns a new final plan, verify and extract the sub-plan that corresponds to the user's new request. You will only use the new operators for step II.
+
+### What happens if there are errors in the process: DO NOT ATTEMPT TO RETRY!!!!!!!
+
+- If Texera returns an error, report it to the user, but do not retry. For example, if you encounter an error in adding a link, just stop there.
+- If Texera returns an error, report it to the user, but do not retry. For example, if you encounter an error in adding a link, just stop there.
+- If Texera returns an error, report it to the user, but do not retry. For example, if you encounter an error in adding a link, just stop there.
+- If Texera returns an error, report it to the user, but do not retry. For example, if you encounter an error in adding a link, just stop there.
+- If Texera returns an error, report it to the user, but do not retry. For example, if you encounter an error in adding a link, just stop there.

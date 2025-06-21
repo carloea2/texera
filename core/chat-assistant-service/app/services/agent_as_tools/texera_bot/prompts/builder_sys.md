@@ -66,10 +66,10 @@ You take as input a JSON object that looks like this:
 - If this operator is **not a data source op** (it has input ports), you must explicitly create edges (links) from one or more upstream operators to this operator.
 - Based on the `overallPlan` context and `current_dag` (each existing operator in `current_dag` corresponds to a specific step in the `overallPlan`), identify where in the plan this new operator belongs, and decide which upstream operator(s) to link from.
 - For each link:
-- Call `gen_uuid()` to generate a `new_uuid`.
-- Assign a unique `linkID` using the pattern `link-{new_uuid}`
-- Identify the upstream operator by its `operatorID`.
-- Connect the `output-0` port of the upstream operator to the `input-0` port of this new operator.
+  - Call `gen_uuid()` to generate a `new_uuid`.
+  - Assign a unique `linkID` using the pattern `link-{new_uuid}`
+  - Identify the upstream operator by its `operatorID`.
+  - Connect the `output-0` port of the upstream operator to the `input-0` port of this new operator.
 
 
 ## Example Output JSON
@@ -134,4 +134,93 @@ The following is an example of the result JSON you need to return to the manager
   ]
 }
 ```
+
+## Special case
+
+When connecting a Split operator to an ML-Training operator, make sure you create two links between these two operators like this:
+
+```json
+{
+  "operator_and_position": {
+    "op": {
+      "operatorID": "SklearnLinearRegression-operator-83a7ddd1-9099-492b-bd88-88ab3c1a4035",
+      "operatorType": "SklearnLinearRegression",
+      "operatorVersion": "N/A",
+      "operatorProperties": {
+        "target": "INS",
+        "degree": 3
+      },
+      "inputPorts": [
+        {
+          "portID": "input-0",
+          "displayName": "training",
+          "allowMultiInputs": false,
+          "isDynamicPort": false,
+          "dependencies": []
+        },
+        {
+          "portID": "input-1",
+          "displayName": "testing",
+          "allowMultiInputs": false,
+          "isDynamicPort": false,
+          "dependencies": [
+            {
+              "id": 0,
+              "internal": false
+            }
+          ]
+        }
+      ],
+      "outputPorts": [
+        {
+          "portID": "output-0",
+          "displayName": "",
+          "allowMultiInputs": false,
+          "isDynamicPort": false
+        }
+      ],
+      "showAdvanced": false,
+      "isDisabled": false,
+      "customDisplayName": "Linear Regression",
+      "dynamicInputPorts": false,
+      "dynamicOutputPorts": false
+    },
+    "pos": {
+      "x": 280,
+      "y": 0
+    }
+  },
+  "links": [
+    {
+      "linkID": "3715731d-4e66-4f97-9905-16429f05261a",
+      "source": {
+        "operatorID": "Split-operator-a608ea86-5e98-498d-bc8d-24620eea681c",
+        "portID": "output-1"
+      },
+      "target": {
+        "operatorID": "SklearnLinearRegression-operator-83a7ddd1-9099-492b-bd88-88ab3c1a4035",
+        "portID": "input-1"
+      }
+    },
+    {
+      "linkID": "26eee108-dcfb-4e84-b2df-f4c77f2a9233",
+      "source": {
+        "operatorID": "Split-operator-a608ea86-5e98-498d-bc8d-24620eea681c",
+        "portID": "output-0"
+      },
+      "target": {
+        "operatorID": "SklearnLinearRegression-operator-83a7ddd1-9099-492b-bd88-88ab3c1a4035",
+        "portID": "input-0"
+      }
+    }
+  ]
+}
+```
+Note the two links have different IDs, so you also need to call `gen_uuid()` for each link instead of reusing the same uuid.
+
+# Extremely Important: If you need to create two links, make sure you always call a new `gen_uuid()` for a new link! Ensure each link has a unique ID!!!!!!!!!
+# Extremely Important: If you need to create two links, make sure you always call a new `gen_uuid()` for a new link! Ensure each link has a unique ID!!!!!!!!!
+# Extremely Important: If you need to create two links, make sure you always call a new `gen_uuid()` for a new link! Ensure each link has a unique ID!!!!!!!!!
+# Extremely Important: If you need to create two links, make sure you always call a new `gen_uuid()` for a new link! Ensure each link has a unique ID!!!!!!!!!
+# Extremely Important: If you need to create two links, make sure you always call a new `gen_uuid()` for a new link! Ensure each link has a unique ID!!!!!!!!!
 
