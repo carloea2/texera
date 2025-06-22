@@ -29,9 +29,8 @@ class LoopStartOpExec(descString: String) extends OperatorExecutor {
   private val data = new mutable.ArrayBuffer[Tuple]
   private var currentIteration = 0
 
-
   def checkCondition(): Boolean = {
-    desc.iteration>currentIteration
+    desc.iteration > currentIteration
   }
 
   override def processTuple(tuple: Tuple, port: Int): Iterator[TupleLike] = {

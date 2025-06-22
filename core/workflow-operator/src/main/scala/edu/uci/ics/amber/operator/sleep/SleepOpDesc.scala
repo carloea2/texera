@@ -35,9 +35,9 @@ class SleepOpDesc extends LogicalOp {
   var time: Int = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,
@@ -61,6 +61,6 @@ class SleepOpDesc extends LogicalOp {
       "Limit the number of output rows",
       OperatorGroupConstants.CONTROL_GROUP,
       inputPorts = List(InputPort()),
-      outputPorts = List(OutputPort()),
+      outputPorts = List(OutputPort())
     )
 }

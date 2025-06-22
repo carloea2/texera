@@ -35,9 +35,9 @@ class LoopStartOpDesc extends LogicalOp {
   var iteration: Int = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

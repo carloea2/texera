@@ -27,9 +27,9 @@ import edu.uci.ics.amber.operator.LogicalOp
 
 class LoopEndOpDesc extends LogicalOp {
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     PhysicalOp
       .oneToOnePhysicalOp(
         workflowId,

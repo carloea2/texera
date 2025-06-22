@@ -22,7 +22,11 @@ package edu.uci.ics.amber.engine.architecture.worker.promisehandlers
 import com.twitter.util.Future
 import edu.uci.ics.amber.core.tuple.FinalizePort
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.PORT_ALIGNMENT
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContext, EmptyRequest, EndIterationRequest}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
+  AsyncRPCContext,
+  EmptyRequest,
+  EndIterationRequest
+}
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_ITERATION
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
@@ -64,7 +68,11 @@ trait EndChannelHandler {
       if (!dp.outputManager.isMissingOutputPort) {
         dp.executor match {
           case _: LoopStartOpExec =>
-            dp.sendECMToDataChannels(METHOD_END_ITERATION.getBareMethodName, PORT_ALIGNMENT, EndIterationRequest(dp.actorId))
+            dp.sendECMToDataChannels(
+              METHOD_END_ITERATION.getBareMethodName,
+              PORT_ALIGNMENT,
+              EndIterationRequest(dp.actorId)
+            )
           case _ =>
             // assuming all the output ports finalize after all input ports are finalized.
             dp.outputManager.finalizeOutput()
