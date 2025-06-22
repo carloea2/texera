@@ -47,6 +47,7 @@ service WorkerService {
   rpc StartChannel(EmptyRequest) returns (EmptyReturn);
   rpc EndChannel(EmptyRequest) returns (EmptyReturn);
   rpc EndIteration(EndIterationRequest) returns (EmptyReturn);
+  rpc NextIteration(EmptyRequest) returns (EmptyReturn);
   rpc DebugCommand(DebugCommandRequest) returns (EmptyReturn);
   rpc EvaluatePythonExpression(EvaluatePythonExpressionRequest) returns (EvaluatedValue);
   rpc NoOperation(EmptyRequest) returns (EmptyReturn);
