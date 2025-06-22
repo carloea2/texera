@@ -31,7 +31,7 @@ from core.models import (
     InternalQueue,
     Tuple,
 )
-from core.models.internal_marker import StartChannel, EndChannel
+from core.models.internal_marker import StartChannel, EndChannel, EndIteration
 from core.models.internal_queue import (
     DataElement,
     ControlElement,
@@ -66,6 +66,7 @@ from proto.edu.uci.ics.amber.core import (
     ChannelIdentity,
     EmbeddedControlMessageIdentity,
 )
+from core.util import set_one_of
 
 
 class MainLoop(StoppableQueueBlockingRunnable):
@@ -296,6 +297,13 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 )
             self.complete()
 
+    def _process_end_iteration(self) -> None:
+        # reset python op here
+        marker = self.context.tuple_processing_manager.get_internal_marker()
+        self._send_ecm_to_data_channels(
+            "EndIteration", EmbeddedControlMessageType.PORT_ALIGNMENT, marker.request
+        )
+
     def _process_ecm(self, ecm_element: EmbeddedControlMessageElement):
         """
         Processes a received ECM and handles synchronization,
@@ -347,21 +355,25 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 {
                     StartChannel: self._process_start_channel,
                     EndChannel: self._process_end_channel,
+                    EndIteration: self._process_end_iteration,
                 }[type(self.context.tuple_processing_manager.current_internal_marker)]()
 
     def _send_ecm_to_data_channels(
-        self, method_name: str, alignment: EmbeddedControlMessageType
+        self,
+        method: str,
+        alignment: EmbeddedControlMessageType,
+        request: ControlRequest = EmptyRequest(),
     ) -> None:
         for active_channel_id in self.context.output_manager.get_output_channel_ids():
             if not active_channel_id.is_control:
                 ecm = EmbeddedControlMessage(
-                    EmbeddedControlMessageIdentity(method_name),
+                    EmbeddedControlMessageIdentity(method),
                     alignment,
                     [],
                     {
                         active_channel_id.to_worker_id.name: ControlInvocation(
-                            method_name,
-                            ControlRequest(empty_request=EmptyRequest()),
+                            method,
+                            set_one_of(ControlRequest, request),
                             AsyncRpcContext(
                                 ActorVirtualIdentity(), ActorVirtualIdentity()
                             ),
