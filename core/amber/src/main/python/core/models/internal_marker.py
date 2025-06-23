@@ -16,7 +16,7 @@
 # under the License.
 
 from dataclasses import dataclass
-from proto.edu.uci.ics.amber.engine.architecture.rpc import EndIterationRequest
+from proto.edu.uci.ics.amber.core import ActorVirtualIdentity
 
 
 class InternalMarker:
@@ -38,4 +38,4 @@ class EndChannel(InternalMarker):
 
 @dataclass
 class EndIteration(InternalMarker):
-    request: EndIterationRequest
+    worker: ActorVirtualIdentity

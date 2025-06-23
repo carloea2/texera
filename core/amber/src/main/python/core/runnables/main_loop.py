@@ -55,6 +55,7 @@ from proto.edu.uci.ics.amber.engine.architecture.rpc import (
     EmbeddedControlMessage,
     AsyncRpcContext,
     ControlRequest,
+    EndIterationRequest,
 )
 from proto.edu.uci.ics.amber.engine.architecture.worker import (
     WorkerState,
@@ -298,10 +299,14 @@ class MainLoop(StoppableQueueBlockingRunnable):
             self.complete()
 
     def _process_end_iteration(self) -> None:
+        worker_id = self.context.tuple_processing_manager.current_internal_marker.worker
+        print("ergergerger")
+        self.process_input_state()
+        self.process_input_tuple()
         # reset python op here
-        marker = self.context.tuple_processing_manager.get_internal_marker()
+
         self._send_ecm_to_data_channels(
-            "EndIteration", EmbeddedControlMessageType.PORT_ALIGNMENT, marker.request
+            "EndIteration", EmbeddedControlMessageType.PORT_ALIGNMENT, EndIterationRequest(worker_id)
         )
 
     def _process_ecm(self, ecm_element: EmbeddedControlMessageElement):
