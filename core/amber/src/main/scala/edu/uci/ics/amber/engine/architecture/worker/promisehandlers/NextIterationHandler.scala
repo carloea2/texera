@@ -29,7 +29,7 @@ import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_ITERATION
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
-import edu.uci.ics.amber.operator.loop.{LoopEndOpExec, LoopStartOpExec}
+import edu.uci.ics.amber.operator.loop.LoopStartOpExec
 
 trait NextIterationHandler {
   this: DataProcessorRPCHandlerInitializer =>
@@ -39,10 +39,7 @@ trait NextIterationHandler {
       ctx: AsyncRPCContext
   ): Future[EmptyReturn] = {
     if (dp.executor.asInstanceOf[LoopStartOpExec].checkCondition()) {
-      val portId = dp.inputGateway.getChannel(dp.inputManager.currentChannelId).getPortId
-      dp.outputManager.outputIterator.setTupleOutput(
-        dp.executor.onFinishMultiPort(portId.id)
-      )
+      dp.processOnFinish()
       dp.sendECMToDataChannels(
         METHOD_END_ITERATION.getBareMethodName,
         PORT_ALIGNMENT,

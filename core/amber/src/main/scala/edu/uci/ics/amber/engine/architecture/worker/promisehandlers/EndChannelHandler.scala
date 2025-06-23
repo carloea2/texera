@@ -30,7 +30,6 @@ import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_ITERATION
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
-import edu.uci.ics.amber.error.ErrorUtils.safely
 import edu.uci.ics.amber.operator.loop.LoopStartOpExec
 
 trait EndChannelHandler {
@@ -44,20 +43,7 @@ trait EndChannelHandler {
     val portId = dp.inputGateway.getChannel(channelId).getPortId
     dp.inputManager.getPort(portId).completed = true
     dp.inputManager.initBatch(channelId, Array.empty)
-    try {
-      val outputState = dp.executor.produceStateOnFinish(portId.id)
-      if (outputState.isDefined) {
-        dp.outputManager.emitState(outputState.get)
-      }
-      dp.outputManager.outputIterator.setTupleOutput(
-        dp.executor.onFinishMultiPort(portId.id)
-      )
-    } catch safely {
-      case e =>
-        // forward input tuple to the user and pause DP thread
-        dp.handleExecutorException(e)
-    }
-
+    dp.processOnFinish()
     dp.outputManager.outputIterator.appendSpecialTupleToEnd(
       FinalizePort(portId, input = true)
     )

@@ -20,14 +20,9 @@
 package edu.uci.ics.amber.engine.architecture.worker.promisehandlers
 
 import com.twitter.util.Future
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.PORT_ALIGNMENT
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
-  AsyncRPCContext,
-  EmptyRequest,
-  EndIterationRequest
-}
+import edu.uci.ics.amber.core.tuple.FinalizeIteration
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContext, EmptyRequest, EndIterationRequest}
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
-import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_ITERATION
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
 import edu.uci.ics.amber.operator.loop.LoopEndOpExec
 
@@ -42,8 +37,8 @@ trait EndIterationHandler {
       case _: LoopEndOpExec =>
         workerInterface.nextIteration(EmptyRequest(), mkContext(request.worker))
       case _ =>
-        dp.executor.reset()
-        dp.sendECMToDataChannels(METHOD_END_ITERATION.getBareMethodName, PORT_ALIGNMENT, request)
+        dp.processOnFinish()
+        dp.outputManager.outputIterator.appendSpecialTupleToEnd(FinalizeIteration(request.worker))
     }
     EmptyReturn()
   }

@@ -22,49 +22,23 @@ package edu.uci.ics.amber.engine.architecture.worker
 import com.softwaremill.macwire.wire
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.state.State
-import edu.uci.ics.amber.core.tuple.{
-  FinalizeExecutor,
-  FinalizePort,
-  SchemaEnforceable,
-  Tuple,
-  TupleLike
-}
+import edu.uci.ics.amber.core.tuple.{FinalizeExecutor, FinalizeIteration, FinalizePort, SchemaEnforceable, Tuple, TupleLike}
 import edu.uci.ics.amber.engine.architecture.common.AmberProcessor
 import edu.uci.ics.amber.engine.architecture.logreplay.ReplayLogManager
-import edu.uci.ics.amber.engine.architecture.messaginglayer.{
-  InputManager,
-  OutputManager,
-  WorkerTimerService
-}
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.{
-  NO_ALIGNMENT,
-  PORT_ALIGNMENT
-}
+import edu.uci.ics.amber.engine.architecture.messaginglayer.{InputManager, OutputManager, WorkerTimerService}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.{NO_ALIGNMENT, PORT_ALIGNMENT}
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands._
-import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{
-  DPInputQueueElement,
-  MainThreadDelegateMessage
-}
+import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{DPInputQueueElement, MainThreadDelegateMessage}
 import edu.uci.ics.amber.engine.architecture.worker.managers.SerializationManager
-import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{
-  COMPLETED,
-  READY,
-  RUNNING
-}
+import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{COMPLETED, READY, RUNNING}
 import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerStatistics
 import edu.uci.ics.amber.engine.common.ambermessage._
 import edu.uci.ics.amber.engine.common.statetransition.WorkerStateManager
 import edu.uci.ics.amber.engine.common.virtualidentity.util.CONTROLLER
 import edu.uci.ics.amber.error.ErrorUtils.{mkConsoleMessage, safely}
-import edu.uci.ics.amber.core.virtualidentity.{
-  ActorVirtualIdentity,
-  ChannelIdentity,
-  EmbeddedControlMessageIdentity
-}
+import edu.uci.ics.amber.core.virtualidentity.{ActorVirtualIdentity, ChannelIdentity, EmbeddedControlMessageIdentity}
 import edu.uci.ics.amber.core.workflow.PortIdentity
-import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
-import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.METHOD_END_CHANNEL
-import io.grpc.MethodDescriptor
+import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.{METHOD_END_CHANNEL, METHOD_END_ITERATION}
 
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -139,6 +113,7 @@ class DataProcessor(
     }
   }
 
+
   /** transfer one tuple from iterator to downstream.
     * this function is only called by the DP thread
     */
@@ -183,6 +158,9 @@ class DataProcessor(
           PortCompletedRequest(portId, input),
           asyncRPCClient.mkContext(CONTROLLER)
         )
+      case FinalizeIteration(worker: ActorVirtualIdentity) =>
+        sendECMToDataChannels(METHOD_END_ITERATION.getBareMethodName, PORT_ALIGNMENT, EndIterationRequest(worker))
+        executor.reset()
       case schemaEnforceable: SchemaEnforceable =>
         val portIdentity = outputPortOpt.getOrElse(outputManager.getSingleOutputPortIdentity)
         val tuple = schemaEnforceable.enforceSchema(outputManager.getPort(portIdentity).schema)
@@ -268,6 +246,36 @@ class DataProcessor(
     }
   }
 
+  def processOnStart(): Unit = {
+    val portId = inputGateway.getChannel(inputManager.currentChannelId).getPortId
+    try {
+      val outputState = executor.produceStateOnStart(portId.id)
+      if (outputState.isDefined) {
+        outputManager.emitState(outputState.get)
+      }
+    } catch safely {
+      case e =>
+        handleExecutorException(e)
+    }
+  }
+
+  def processOnFinish(): Unit = {
+    val portId = inputGateway.getChannel(inputManager.currentChannelId).getPortId
+    try {
+      val outputState = executor.produceStateOnFinish(portId.id)
+      if (outputState.isDefined) {
+        outputManager.emitState(outputState.get)
+      }
+      outputManager.outputIterator.setTupleOutput(
+        executor.onFinishMultiPort(portId.id)
+      )
+    } catch safely {
+      case e =>
+        // forward input tuple to the user and pause DP thread
+        handleExecutorException(e)
+    }
+  }
+
   def sendECMToDataChannels(
       method: String,
       alignment: EmbeddedControlMessageType,
@@ -295,7 +303,7 @@ class DataProcessor(
       }
   }
 
-  def handleExecutorException(e: Throwable): Unit = {
+  private[this] def handleExecutorException(e: Throwable): Unit = {
     asyncRPCClient.controllerInterface.consoleMessageTriggered(
       ConsoleMessageTriggeredRequest(mkConsoleMessage(actorId, e)),
       asyncRPCClient.mkContext(CONTROLLER)
