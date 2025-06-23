@@ -26,7 +26,10 @@ import edu.uci.ics.amber.operator.PythonOperatorDescriptor
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.core.workflow.OutputPort.OutputMode
 import edu.uci.ics.amber.core.workflow.{InputPort, OutputPort, PortIdentity}
-import edu.uci.ics.amber.operator.metadata.annotations.{AutofillAttributeName, AutofillAttributeNameList}
+import edu.uci.ics.amber.operator.metadata.annotations.{
+  AutofillAttributeName,
+  AutofillAttributeNameList
+}
 
 @JsonSchemaInject(json = """
 {
@@ -55,7 +58,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @JsonPropertyDescription("Normalize the radar plot values")
   var normalize: Boolean = true
 
-  override def getOutputSchemas(inputSchemas: Map[PortIdentity, Schema]): Map[PortIdentity, Schema] = {
+  override def getOutputSchemas(
+      inputSchemas: Map[PortIdentity, Schema]
+  ): Map[PortIdentity, Schema] = {
     val outputSchema = Schema()
       .add("html-content", AttributeType.STRING)
     Map(operatorInfo.outputPorts.head.id -> outputSchema)
@@ -133,8 +138,6 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |        )
        |""".stripMargin
   }
-
-
 
   override def generatePythonCode(): String = {
     s"""
