@@ -70,15 +70,13 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
       "Radar Plot",
-      "View the result in radar plot",
+      "View the result in a radar plot. A radar plot displays multivariate data on multiple axes arranged in a circular layout, allowing for comparison between different entities.",
       OperatorGroupConstants.VISUALIZATION_SCIENTIFIC_GROUP,
       inputPorts = List(InputPort()),
       outputPorts = List(OutputPort(mode = OutputMode.SINGLE_SNAPSHOT))
     )
 
   def generateRadarPlotCode(): String = {
-    assert(selectedAttributes.nonEmpty)
-
     val attrList = selectedAttributes.map(attr => s""""$attr"""").mkString(", ")
     val traceNameCol = traceNameAttribute match {
       case null | "" => "None"
@@ -88,6 +86,10 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
 
     s"""
        |        categories = [$attrList]
+       |        if len(categories) == 0:
+       |            yield {'html-content': self.render_error("No columns selected as axes.")}
+       |            return
+       |
        |        trace_name_col = $traceNameCol
        |        normalize = $normalizePython
        |        max_vals = {attr: float('-inf') for attr in categories}
@@ -155,7 +157,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |    @overrides
        |    def process_table(self, table: Table, port: int):
        |        if table.empty:
-       |            yield {'html-content': self.render_error("input table is empty.")}
+       |            yield {'html-content': self.render_error("Input table is empty.")}
        |            return
        |
        |        ${generateRadarPlotCode()}
