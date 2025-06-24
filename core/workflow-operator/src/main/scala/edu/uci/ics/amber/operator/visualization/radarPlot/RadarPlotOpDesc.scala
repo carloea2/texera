@@ -47,13 +47,13 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeNameList
   var selectedAttributes: List[String] = _
 
-  @JsonProperty(value = "traceNameAttribute", required = false)
+  @JsonProperty(value = "traceNameAttribute", defaultValue = "", required = false)
   @JsonSchemaTitle("Trace Name Column")
   @JsonPropertyDescription("Optional column to use for naming each radar trace")
   @AutofillAttributeName
   var traceNameAttribute: String = ""
 
-  @JsonProperty(value = "normalize", required = false)
+  @JsonProperty(value = "normalize", defaultValue = "true", required = true)
   @JsonSchemaTitle("Normalize Data")
   @JsonPropertyDescription("Normalize the radar plot values")
   var normalize: Boolean = true
@@ -71,7 +71,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
     OperatorInfo(
       "Radar Plot",
       "View the result in radar plot",
-      OperatorGroupConstants.VISUALIZATION_BASIC_GROUP,
+      OperatorGroupConstants.VISUALIZATION_SCIENTIFIC_GROUP,
       inputPorts = List(InputPort()),
       outputPorts = List(OutputPort(mode = OutputMode.SINGLE_SNAPSHOT))
     )
