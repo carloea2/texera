@@ -53,10 +53,10 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeName
   var traceNameAttribute: String = ""
 
-  @JsonProperty(value = "normalize", defaultValue = "true", required = true)
-  @JsonSchemaTitle("Normalize Data")
-  @JsonPropertyDescription("Normalize the radar plot values")
-  var normalize: Boolean = true
+  @JsonProperty(value = "maxNormalize", defaultValue = "true", required = true)
+  @JsonSchemaTitle("Max Normalize")
+  @JsonPropertyDescription("Normalize radar plot values by scaling them relative to the maximum value on their respective axes")
+  var maxNormalize: Boolean = true
 
   override def getOutputSchemas(
       inputSchemas: Map[PortIdentity, Schema]
@@ -82,7 +82,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
       case null | "" => "None"
       case col       => s"'$col'"
     }
-    val normalizePython = if (normalize) "True" else "False"
+    val maxNormalizePython = if (maxNormalize) "True" else "False"
 
     s"""
        |        categories = [$attrList]
@@ -91,29 +91,29 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |            return
        |
        |        trace_name_col = $traceNameCol
-       |        normalize = $normalizePython
+       |        max_normalize = $maxNormalizePython
        |        max_vals = {attr: float('-inf') for attr in categories}
        |
        |        fig = go.Figure()
        |
-       |        if normalize:
+       |        if max_normalize:
        |            for _, row in table.iterrows():
        |                for attr in categories:
        |                    max_vals[attr] = max(max_vals[attr], row[attr])
        |
        |        for _, row in table.iterrows():
        |            trace_name = row[trace_name_col] if trace_name_col is not None else ""
-       |            if normalize:
+       |            if max_normalize:
        |                original_vals = []
-       |                normalized_vals = []
+       |                max_normalized_vals = []
        |                for attr in categories:
        |                    original_vals.append(f"{attr}: {row[attr]}")
-       |                    normalized_vals.append(
+       |                    max_normalized_vals.append(
        |                        row[attr] / max_vals[attr] if max_vals[attr] != 0 else 0
        |                    )
        |
        |                fig.add_trace(go.Scatterpolar(
-       |                    r=normalized_vals,
+       |                    r=max_normalized_vals,
        |                    theta=categories,
        |                    fill='toself',
        |                    name=str(trace_name) if trace_name is not None else "",
