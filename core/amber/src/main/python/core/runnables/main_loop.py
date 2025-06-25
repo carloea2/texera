@@ -291,7 +291,9 @@ class MainLoop(StoppableQueueBlockingRunnable):
         self.process_input_state()
         self.process_input_tuple()
         self._send_ecm_to_data_channels(
-            "EndIteration", EmbeddedControlMessageType.PORT_ALIGNMENT, EndIterationRequest(worker_id)
+            "EndIteration",
+            EmbeddedControlMessageType.PORT_ALIGNMENT,
+            EndIterationRequest(worker_id),
         )
         self.context.executor_manager.executor.close()
         self.context.executor_manager.executor.open()

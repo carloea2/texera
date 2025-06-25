@@ -22,23 +22,51 @@ package edu.uci.ics.amber.engine.architecture.worker
 import com.softwaremill.macwire.wire
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.state.State
-import edu.uci.ics.amber.core.tuple.{FinalizeExecutor, FinalizeIteration, FinalizePort, SchemaEnforceable, Tuple, TupleLike}
+import edu.uci.ics.amber.core.tuple.{
+  FinalizeExecutor,
+  FinalizeIteration,
+  FinalizePort,
+  SchemaEnforceable,
+  Tuple,
+  TupleLike
+}
 import edu.uci.ics.amber.engine.architecture.common.AmberProcessor
 import edu.uci.ics.amber.engine.architecture.logreplay.ReplayLogManager
-import edu.uci.ics.amber.engine.architecture.messaginglayer.{InputManager, OutputManager, WorkerTimerService}
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.{NO_ALIGNMENT, PORT_ALIGNMENT}
+import edu.uci.ics.amber.engine.architecture.messaginglayer.{
+  InputManager,
+  OutputManager,
+  WorkerTimerService
+}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.EmbeddedControlMessageType.{
+  NO_ALIGNMENT,
+  PORT_ALIGNMENT
+}
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands._
-import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{DPInputQueueElement, MainThreadDelegateMessage}
+import edu.uci.ics.amber.engine.architecture.worker.WorkflowWorker.{
+  DPInputQueueElement,
+  MainThreadDelegateMessage
+}
 import edu.uci.ics.amber.engine.architecture.worker.managers.SerializationManager
-import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{COMPLETED, READY, RUNNING}
+import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{
+  COMPLETED,
+  READY,
+  RUNNING
+}
 import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerStatistics
 import edu.uci.ics.amber.engine.common.ambermessage._
 import edu.uci.ics.amber.engine.common.statetransition.WorkerStateManager
 import edu.uci.ics.amber.engine.common.virtualidentity.util.CONTROLLER
 import edu.uci.ics.amber.error.ErrorUtils.{mkConsoleMessage, safely}
-import edu.uci.ics.amber.core.virtualidentity.{ActorVirtualIdentity, ChannelIdentity, EmbeddedControlMessageIdentity}
+import edu.uci.ics.amber.core.virtualidentity.{
+  ActorVirtualIdentity,
+  ChannelIdentity,
+  EmbeddedControlMessageIdentity
+}
 import edu.uci.ics.amber.core.workflow.PortIdentity
-import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.{METHOD_END_CHANNEL, METHOD_END_ITERATION}
+import edu.uci.ics.amber.engine.architecture.rpc.workerservice.WorkerServiceGrpc.{
+  METHOD_END_CHANNEL,
+  METHOD_END_ITERATION
+}
 
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -113,7 +141,6 @@ class DataProcessor(
     }
   }
 
-
   /** transfer one tuple from iterator to downstream.
     * this function is only called by the DP thread
     */
@@ -159,7 +186,11 @@ class DataProcessor(
           asyncRPCClient.mkContext(CONTROLLER)
         )
       case FinalizeIteration(worker: ActorVirtualIdentity) =>
-        sendECMToDataChannels(METHOD_END_ITERATION.getBareMethodName, PORT_ALIGNMENT, EndIterationRequest(worker))
+        sendECMToDataChannels(
+          METHOD_END_ITERATION.getBareMethodName,
+          PORT_ALIGNMENT,
+          EndIterationRequest(worker)
+        )
         executor.reset()
       case schemaEnforceable: SchemaEnforceable =>
         val portIdentity = outputPortOpt.getOrElse(outputManager.getSingleOutputPortIdentity)
