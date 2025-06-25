@@ -55,7 +55,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
 
   @JsonProperty(value = "maxNormalize", defaultValue = "true", required = true)
   @JsonSchemaTitle("Max Normalize")
-  @JsonPropertyDescription("Normalize radar plot values by scaling them relative to the maximum value on their respective axes")
+  @JsonPropertyDescription(
+    "Normalize radar plot values by scaling them relative to the maximum value on their respective axes"
+  )
   var maxNormalize: Boolean = true
 
   override def getOutputSchemas(
