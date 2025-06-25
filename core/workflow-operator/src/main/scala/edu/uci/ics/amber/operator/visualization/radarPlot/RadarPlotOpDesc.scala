@@ -86,55 +86,36 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
 
     s"""
        |        categories = [$attrList]
-       |        if len(categories) == 0:
+       |        if not categories:
        |            yield {'html-content': self.render_error("No columns selected as axes.")}
        |            return
        |
        |        trace_name_col = $traceNameCol
        |        max_normalize = $maxNormalizePython
-       |        max_vals = {attr: float('-inf') for attr in categories}
+       |        selected_table = table[categories]
+       |        hover_texts = selected_table.apply(lambda row: [f"{attr}: {row[attr]}" for attr in categories], axis=1)
+       |        trace_names = table[trace_name_col] if trace_name_col else pd.Series([""] * len(table))
+       |
+       |        if max_normalize:
+       |            max_vals = selected_table.max()
+       |            selected_table = selected_table.divide(max_vals).fillna(0)
        |
        |        fig = go.Figure()
        |
-       |        if max_normalize:
-       |            for _, row in table.iterrows():
-       |                for attr in categories:
-       |                    max_vals[attr] = max(max_vals[attr], row[attr])
-       |
-       |        for _, row in table.iterrows():
-       |            trace_name = row[trace_name_col] if trace_name_col is not None else ""
-       |            if max_normalize:
-       |                original_vals = []
-       |                max_normalized_vals = []
-       |                for attr in categories:
-       |                    original_vals.append(f"{attr}: {row[attr]}")
-       |                    max_normalized_vals.append(
-       |                        row[attr] / max_vals[attr] if max_vals[attr] != 0 else 0
-       |                    )
-       |
-       |                fig.add_trace(go.Scatterpolar(
-       |                    r=max_normalized_vals,
-       |                    theta=categories,
-       |                    fill='toself',
-       |                    name=str(trace_name) if trace_name is not None else "",
-       |                    text=original_vals,
-       |                    hoverinfo="text"
-       |                ))
-       |            else:
-       |                fig.add_trace(go.Scatterpolar(
-       |                    r=[row[attr] for attr in categories],
-       |                    theta=categories,
-       |                    fill='toself',
-       |                    name=str(trace_name) if trace_name is not None else "",
-       |                    text=[f"{attr}: {row[attr]}" for attr in categories],
-       |                    hoverinfo="text"
-       |                ))
-       |
-       |        showlegend = any(row.get(trace_name_col) for _, row in table.iterrows()) if trace_name_col is not None else False
+       |        for idx, row in selected_table.iterrows():
+       |            trace_name = trace_names.iloc[idx]
+       |            fig.add_trace(go.Scatterpolar(
+       |                r=row.tolist(),
+       |                theta=categories,
+       |                fill='toself',
+       |                name=str(trace_name) if trace_name else "",
+       |                text=hover_texts.iloc[idx],
+       |                hoverinfo="text"
+       |            ))
        |
        |        fig.update_layout(
        |            polar=dict(radialaxis=dict(visible=True)),
-       |            showlegend=showlegend,
+       |            showlegend=bool(table[trace_name_col].notna().any()) if trace_name_col else False,
        |            width=600,
        |            height=600
        |        )
@@ -144,6 +125,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   override def generatePythonCode(): String = {
     s"""
        |from pytexera import *
+       |import pandas as pd
        |import plotly.graph_objects as go
        |import plotly.io
        |
