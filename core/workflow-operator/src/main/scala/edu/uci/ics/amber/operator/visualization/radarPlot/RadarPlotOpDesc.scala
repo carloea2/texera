@@ -47,9 +47,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeNameList
   var selectedAttributes: List[String] = _
 
-  @JsonProperty(value = "traceNameAttribute", defaultValue = "", required = false)
+  @JsonProperty(value = "traceNameAttribute", defaultValue = "-- No Selection --", required = false)
   @JsonSchemaTitle("Trace Name Column")
-  @JsonPropertyDescription("Optional column to use for naming each radar trace")
+  @JsonPropertyDescription("Optional - Select a column to use for naming each radar trace")
   @AutofillAttributeName
   var traceNameAttribute: String = ""
 
@@ -81,8 +81,8 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   def generateRadarPlotCode(): String = {
     val attrList = selectedAttributes.map(attr => s""""$attr"""").mkString(", ")
     val traceNameCol = traceNameAttribute match {
-      case null | "" => "None"
-      case col       => s"'$col'"
+      case "" | "-- No Selection --" => "None"
+      case col                       => s"'$col'"
     }
     val maxNormalizePython = if (maxNormalize) "True" else "False"
 
