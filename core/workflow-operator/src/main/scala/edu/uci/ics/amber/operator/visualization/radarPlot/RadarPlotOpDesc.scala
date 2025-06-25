@@ -94,30 +94,42 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |
        |        trace_name_col = $traceNameCol
        |        max_normalize = $maxNormalizePython
-       |        selected_table = table[categories]
-       |        hover_texts = selected_table.apply(lambda row: [f"{attr}: {row[attr]}" for attr in categories], axis=1)
-       |        trace_names = table[trace_name_col] if trace_name_col else pd.Series([""] * len(table))
+       |
+       |        selected_table_df = table[categories].astype(float)
+       |        selected_table = selected_table_df.values
+       |
+       |        trace_names = (
+       |            table[trace_name_col].values if trace_name_col
+       |            else np.full(len(table), "", dtype=object)
+       |        )
+       |
+       |        hover_texts = selected_table_df.apply(
+       |            lambda row: [f"{attr}: {row[attr]}" for attr in categories], axis=1
+       |        ).tolist()
        |
        |        if max_normalize:
-       |            max_vals = selected_table.max()
-       |            selected_table = selected_table.divide(max_vals).fillna(0)
+       |            max_vals = selected_table_df.max().values
+       |            max_vals[max_vals == 0] = 1
+       |            selected_table = selected_table / max_vals
+       |
+       |        selected_table = np.nan_to_num(selected_table)
        |
        |        fig = go.Figure()
        |
-       |        for idx, row in selected_table.iterrows():
-       |            trace_name = trace_names.iloc[idx]
+       |        for idx, row in enumerate(selected_table):
+       |            trace_name = trace_names[idx]
        |            fig.add_trace(go.Scatterpolar(
        |                r=row.tolist(),
        |                theta=categories,
        |                fill='toself',
        |                name=str(trace_name) if trace_name else "",
-       |                text=hover_texts.iloc[idx],
+       |                text=hover_texts[idx],
        |                hoverinfo="text"
        |            ))
        |
        |        fig.update_layout(
        |            polar=dict(radialaxis=dict(visible=True)),
-       |            showlegend=bool(table[trace_name_col].notna().any()) if trace_name_col else False,
+       |            showlegend=True,
        |            width=600,
        |            height=600
        |        )
@@ -127,7 +139,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   override def generatePythonCode(): String = {
     s"""
        |from pytexera import *
-       |import pandas as pd
+       |import numpy as np
        |import plotly.graph_objects as go
        |import plotly.io
        |
