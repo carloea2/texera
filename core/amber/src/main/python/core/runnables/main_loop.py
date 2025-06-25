@@ -290,11 +290,11 @@ class MainLoop(StoppableQueueBlockingRunnable):
         worker_id = self.context.tuple_processing_manager.current_internal_marker.worker
         self.process_input_state()
         self.process_input_tuple()
-        # reset python op here
-
         self._send_ecm_to_data_channels(
             "EndIteration", EmbeddedControlMessageType.PORT_ALIGNMENT, EndIterationRequest(worker_id)
         )
+        self.context.executor_manager.executor.close()
+        self.context.executor_manager.executor.open()
 
     def _process_ecm(self, ecm_element: ECMElement):
         """
