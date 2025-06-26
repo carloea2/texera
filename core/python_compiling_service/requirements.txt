@@ -1,0 +1,8 @@
+Flask==2.3.3
+Flask-CORS==4.0.0
+astor==0.8.1
+vulture==2.11
+loguru==0.7.2
+autoflake==2.3.0
+pytest==8.0.2
+graphviz==0.20.3 
