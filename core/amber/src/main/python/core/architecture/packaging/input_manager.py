@@ -53,6 +53,7 @@ class WorkerPort:
     def __init__(self, schema: Schema):
         self.channels: List[Channel] = list()
         self._schema = schema
+        self.started = False
 
     def add_channel(self, channel: Channel) -> None:
         self.channels.append(channel)
@@ -138,7 +139,11 @@ class InputManager:
             if not self.started:
                 yield StartOfOutputPorts()
             self.started = True
-            yield StartOfInputPort()
+            channel = self._channels[self._current_channel_id]
+            port_id = channel.port_id
+            if not self._ports[port_id].started:
+                self._ports[port_id].started = True
+                yield StartOfInputPort(port_id)
         if isinstance(marker, EndOfInputChannel):
             channel = self._channels[self._current_channel_id]
             channel.complete()

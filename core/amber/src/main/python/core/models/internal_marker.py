@@ -17,6 +17,7 @@
 
 from dataclasses import dataclass
 from core.models.marker import Marker
+from proto.edu.uci.ics.amber.core import PortIdentity
 
 
 @dataclass
@@ -31,6 +32,7 @@ class InternalMarker(Marker):
 
 @dataclass
 class StartOfInputPort(InternalMarker):
+    port_id: PortIdentity
     pass
 
 

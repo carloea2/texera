@@ -101,7 +101,6 @@ class TupleOperatorV2(Operator):
     be provided upon using.
     """
 
-    @abstractmethod
     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
         """
         Process an input Tuple from the given link.
@@ -127,7 +126,7 @@ class TupleOperatorV2(Operator):
 class SourceOperator(TupleOperatorV2):
     __internal_is_source = True
 
-    @abstractmethod
+
     def produce(self) -> Iterator[Union[TupleLike, TableLike, None]]:
         """
         Produce Tuples or Tables. Used by the source operator only.
@@ -206,7 +205,6 @@ class BatchOperator(TupleOperatorV2):
         while len(self.__batch_data[port]) != 0:
             yield from self._process_batch(port)
 
-    @abstractmethod
     def process_batch(self, batch: Batch, port: int) -> Iterator[Optional[BatchLike]]:
         """
         Process an input Batch from the given link. The Batch is represented as a
@@ -238,17 +236,8 @@ class TableOperator(TupleOperatorV2):
 
     def on_finish(self, port: int) -> Iterator[Optional[TableLike]]:
         table = Table(self.__table_data[port])
-        yield from self.process_table(table, port)
+        method_name = 'process_table_' + str(port)
+        process_method = getattr(self, method_name, None)
+        yield from process_method(table)
 
-    @abstractmethod
-    def process_table(self, table: Table, port: int) -> Iterator[Optional[TableLike]]:
-        """
-        Process an input Table from the given link. The Table is represented as a
-        pandas.DataFrame.
 
-        :param table: Table, a table to be processed.
-        :param port: int, input port index of the current Tuple.
-        :return: Iterator[Optional[TableLike]], producing one TableLike object at a
-            time, or None.
-        """
-        yield

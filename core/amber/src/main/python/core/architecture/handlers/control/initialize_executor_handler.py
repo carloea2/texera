@@ -44,4 +44,6 @@ class InitializeExecutorHandler(ControlHandler):
             with open(pkl_path, 'rb') as f:
                 self.context.executor_manager.executor = pickle.load(f)
                 self.context.executor_manager.state_loaded = True
+                logger.info(self.context.executor_manager.executor)
+                logger.info(f"operator state reloaded from {pkl_path}")
         return EmptyReturn()

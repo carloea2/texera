@@ -33,7 +33,7 @@ class UDFOperatorV2(TupleOperatorV2):
         """
         pass
 
-    @abstractmethod
+
     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
         """
         Process an input Tuple from the given link.
@@ -72,7 +72,7 @@ class UDFSourceOperator(SourceOperator):
         """
         pass
 
-    @abstractmethod
+
     def produce(self) -> Iterator[Optional[Union[TupleLike, TableLike]]]:
         """
         Produce Tuples or Tables. Used by the source operator only.
@@ -94,32 +94,8 @@ class UDFTableOperator(TableOperator):
     Base class for table-oriented user-defined operators. A concrete implementation must
     be provided upon using.
     """
+    pass
 
-    def open(self) -> None:
-        """
-        Open a context of the operator. Usually can be used for loading/initiating some
-        resources, such as a file, a model, or an API client.
-        """
-        pass
-
-    @abstractmethod
-    def process_table(self, table: Table, port: int) -> Iterator[Optional[TableLike]]:
-        """
-        Process an input Table from the given link. The Table is represented as
-        pandas.DataFrame.
-
-        :param table: Table, a table to be processed.
-        :param port: int, input index of the current Table.
-        :return: Iterator[Optional[TableLike]], producing one TableLike object at a
-            time, or None.
-        """
-        yield
-
-    def close(self) -> None:
-        """
-        Close the context of the operator.
-        """
-        pass
 
 
 class UDFBatchOperator(BatchOperator):
@@ -135,7 +111,7 @@ class UDFBatchOperator(BatchOperator):
         """
         pass
 
-    @abstractmethod
+
     def process_batch(self, batch: Batch, port: int) -> Iterator[Optional[BatchLike]]:
         """
         Process an input Batch from the given link. The Batch is represented as

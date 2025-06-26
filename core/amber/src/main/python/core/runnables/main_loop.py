@@ -131,14 +131,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
     @overrides
     def post_stop(self) -> None:
-        import pickle
-        import re
-        s = self.context.worker_id
-        if re.search(r'-\d+$', s):
-            s = s.rsplit('-', 1)[0]
-        with open(f'{s}.pkl', 'wb') as f:
-            pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
-
+        pass
     @overrides
     def receive(self, next_entry: QueueElement) -> None:
         """
@@ -330,6 +323,14 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 )
             )
             self._check_and_process_control()
+
+        import pickle
+        import re
+        s = self.context.worker_id
+        if re.search(r'-\d+$', s):
+            s = s.rsplit('-', 1)[0]
+        with open(f'{s}.pkl', 'wb') as f:
+            pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
 
         # Need to send port completed even if there is no downstream link
         for port_id in self.context.output_manager.get_port_ids():
