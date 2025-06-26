@@ -89,6 +89,8 @@ class DataProcessor(Runnable, Stoppable):
                     self._switch_context()
                     if isinstance(executor, TableOperator):
                         self._set_output_tuple(executor.on_finish(port_id))
+                        if self._context.input_manager.all_ports_completed:
+                            self._set_output_tuple(executor.on_finish_all())
                     else:
                         method_name = f'on_finish_{port_id}'
                         process_method = getattr(executor, method_name, None)

@@ -240,4 +240,11 @@ class TableOperator(TupleOperatorV2):
         process_method = getattr(self, method_name, None)
         yield from process_method(table)
 
+    def on_finish_all(self):
+        sorted_values = [self.__table_data[k] for k in sorted(self.__table_data)]
+        yield from self.process_tables(*sorted_values)
+
+    def process_tables(self, *args):
+        yield from iter([])
+
 

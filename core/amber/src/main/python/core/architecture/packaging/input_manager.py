@@ -75,6 +75,7 @@ class InputManager:
         self._channels: Dict[ChannelIdentity, Channel] = dict()
         self._current_channel_id: Optional[ChannelIdentity] = None
         self.started = False
+        self.all_ports_completed = False
 
     def get_all_channel_ids(self) -> Dict["ChannelIdentity", "Channel"].keys:
         return self._channels.keys()
@@ -155,12 +156,12 @@ class InputManager:
                 )
             )
 
-            if port_completed:
-                yield EndOfInputPort()
-
-            all_ports_completed = all(
+            self.all_ports_completed = all(
                 map(lambda port: port.is_completed(), self._ports.values())
             )
 
-            if all_ports_completed:
+            if port_completed:
+                yield EndOfInputPort()
+
+            if self.all_ports_completed:
                 yield EndOfOutputPorts()
