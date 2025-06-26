@@ -1527,7 +1527,7 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
             process_tables[f'process_table_{i}'] = process_table_code
     
     # Wrap all process tables in an Operator class
-    operator_class_code = "class Operator:\n"
+    operator_class_code = "class Operator(UDFTableOperator):\n"
     for table_name, table_code in process_tables.items():
         # The process table code already has proper indentation, just add it as is
         operator_class_code += table_code + "\n"

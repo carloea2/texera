@@ -104,11 +104,8 @@ def split_code():
             'cuts_used': result['cuts_used'],
             'import_statements': result['import_statements']
         }
-        
-        return jsonify({
-            'success': True,
-            'result': serializable_result
-        })
+        print(result['operator_class'])
+        return result['operator_class']
         
     except Exception as e:
         # Log the error for debugging
@@ -163,10 +160,7 @@ def split_code_get():
             'import_statements': result['import_statements']
         }
         
-        return jsonify({
-            'success': True,
-            'result': serializable_result
-        })
+        return result['operator_class']
         
     except Exception as e:
         print(f"Error in split_code_get endpoint: {str(e)}")
@@ -224,4 +218,4 @@ if __name__ == '__main__':
     print()
     print("Server will start on http://localhost:5000")
     
-    app.run(host='0.0.0.0', port=8000, debug=True) 
+    app.run(host='0.0.0.0', port=9999, debug=True)

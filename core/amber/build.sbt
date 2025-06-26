@@ -273,4 +273,8 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-collection-contrib" % 
 // https://mvnrepository.com/artifact/io.github.kostaskougios/cloning
 libraryDependencies += "io.github.kostaskougios" % "cloning" % "1.10.3"
 
+libraryDependencies += "com.softwaremill.sttp.client3" %% "core" % "3.9.0"
+
+libraryDependencies += "com.lihaoyi" %% "upickle" % "3.1.3"
+
 

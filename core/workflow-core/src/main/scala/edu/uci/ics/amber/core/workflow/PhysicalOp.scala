@@ -179,7 +179,7 @@ case class PhysicalOp(
     // the execution id number
     executionId: ExecutionIdentity,
     // information regarding initializing an operator executor instance
-    opExecInitInfo: OpExecInitInfo,
+    var opExecInitInfo: OpExecInitInfo,
     // preference of parallelism
     parallelizable: Boolean = true,
     // preference of worker placement
@@ -235,6 +235,13 @@ case class PhysicalOp(
       case _                       => throw new IllegalAccessError("No code information in this physical operator")
     }
   }
+
+  @JsonIgnore
+  def setCode(code: String):Unit ={
+    opExecInitInfo = OpExecWithCode(code, "python")
+  }
+
+
 
   /**
     * creates a copy with the location preference information
