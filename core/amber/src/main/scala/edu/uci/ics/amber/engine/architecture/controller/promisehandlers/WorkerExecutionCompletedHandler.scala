@@ -73,6 +73,9 @@ trait WorkerExecutionCompletedHandler {
           listFilesWithPrefix(Utils.amberHomePath.getParent, "Worker:").foreach{
             file => Files.delete(file)
           }
+          listFilesWithPrefix(Utils.amberHomePath, "Worker:").foreach {
+            file => Files.delete(file)
+          }
           // after query result come back: send completed event, cleanup ,and kill workflow
           sendToClient(ExecutionStateUpdate(cp.workflowExecution.getState))
           cp.controllerTimerService.disableStatusUpdate()
