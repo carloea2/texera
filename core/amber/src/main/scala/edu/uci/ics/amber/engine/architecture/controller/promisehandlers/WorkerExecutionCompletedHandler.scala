@@ -20,17 +20,14 @@
 package edu.uci.ics.amber.engine.architecture.controller.promisehandlers
 
 import com.twitter.util.Future
-import edu.uci.ics.amber.engine.architecture.controller.{
-  ControllerAsyncRPCHandlerInitializer,
-  ExecutionStateUpdate
-}
-import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
-  AsyncRPCContext,
-  EmptyRequest,
-  QueryStatisticsRequest
-}
+import edu.uci.ics.amber.engine.architecture.controller.{ControllerAsyncRPCHandlerInitializer, ExecutionStateUpdate}
+import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{AsyncRPCContext, EmptyRequest, QueryStatisticsRequest}
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
+import edu.uci.ics.amber.engine.common.Utils
 import edu.uci.ics.amber.engine.common.virtualidentity.util.SELF
+
+import java.nio.file.{Files, Path}
+import scala.jdk.CollectionConverters.IteratorHasAsScala
 
 /** indicate a worker has completed its execution
   * i.e. received and processed all data from upstreams
@@ -41,6 +38,18 @@ import edu.uci.ics.amber.engine.common.virtualidentity.util.SELF
   */
 trait WorkerExecutionCompletedHandler {
   this: ControllerAsyncRPCHandlerInitializer =>
+
+  def listFilesWithPrefix(dirPath: Path, prefix: String): List[Path] = {
+    if (Files.isDirectory(dirPath)) {
+      Files.list(dirPath)
+        .iterator()
+        .asScala
+        .filter(p => Files.isRegularFile(p) && p.getFileName.toString.startsWith(prefix))
+        .toList
+    } else {
+      List.empty
+    }
+  }
 
   override def workerExecutionCompleted(
       msg: EmptyRequest,
@@ -61,6 +70,9 @@ trait WorkerExecutionCompletedHandler {
       .flatMap(_ => {
         // if entire workflow is completed, clean up
         if (cp.workflowExecution.isCompleted) {
+          listFilesWithPrefix(Utils.amberHomePath.getParent, "Worker:").foreach{
+            file => Files.delete(file)
+          }
           // after query result come back: send completed event, cleanup ,and kill workflow
           sendToClient(ExecutionStateUpdate(cp.workflowExecution.getState))
           cp.controllerTimerService.disableStatusUpdate()
