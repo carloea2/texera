@@ -31,4 +31,3 @@ class CaseSensitiveAnalyzer extends Analyzer {
     new TokenStreamComponents(tokenizer, stream)
   }
 }
-
