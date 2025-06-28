@@ -36,7 +36,7 @@ class KeywordSearchOpExec(descString: String) extends FilterOpExec {
   // This ensures that search functionality can include standalone numbers (e.g., "3") and complex queries while offering robust performance for most use cases.
 
   @transient private lazy val analyzer: Analyzer = {
-    if(desc.isCaseSensitive) new CaseSensitiveAnalyzer() else new StandardAnalyzer()
+    if (desc.isCaseSensitive) new CaseSensitiveAnalyzer() else new StandardAnalyzer()
   }
 
   @transient lazy val query: Query = new QueryParser(desc.attribute, analyzer).parse(desc.keyword)
