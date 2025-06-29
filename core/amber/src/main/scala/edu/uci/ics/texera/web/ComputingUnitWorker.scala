@@ -19,13 +19,14 @@
 
 package edu.uci.ics.texera.web
 
-import edu.uci.ics.amber.engine.common.{AmberConfig, AmberRuntime}
+import edu.uci.ics.amber.config.ApplicationConfig
+import edu.uci.ics.amber.engine.common.AmberRuntime
 
 object ComputingUnitWorker {
 
   def main(args: Array[String]): Unit = {
     // start actor system worker node
-    AmberRuntime.startActorWorker(AmberConfig.amberClusterEnabled)
+    AmberRuntime.startActorWorker(ApplicationConfig.amberClusterEnabled)
   }
 
 }

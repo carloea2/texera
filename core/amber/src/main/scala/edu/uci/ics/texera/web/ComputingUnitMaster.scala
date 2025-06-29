@@ -23,18 +23,15 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.typesafe.scalalogging.LazyLogging
 import edu.uci.ics.amber.config.{ApplicationConfig, StorageConfig}
 import edu.uci.ics.amber.core.storage.DocumentFactory
+import edu.uci.ics.amber.core.virtualidentity.ExecutionIdentity
 import edu.uci.ics.amber.core.workflow.{PhysicalPlan, WorkflowContext}
 import edu.uci.ics.amber.engine.architecture.controller.ControllerConfig
-import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.WorkflowAggregatedState.{
-  COMPLETED,
-  FAILED
-}
+import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.WorkflowAggregatedState.{COMPLETED, FAILED}
 import edu.uci.ics.amber.engine.common.AmberRuntime.scheduleRecurringCallThroughActorSystem
 import edu.uci.ics.amber.engine.common.Utils.maptoStatusCode
 import edu.uci.ics.amber.engine.common.client.AmberClient
 import edu.uci.ics.amber.engine.common.storage.SequentialRecordStorage
 import edu.uci.ics.amber.engine.common.{AmberRuntime, Utils}
-import edu.uci.ics.amber.core.virtualidentity.ExecutionIdentity
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 import edu.uci.ics.amber.util.ObjectMapperUtils
 import edu.uci.ics.texera.auth.SessionUser
@@ -42,8 +39,8 @@ import edu.uci.ics.texera.config.UserSystemConfig
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.WorkflowExecutions
 import edu.uci.ics.texera.web.auth.JwtAuth.setupJwtAuth
-import edu.uci.ics.texera.web.resource.{WebsocketPayloadSizeTuner, WorkflowWebsocketResource}
 import edu.uci.ics.texera.web.resource.dashboard.user.workflow.WorkflowExecutionsResource
+import edu.uci.ics.texera.web.resource.{WebsocketPayloadSizeTuner, WorkflowWebsocketResource}
 import edu.uci.ics.texera.web.service.ExecutionsMetadataPersistService
 import io.dropwizard.Configuration
 import io.dropwizard.setup.{Bootstrap, Environment}
@@ -74,7 +71,7 @@ object ComputingUnitMaster {
 
   def main(args: Array[String]): Unit = {
     // start actor system master node
-    AmberRuntime.startActorMaster(AmberConfig.amberClusterEnabled)
+    AmberRuntime.startActorMaster(ApplicationConfig.amberClusterEnabled)
     // start web server
     new ComputingUnitMaster().run(
       "server",

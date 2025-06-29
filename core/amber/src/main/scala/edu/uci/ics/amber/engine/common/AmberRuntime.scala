@@ -21,7 +21,7 @@ package edu.uci.ics.amber.engine.common
 
 import akka.actor.{ActorSystem, Address, Cancellable, DeadLetter, Props}
 import akka.serialization.{Serialization, SerializationExtension}
-import edu.uci.ics.amber.config.AkkaConfig
+import edu.uci.ics.amber.config.{AkkaConfig, ApplicationConfig}
 import com.typesafe.config.{Config, ConfigFactory}
 import edu.uci.ics.amber.clustering.ClusterListener
 import edu.uci.ics.amber.engine.architecture.messaginglayer.DeadLetterMonitorActor
@@ -64,8 +64,8 @@ object AmberRuntime {
     var masterIpAddress = "localhost"
     var masterPort = 2552
     if (clusterMode) {
-      masterIpAddress = AmberConfig.masterIpAddress
-      masterPort = AmberConfig.masterPort
+      masterIpAddress = ApplicationConfig.masterIpAddress
+      masterPort = ApplicationConfig.masterPort
     }
 
     val masterConfig = ConfigFactory
@@ -90,8 +90,8 @@ object AmberRuntime {
     var masterPort = 2552
     var nodeIp = "localhost"
     if (clusterMode) {
-      masterIpAddress = AmberConfig.masterIpAddress
-      masterPort = AmberConfig.masterPort
+      masterIpAddress = ApplicationConfig.masterIpAddress
+      masterPort = ApplicationConfig.masterPort
       nodeIp = "hostname -i".!!.trim // only supported by linux/unix
     }
     val workerConfig = ConfigFactory
