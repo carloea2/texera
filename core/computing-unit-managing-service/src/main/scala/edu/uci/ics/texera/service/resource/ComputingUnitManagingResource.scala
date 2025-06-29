@@ -19,16 +19,17 @@
 
 package edu.uci.ics.texera.service.resource
 
-import edu.uci.ics.amber.core.storage.{EnvironmentalVariable, StorageConfig}
+import edu.uci.ics.amber.config.{EnvironmentalVariable, StorageConfig}
 import edu.uci.ics.texera.auth.JwtAuth.{TOKEN_EXPIRE_TIME_IN_DAYS, dayToMin, jwtClaims}
 import edu.uci.ics.texera.auth.{JwtAuth, SessionUser}
+import edu.uci.ics.texera.config.{ComputingUnitConfig, KubernetesConfig}
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.SqlServer.withTransaction
 import edu.uci.ics.texera.dao.jooq.generated.enums.WorkflowComputingUnitTypeEnum
 import edu.uci.ics.texera.dao.jooq.generated.tables.daos.WorkflowComputingUnitDao
 import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.WorkflowComputingUnit
-import edu.uci.ics.texera.service.{ComputingUnitConfig, KubernetesConfig}
-import edu.uci.ics.texera.service.KubernetesConfig.{
+import edu.uci.ics.texera.dao.jooq.generated.enums.WorkflowComputingUnitTypeEnum
+import KubernetesConfig.{
   cpuLimitOptions,
   gpuLimitOptions,
   maxNumOfRunningComputingUnitsPerUser,
@@ -36,9 +37,14 @@ import edu.uci.ics.texera.service.KubernetesConfig.{
 }
 import edu.uci.ics.texera.service.resource.ComputingUnitManagingResource._
 import edu.uci.ics.texera.service.resource.ComputingUnitState._
-import edu.uci.ics.texera.service.util.KubernetesClient
+import edu.uci.ics.texera.service.util.{
+  ComputingUnitManagingServiceException,
+  InsufficientComputingUnitQuota,
+  KubernetesClient
+}
 import io.dropwizard.auth.Auth
 import io.fabric8.kubernetes.api.model.Quantity
+import io.fabric8.kubernetes.client.KubernetesClientException
 import jakarta.annotation.security.RolesAllowed
 import jakarta.ws.rs._
 import jakarta.ws.rs.core.{MediaType, Response}
@@ -353,9 +359,7 @@ class ComputingUnitManagingResource {
       if (
         units.size >= maxNumOfRunningComputingUnitsPerUser && cuType == WorkflowComputingUnitTypeEnum.kubernetes
       ) {
-        throw new BadRequestException(
-          s"You can only have at most ${maxNumOfRunningComputingUnitsPerUser} running at the same time"
-        )
+        throw InsufficientComputingUnitQuota(maxNumOfRunningComputingUnitsPerUser)
       }
 
       val resourceJson: String = cuType match {
@@ -414,32 +418,39 @@ class ComputingUnitManagingResource {
         wcDao.update(insertedUnit)
 
         // 2. Launch the pod as CU
-
         val envVars = computingUnitEnvironmentVariables ++ Map(
           EnvironmentalVariable.ENV_USER_JWT_TOKEN -> userToken,
           EnvironmentalVariable.ENV_JAVA_OPTS -> s"-Xmx${param.jvmMemorySize}"
         )
 
-        if (param.numNodes > 1) {
-          KubernetesClient.createCluster(
-            cuid,
-            param.cpuLimit,
-            param.memoryLimit,
-            param.diskLimit,
-            param.numNodes,
-            envVars
-          )
-        } else {
-          val volume = KubernetesClient.createVolume(cuid, param.diskLimit)
-          KubernetesClient.createPod(
-            cuid,
-            param.cpuLimit,
-            param.memoryLimit,
-            envVars,
-            volume,
-            param.gpuLimit,
-            param.shmSize
-          )
+        try {
+          if (param.numNodes > 1) {
+            KubernetesClient.createCluster(
+              cuid,
+              param.cpuLimit,
+              param.memoryLimit,
+              param.diskLimit,
+              param.numNodes,
+              envVars
+            )
+          } else {
+            val volume = KubernetesClient.createVolume(cuid, param.diskLimit)
+            KubernetesClient.createPod(
+              cuid,
+              param.cpuLimit,
+              param.memoryLimit,
+              envVars,
+              volume,
+              param.gpuLimit,
+              param.shmSize
+            )
+          }
+        } catch {
+          case e: KubernetesClientException =>
+            throw ComputingUnitManagingServiceException.fromKubernetes(e)
+
+          case t: Throwable =>
+            throw t
         }
       }
 

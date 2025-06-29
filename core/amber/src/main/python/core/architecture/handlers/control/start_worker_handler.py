@@ -20,25 +20,27 @@ from proto.edu.uci.ics.amber.core import (
     ChannelIdentity,
     ActorVirtualIdentity,
     PortIdentity,
+    EmbeddedControlMessageIdentity,
 )
 from proto.edu.uci.ics.amber.engine.architecture.rpc import (
     WorkerStateResponse,
+    ControlInvocation,
     EmptyRequest,
+    EmbeddedControlMessage,
+    AsyncRpcContext,
+    ControlRequest,
+    EmbeddedControlMessageType,
 )
 from proto.edu.uci.ics.amber.engine.architecture.worker import (
     WorkerState,
 )
 from core.architecture.handlers.control.control_handler_base import ControlHandler
 from core.architecture.packaging.input_manager import InputManager
-from core.models.internal_queue import DataElement
-
-from loguru import logger
+from core.models.internal_queue import ECMElement
 
 
 class StartWorkerHandler(ControlHandler):
-
     async def start_worker(self, req: EmptyRequest) -> WorkerStateResponse:
-        logger.info("Starting the worker.")
         if self.context.executor_manager.executor.is_source:
             self.context.state_manager.transit_to(WorkerState.RUNNING)
             input_channel_id = ChannelIdentity(
@@ -51,14 +53,48 @@ class StartWorkerHandler(ControlHandler):
                 port_id=port_id, schema=Schema(), storage_uris=[], partitionings=[]
             )
             self.context.input_manager.register_input(input_channel_id, port_id)
+            self.context.current_input_channel_id = input_channel_id
             self.context.input_queue.put(
-                DataElement(
+                ECMElement(
                     tag=input_channel_id,
-                    payload=None,
+                    payload=EmbeddedControlMessage(
+                        EmbeddedControlMessageIdentity("StartChannel"),
+                        EmbeddedControlMessageType.NO_ALIGNMENT,
+                        [],
+                        {
+                            input_channel_id.to_worker_id.name: ControlInvocation(
+                                "StartChannel",
+                                ControlRequest(empty_request=EmptyRequest()),
+                                AsyncRpcContext(
+                                    ActorVirtualIdentity(), ActorVirtualIdentity()
+                                ),
+                                -1,
+                            )
+                        },
+                    ),
+                )
+            )
+            self.context.input_queue.put(
+                ECMElement(
+                    tag=input_channel_id,
+                    payload=EmbeddedControlMessage(
+                        EmbeddedControlMessageIdentity("EndChannel"),
+                        EmbeddedControlMessageType.PORT_ALIGNMENT,
+                        [],
+                        {
+                            input_channel_id.to_worker_id.name: ControlInvocation(
+                                "EndChannel",
+                                ControlRequest(empty_request=EmptyRequest()),
+                                AsyncRpcContext(
+                                    ActorVirtualIdentity(), ActorVirtualIdentity()
+                                ),
+                                -1,
+                            )
+                        },
+                    ),
                 )
             )
         elif self.context.input_manager.get_input_port_mat_reader_threads():
             self.context.input_manager.start_input_port_mat_reader_threads()
 
-        state = self.context.state_manager.get_current_state()
-        return WorkerStateResponse(state)
+        return WorkerStateResponse(self.context.state_manager.get_current_state())

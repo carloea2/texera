@@ -59,14 +59,14 @@ import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { filter } from "rxjs/operators";
 import { NotificationService } from "../../../../common/service/notification/notification.service";
 import { PresetWrapperComponent } from "src/app/common/formly/preset-wrapper/preset-wrapper.component";
-import { environment } from "src/environments/environment";
 import { WorkflowVersionService } from "../../../../dashboard/service/user/workflow-version/workflow-version.service";
 import { QuillBinding } from "y-quill";
 import Quill from "quill";
 import QuillCursors from "quill-cursors";
 import * as Y from "yjs";
 import { OperatorSchema } from "src/app/workspace/types/operator-schema.interface";
-import { AttributeType, PortInputSchema } from "../../../types/workflow-compiling.interface";
+import { AttributeType, PortSchema } from "../../../types/workflow-compiling.interface";
+import { GuiConfigService } from "../../../../common/service/gui-config.service";
 
 Quill.register("modules/cursors", QuillCursors);
 
@@ -122,6 +122,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
   formlyOptions: FormlyFormOptions = {};
   formlyFields: FormlyFieldConfig[] | undefined;
   formTitle: string | undefined;
+  operatorDescription: string | undefined;
 
   // The field name and its css style to be overridden, e.g., for showing the diff between two workflows.
   // example: new Map([
@@ -153,7 +154,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     private notificationService: NotificationService,
     private changeDetectorRef: ChangeDetectorRef,
     private workflowVersionService: WorkflowVersionService,
-    private workflowStatusSerivce: WorkflowStatusService
+    private workflowStatusSerivce: WorkflowStatusService,
+    private config: GuiConfigService
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -226,7 +228,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     this.operatorVersion = operator.operatorVersion.slice(0, 9);
     this.setFormlyFormBinding(this.currentOperatorSchema.jsonSchema);
     this.formTitle = operator.customDisplayName ?? this.currentOperatorSchema.additionalMetadata.userFriendlyName;
-
+    this.operatorDescription = this.currentOperatorSchema.additionalMetadata.operatorDescription;
     /**
      * Important: make a deep copy of the initial property data object.
      * Prevent the form directly changes the value in the texera graph without going through workflow action service.
@@ -338,7 +340,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     if (!this.currentOperatorId?.includes("PythonLambdaFunction")) {
       return;
     }
-    const opInputSchema = this.workflowCompilingService.getOperatorInputSchema(this.currentOperatorId);
+    const opInputSchema = this.workflowCompilingService.getOperatorInputSchemaMap(this.currentOperatorId);
     if (!opInputSchema) {
       return;
     }
@@ -459,8 +461,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       }
       // if presetService is ready and operator property allows presets, setup formly field to display presets
       if (
-        environment.userSystemEnabled &&
-        environment.userPresetEnabled &&
+        this.config.env.userSystemEnabled &&
+        this.config.env.userPresetEnabled &&
         mapSource["enable-presets"] !== undefined &&
         this.currentOperatorId !== undefined
       ) {
@@ -497,7 +499,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
 
       if (isDefined(mapSource.enum)) {
         mappedField.validators.inEnum = {
-          expression: (c: AbstractControl) => mapSource.enum?.includes(c.value),
+          expression: (c: AbstractControl) => mapSource.enum?.includes(c.value ?? ""),
           message: (error: any, field: FormlyFieldConfig) =>
             `"${field.formControl?.value}" is no longer a valid option`,
         };
@@ -678,8 +680,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
 
         if (propertyValue.dependOn) {
           if (isDefined(this.currentOperatorId)) {
-            const attributes: ReadonlyArray<PortInputSchema | undefined> | undefined =
-              this.workflowCompilingService.getOperatorInputSchema(this.currentOperatorId);
+            const attributes: Readonly<Record<string, PortSchema | undefined>> | undefined =
+              this.workflowCompilingService.getOperatorInputSchemaMap(this.currentOperatorId);
             setChildTypeDependency(attributes, propertyValue.dependOn, fields, propertyName);
           }
         }

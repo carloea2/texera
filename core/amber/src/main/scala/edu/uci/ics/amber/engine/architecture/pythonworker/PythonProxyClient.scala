@@ -21,17 +21,16 @@ package edu.uci.ics.amber.engine.architecture.pythonworker
 
 import com.twitter.util.{Await, Promise}
 import edu.uci.ics.amber.core.WorkflowRuntimeException
-import edu.uci.ics.amber.core.marker.State
 import edu.uci.ics.amber.core.tuple.{Schema, Tuple}
 import edu.uci.ics.amber.core.virtualidentity.{ActorVirtualIdentity, ChannelIdentity}
 import edu.uci.ics.amber.engine.architecture.pythonworker.WorkerBatchInternalQueue.{
   ActorCommandElement,
-  ChannelMarkerElement,
+  EmbeddedControlMessageElement,
   ControlElement,
   DataElement
 }
 import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
-  ChannelMarkerPayload,
+  EmbeddedControlMessage,
   ControlInvocation
 }
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.ReturnInvocation
@@ -114,8 +113,8 @@ class PythonProxyClient(portNumberPromise: Promise[Int], val actorId: ActorVirtu
           sendData(dataPayload, channel)
         case ControlElement(cmd, channel) =>
           sendControl(channel, cmd)
-        case ChannelMarkerElement(cmd, channel) =>
-          sendChannelMarker(cmd, channel)
+        case EmbeddedControlMessageElement(cmd, channel) =>
+          sendECM(cmd, channel)
         case ActorCommandElement(cmd) =>
           sendActorCommand(cmd)
       }
@@ -126,20 +125,16 @@ class PythonProxyClient(portNumberPromise: Promise[Int], val actorId: ActorVirtu
     dataPayload match {
       case DataFrame(frame) =>
         writeArrowStream(mutable.Queue(ArraySeq.unsafeWrapArray(frame): _*), from, "Data")
-      case MarkerFrame(marker) =>
-        marker match {
-          case state: State =>
-            writeArrowStream(mutable.Queue(state.toTuple), from, marker.getClass.getSimpleName)
-          case _ => writeArrowStream(mutable.Queue.empty, from, marker.getClass.getSimpleName)
-        }
+      case StateFrame(state) =>
+        writeArrowStream(mutable.Queue(state.toTuple), from, "State")
     }
   }
 
-  private def sendChannelMarker(
-      markerPayload: ChannelMarkerPayload,
+  private def sendECM(
+      ecm: EmbeddedControlMessage,
       from: ChannelIdentity
   ): Unit = {
-    val descriptor = FlightDescriptor.command(PythonDataHeader(from, "ChannelMarker").toByteArray)
+    val descriptor = FlightDescriptor.command(PythonDataHeader(from, "ECM").toByteArray)
     val flightListener = new SyncPutListener
 
     val field = new Field("payload", FieldType.nullable(new ArrowType.Binary), null)
@@ -150,7 +145,7 @@ class PythonProxyClient(portNumberPromise: Promise[Int], val actorId: ActorVirtu
     schemaRoot.allocateNew()
 
     val vector = schemaRoot.getVector("payload").asInstanceOf[VarBinaryVector]
-    vector.setSafe(0, markerPayload.toByteArray)
+    vector.setSafe(0, ecm.toByteArray)
     vector.setValueCount(1)
     schemaRoot.setRowCount(1)
 
@@ -169,9 +164,9 @@ class PythonProxyClient(portNumberPromise: Promise[Int], val actorId: ActorVirtu
 
   private def sendControl(
       from: ChannelIdentity,
-      payload: ControlPayload
+      payload: DirectControlMessagePayload
   ): Result = {
-    var payloadV2 = ControlPayloadV2.defaultInstance
+    var payloadV2 = DirectControlMessagePayloadV2.defaultInstance
     payloadV2 = payload match {
       case c: ControlInvocation =>
         payloadV2.withControlInvocation(c)
