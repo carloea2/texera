@@ -100,3 +100,23 @@
     }
   }
 }
+
+.project-lead-members,
+.team-members {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.lead-member,
+.team-member {
+  text-align: center;
+}
+
+.lead-photo,
+.team-photo {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  margin-bottom: 10px;
+}
