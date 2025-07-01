@@ -65,6 +65,10 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeName
   var traceColorAttribute: String = ""
 
+  @JsonProperty(value = "linePattern", defaultValue = "solid", required = true)
+  @JsonPropertyDescription("Pattern of the lines connecting points on the radar plot")
+  var linePattern: RadarPlotLinePattern = _
+
   @JsonProperty(value = "maxNormalize", defaultValue = "true", required = true)
   @JsonSchemaTitle("Max Normalize")
   @JsonPropertyDescription(
@@ -84,7 +88,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
 
   @JsonProperty(value = "showLegend", defaultValue = "true", required = false)
   @JsonSchemaTitle("Show Legend")
-  @JsonPropertyDescription("Display the legend")
+  @JsonPropertyDescription("Display the legend (note: without the legend, you are unable to selectively hide or show traces in the plot)")
   var showLegend: Boolean = true
 
   override def getOutputSchemas(
@@ -125,6 +129,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |
        |        trace_name_col = $traceNameCol
        |        trace_color_col = $traceColorCol
+       |        line_pattern = "${linePattern.getLinePattern}"
        |        max_normalize = ${toPythonBool(maxNormalize)}
        |        fill_trace = ${toPythonBool(fillTrace)}
        |        show_markers = ${toPythonBool(showMarkers)}
@@ -177,7 +182,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |                text=closed_hover_texts,
        |                hoverinfo="text",
        |                mode="lines+markers" if show_markers else "lines",
-       |                line=dict(color=trace_colors[idx]) if trace_colors[idx] else {},
+       |                line=dict(dash=line_pattern, color=trace_colors[idx] if trace_colors[idx] else None),
        |                marker=dict(color=trace_colors[idx]) if trace_colors[idx] else {}
        |            ))
        |
