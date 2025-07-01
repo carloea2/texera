@@ -53,9 +53,15 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeName
   var traceNameAttribute: String = ""
 
-  @JsonProperty(value = "traceColorAttribute", defaultValue = "-- No Selection --", required = false)
+  @JsonProperty(
+    value = "traceColorAttribute",
+    defaultValue = "-- No Selection --",
+    required = false
+  )
   @JsonSchemaTitle("Trace Color Column")
-  @JsonPropertyDescription("Optional - Select a column to use for coloring each radar trace (note: if there are too many traces with distinct coloring values, colors may repeat)")
+  @JsonPropertyDescription(
+    "Optional - Select a column to use for coloring each radar trace (note: if there are too many traces with distinct coloring values, colors may repeat)"
+  )
   @AutofillAttributeName
   var traceColorAttribute: String = ""
 
