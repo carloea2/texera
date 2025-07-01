@@ -98,6 +98,7 @@ class ExecutorManager:
         executors = list(
             filter(self.is_concrete_operator, executor_module.__dict__.values())
         )
+        print(executors)
         # assert len(executors) == 1, "There should be one and only one Operator defined"
         return executors[-1]
 

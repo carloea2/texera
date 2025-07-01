@@ -85,7 +85,7 @@ class WorkflowCompiler(
                 )
 
                 val request = basicRequest
-                  .post(uri"http://localhost:9999/split")
+                  .post(uri"http://localhost:9999/compile")
                   .contentType(MediaType.ApplicationJson)
                   .body(json.render())
 
