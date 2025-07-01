@@ -60,12 +60,27 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   )
   var maxNormalize: Boolean = true
 
+  // fill, line style, line width, show markers, marker size, show legend, hover info, plot background color
+  @JsonProperty(value = "fillTrace", defaultValue = "true", required = true)
+  @JsonSchemaTitle("Fill Trace")
+  @JsonPropertyDescription("Fill the area within each radar trace")
+  var fillTrace: Boolean = true
+
+  @JsonProperty(value = "showMarkers", defaultValue = "true", required = true)
+  @JsonSchemaTitle("Show Point Markers")
+  @JsonPropertyDescription("Display point markers on the radar plot")
+  var showMarkers: Boolean = true
+
+  @JsonProperty(value = "showLegend", defaultValue = "true", required = false)
+  @JsonSchemaTitle("Show Legend")
+  @JsonPropertyDescription("Display the legend")
+  var showLegend: Boolean = true
+
   override def getOutputSchemas(
       inputSchemas: Map[PortIdentity, Schema]
   ): Map[PortIdentity, Schema] = {
     val outputSchema = Schema()
       .add("html-content", AttributeType.STRING)
-    Map(operatorInfo.outputPorts.head.id -> outputSchema)
     Map(operatorInfo.outputPorts.head.id -> outputSchema)
   }
 
@@ -85,6 +100,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
       case col                       => s"'$col'"
     }
     val maxNormalizePython = if (maxNormalize) "True" else "False"
+    val fillTracePython = if (fillTrace) "True" else "False"
+    val showMarkersPython = if (showMarkers) "True" else "False"
+    val showLegendPython = if (showLegend) "True" else "False"
 
     s"""
        |        categories = [$attrList]
@@ -94,6 +112,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |
        |        trace_name_col = $traceNameCol
        |        max_normalize = $maxNormalizePython
+       |        fill_trace = $fillTracePython
+       |        show_markers = $showMarkersPython
+       |        show_legend = $showLegendPython
        |
        |        selected_table_df = table[categories].astype(float)
        |        selected_table = selected_table_df.values
@@ -117,19 +138,24 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |        fig = go.Figure()
        |
        |        for idx, row in enumerate(selected_table):
-       |            trace_name = trace_names[idx]
+       |            # To connect ensure all points in the radar trace are connected
+       |            closed_row = row.tolist() + [row[0]]
+       |            closed_categories = categories + [categories[0]]
+       |            closed_hover_texts = hover_texts[idx] + [hover_texts[idx][0]]
+       |
        |            fig.add_trace(go.Scatterpolar(
-       |                r=row.tolist(),
-       |                theta=categories,
-       |                fill='toself',
-       |                name=str(trace_name) if trace_name else "",
-       |                text=hover_texts[idx],
-       |                hoverinfo="text"
+       |                r=closed_row,
+       |                theta=closed_categories,
+       |                fill='toself' if fill_trace else 'none',
+       |                name=str(trace_names[idx]) if trace_names[idx] else "",
+       |                text=closed_hover_texts,
+       |                hoverinfo="text",
+       |                mode="lines+markers" if show_markers else "lines"
        |            ))
        |
        |        fig.update_layout(
        |            polar=dict(radialaxis=dict(visible=True)),
-       |            showlegend=True,
+       |            showlegend=show_legend,
        |            width=600,
        |            height=600
        |        )
