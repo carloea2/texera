@@ -53,6 +53,12 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   @AutofillAttributeName
   var traceNameAttribute: String = ""
 
+  @JsonProperty(value = "traceColorAttribute", defaultValue = "-- No Selection --", required = false)
+  @JsonSchemaTitle("Trace Color Column")
+  @JsonPropertyDescription("Optional - Select a column to use for coloring each radar trace (note: if there are too many traces with distinct coloring values, colors may repeat)")
+  @AutofillAttributeName
+  var traceColorAttribute: String = ""
+
   @JsonProperty(value = "maxNormalize", defaultValue = "true", required = true)
   @JsonSchemaTitle("Max Normalize")
   @JsonPropertyDescription(
@@ -60,7 +66,6 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
   )
   var maxNormalize: Boolean = true
 
-  // fill, line style, line width, show markers, marker size, show legend, hover info, plot background color
   @JsonProperty(value = "fillTrace", defaultValue = "true", required = true)
   @JsonSchemaTitle("Fill Trace")
   @JsonPropertyDescription("Fill the area within each radar trace")
@@ -94,15 +99,17 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
     )
 
   def generateRadarPlotCode(): String = {
+    def toPythonBool(value: Boolean): String = if (value) "True" else "False"
+
     val attrList = selectedAttributes.map(attr => s""""$attr"""").mkString(", ")
     val traceNameCol = traceNameAttribute match {
       case "" | "-- No Selection --" => "None"
       case col                       => s"'$col'"
     }
-    val maxNormalizePython = if (maxNormalize) "True" else "False"
-    val fillTracePython = if (fillTrace) "True" else "False"
-    val showMarkersPython = if (showMarkers) "True" else "False"
-    val showLegendPython = if (showLegend) "True" else "False"
+    val traceColorCol = traceColorAttribute match {
+      case "" | "-- No Selection --" => "None"
+      case col                       => s"'$col'"
+    }
 
     s"""
        |        categories = [$attrList]
@@ -111,10 +118,11 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |            return
        |
        |        trace_name_col = $traceNameCol
-       |        max_normalize = $maxNormalizePython
-       |        fill_trace = $fillTracePython
-       |        show_markers = $showMarkersPython
-       |        show_legend = $showLegendPython
+       |        trace_color_col = $traceColorCol
+       |        max_normalize = ${toPythonBool(maxNormalize)}
+       |        fill_trace = ${toPythonBool(fillTrace)}
+       |        show_markers = ${toPythonBool(showMarkers)}
+       |        show_legend = ${toPythonBool(showLegend)}
        |
        |        selected_table_df = table[categories].astype(float)
        |        selected_table = selected_table_df.values
@@ -124,9 +132,21 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |            else np.full(len(table), "", dtype=object)
        |        )
        |
-       |        hover_texts = selected_table_df.apply(
-       |            lambda row: [f"{attr}: {row[attr]}" for attr in categories], axis=1
-       |        ).tolist()
+       |        trace_colors = [None] * len(table)
+       |        if trace_color_col:
+       |            unique_vals = table[trace_color_col].unique()
+       |            color_map = {val: px.colors.qualitative.Plotly[idx % len(px.colors.qualitative.Plotly)]
+       |                         for idx, val in enumerate(unique_vals)}
+       |            nan_color = '#000000'
+       |            trace_colors = table[trace_color_col].map(color_map).fillna(nan_color).values
+       |
+       |        hover_texts = []
+       |        for idx, row in enumerate(selected_table):
+       |            name_prefix = str(trace_names[idx]) + "<br>" if trace_names[idx] else ""
+       |            row_hover_texts = []
+       |            for attr, value in zip(categories, row):
+       |                row_hover_texts.append(name_prefix + attr + ": " + str(value))
+       |            hover_texts.append(row_hover_texts)
        |
        |        if max_normalize:
        |            max_vals = selected_table_df.max().values
@@ -150,7 +170,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |                name=str(trace_names[idx]) if trace_names[idx] else "",
        |                text=closed_hover_texts,
        |                hoverinfo="text",
-       |                mode="lines+markers" if show_markers else "lines"
+       |                mode="lines+markers" if show_markers else "lines",
+       |                line=dict(color=trace_colors[idx]) if trace_colors[idx] else {},
+       |                marker=dict(color=trace_colors[idx]) if trace_colors[idx] else {}
        |            ))
        |
        |        fig.update_layout(
@@ -167,6 +189,7 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
        |from pytexera import *
        |import numpy as np
        |import plotly.graph_objects as go
+       |import plotly.express as px
        |import plotly.io
        |
        |class ProcessTableOperator(UDFTableOperator):
