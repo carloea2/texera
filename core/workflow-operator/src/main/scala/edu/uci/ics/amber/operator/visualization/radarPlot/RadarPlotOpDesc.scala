@@ -88,7 +88,9 @@ class RadarPlotOpDesc extends PythonOperatorDescriptor {
 
   @JsonProperty(value = "showLegend", defaultValue = "true", required = false)
   @JsonSchemaTitle("Show Legend")
-  @JsonPropertyDescription("Display the legend (note: without the legend, you are unable to selectively hide or show traces in the plot)")
+  @JsonPropertyDescription(
+    "Display the legend (note: without the legend, you are unable to selectively hide or show traces in the plot)"
+  )
   var showLegend: Boolean = true
 
   override def getOutputSchemas(
