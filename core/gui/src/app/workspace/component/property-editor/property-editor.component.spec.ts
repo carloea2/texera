@@ -30,8 +30,6 @@ import { OperatorPropertyEditFrameComponent } from "./operator-property-edit-fra
 import { HttpClientTestingModule } from "@angular/common/http/testing";
 import { OperatorMetadataService } from "../../service/operator-metadata/operator-metadata.service";
 import { StubOperatorMetadataService } from "../../service/operator-metadata/stub-operator-metadata.service";
-import { ComputingUnitStatusService } from "../../service/computing-unit-status/computing-unit-status.service";
-import { MockComputingUnitStatusService } from "../../service/computing-unit-status/mock-computing-unit-status.service";
 
 describe("PropertyEditorComponent", () => {
   let component: PropertyEditorComponent;
@@ -46,7 +44,6 @@ describe("PropertyEditorComponent", () => {
           provide: OperatorMetadataService,
           useClass: StubOperatorMetadataService,
         },
-        { provide: ComputingUnitStatusService, useClass: MockComputingUnitStatusService },
       ],
     }).compileComponents();
   }));

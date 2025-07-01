@@ -25,7 +25,7 @@ import { NzModalService } from "ng-zorro-antd/modal";
 import { FileSelectionComponent } from "../file-selection/file-selection.component";
 import { environment } from "../../../../environments/environment";
 import { DatasetFileNode, getFullPathFromDatasetFileNode } from "../../../common/type/datasetVersionFileTree";
-import { DatasetService } from "../../../dashboard/service/user/dataset/dataset.service";
+import { DatasetService } from "../../../common/service/user/dataset/dataset.service";
 
 @UntilDestroy()
 @Component({
@@ -37,7 +37,6 @@ export class InputAutoCompleteComponent extends FieldType<FieldTypeConfig> {
   constructor(
     private modalService: NzModalService,
     public workflowActionService: WorkflowActionService,
-    public datasetService: DatasetService
   ) {
     super();
   }

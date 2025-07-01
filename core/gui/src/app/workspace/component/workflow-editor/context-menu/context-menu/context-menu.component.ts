@@ -21,10 +21,6 @@ import { Component } from "@angular/core";
 import { OperatorMenuService } from "src/app/workspace/service/operator-menu/operator-menu.service";
 import { WorkflowActionService } from "src/app/workspace/service/workflow-graph/model/workflow-action.service";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
-import { WorkflowResultService } from "src/app/workspace/service/workflow-result/workflow-result.service";
-import { WorkflowResultExportService } from "src/app/workspace/service/workflow-result-export/workflow-result-export.service";
-import { NzModalService } from "ng-zorro-antd/modal";
-import { ResultExportationComponent } from "../../../result-exportation/result-exportation.component";
 import { ValidationWorkflowService } from "src/app/workspace/service/validation/validation-workflow.service";
 
 @UntilDestroy()
@@ -39,9 +35,6 @@ export class ContextMenuComponent {
   constructor(
     public workflowActionService: WorkflowActionService,
     public operatorMenuService: OperatorMenuService,
-    public workflowResultExportService: WorkflowResultExportService,
-    private workflowResultService: WorkflowResultService,
-    private modalService: NzModalService,
     private validationWorkflowService: ValidationWorkflowService
   ) {
     this.registerWorkflowModifiableChangedHandler();
@@ -100,21 +93,5 @@ export class ContextMenuComponent {
       .getWorkflowModificationEnabledStream()
       .pipe(untilDestroyed(this))
       .subscribe(modifiable => (this.isWorkflowModifiable = modifiable));
-  }
-
-  /**
-   * This is the handler for the execution result export button for only highlighted operators.
-   *
-   */
-  public onClickExportHighlightedExecutionResult(): void {
-    this.modalService.create({
-      nzTitle: "Export Highlighted Operators Result",
-      nzContent: ResultExportationComponent,
-      nzData: {
-        workflowName: this.workflowActionService.getWorkflowMetadata()?.name,
-        sourceTriggered: "context-menu",
-      },
-      nzFooter: null,
-    });
   }
 }

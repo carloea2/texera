@@ -45,9 +45,6 @@ import { WorkflowStatusService } from "../workflow-status/workflow-status.servic
 import { intersection } from "../../../common/util/set";
 import { WorkflowSettings } from "../../../common/type/workflow";
 import { DOCUMENT } from "@angular/common";
-import { UserService } from "src/app/common/service/user/user.service";
-import { User } from "src/app/common/type/user";
-import { ComputingUnitStatusService } from "../computing-unit-status/computing-unit-status.service";
 
 // TODO: change this declaration
 export const FORM_DEBOUNCE_TIME_MS = 150;
@@ -97,7 +94,6 @@ export class ExecuteWorkflowService {
     private workflowStatusService: WorkflowStatusService,
     private notificationService: NotificationService,
     @Inject(DOCUMENT) private document: Document,
-    private computingUnitStatusService: ComputingUnitStatusService
   ) {
     workflowWebsocketService.websocketEvent().subscribe(event => {
       switch (event.type) {
@@ -228,14 +224,7 @@ export class ExecuteWorkflowService {
     emailNotificationEnabled: boolean,
     replayExecutionInfo: ReplayExecutionInfo | undefined = undefined
   ): void {
-    // Get the current computing unit ID from the status service
-    const selectedUnit = this.computingUnitStatusService.getSelectedComputingUnitValue();
-    const computingUnitId = selectedUnit?.computingUnit.cuid;
 
-    // Log a warning if no computing unit is selected
-    if (computingUnitId === undefined) {
-      console.warn("No computing unit selected for workflow execution");
-    }
 
     const workflowExecuteRequest = {
       executionName: executionName,
@@ -244,7 +233,7 @@ export class ExecuteWorkflowService {
       replayFromExecution: replayExecutionInfo,
       workflowSettings: workflowSettings,
       emailNotificationEnabled: emailNotificationEnabled,
-      computingUnitId: computingUnitId, // Include the computing unit ID
+
     };
     // wait for the form debounce to complete, then send
     window.setTimeout(() => {

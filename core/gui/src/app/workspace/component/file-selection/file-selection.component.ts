@@ -23,7 +23,7 @@ import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { DatasetFileNode } from "../../../common/type/datasetVersionFileTree";
 import { DatasetVersion } from "../../../common/type/dataset";
 import { DashboardDataset } from "../../../dashboard/type/dashboard-dataset.interface";
-import { DatasetService } from "../../../dashboard/service/user/dataset/dataset.service";
+import { DatasetService } from "../../../common/service/user/dataset/dataset.service";
 import { parseFilePathToDatasetFile } from "../../../common/type/dataset-file";
 
 @UntilDestroy()

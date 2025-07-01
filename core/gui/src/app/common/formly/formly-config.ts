@@ -23,7 +23,6 @@ import { ObjectTypeComponent } from "./object.type";
 import { MultiSchemaTypeComponent } from "./multischema.type";
 import { FormlyFieldConfig } from "@ngx-formly/core";
 import { CodeareaCustomTemplateComponent } from "../../workspace/component/codearea-custom-template/codearea-custom-template.component";
-import { PresetWrapperComponent } from "./preset-wrapper/preset-wrapper.component";
 import { InputAutoCompleteComponent } from "../../workspace/component/input-autocomplete/input-autocomplete.component";
 import { CollabWrapperComponent } from "./collab-wrapper/collab-wrapper/collab-wrapper.component";
 
@@ -78,7 +77,6 @@ export const TEXERA_FORMLY_CONFIG = {
     { name: "inputautocomplete", component: InputAutoCompleteComponent, wrappers: ["form-field"] },
   ],
   wrappers: [
-    { name: "preset-wrapper", component: PresetWrapperComponent },
     { name: "collab-wrapper", component: CollabWrapperComponent },
   ],
 };

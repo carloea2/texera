@@ -66,12 +66,6 @@
       </nz-select>
     </div>
 
-    <texera-user-dataset-version-filetree
-      *ngIf="suggestedFileTreeNodes.length > 0"
-      [isExpandAllAfterViewInit]="true"
-      [fileTreeNodes]="suggestedFileTreeNodes"
-      (selectedTreeNode)="onFileTreeNodeSelected($event)"
-      class="texera-user-dataset-version-filetree">
-    </texera-user-dataset-version-filetree>
+
   </div>
 </nz-spin>

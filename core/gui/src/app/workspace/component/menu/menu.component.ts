@@ -32,28 +32,20 @@ import { ValidationWorkflowService } from "../../service/validation/validation-w
 import { WorkflowActionService } from "../../service/workflow-graph/model/workflow-action.service";
 import { ExecutionState } from "../../types/execute-workflow.interface";
 import { WorkflowWebsocketService } from "../../service/workflow-websocket/workflow-websocket.service";
-import { WorkflowResultExportService } from "../../service/workflow-result-export/workflow-result-export.service";
-import { catchError, debounceTime, filter, mergeMap, tap, take } from "rxjs/operators";
+import { catchError, debounceTime, filter, mergeMap, tap } from "rxjs/operators";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { WorkflowUtilService } from "../../service/workflow-graph/util/workflow-util.service";
-import { WorkflowVersionService } from "../../../dashboard/service/user/workflow-version/workflow-version.service";
-import { UserProjectService } from "../../../dashboard/service/user/project/user-project.service";
+import { WorkflowVersionService } from "../../../common/service/user/workflow-version/workflow-version.service";
 import { NzUploadFile } from "ng-zorro-antd/upload";
 import { saveAs } from "file-saver";
 import { NotificationService } from "src/app/common/service/notification/notification.service";
 import { OperatorMenuService } from "../../service/operator-menu/operator-menu.service";
 import { CoeditorPresenceService } from "../../service/workflow-graph/model/coeditor-presence.service";
-import { firstValueFrom, of, Subscription, timer, interval, Subject } from "rxjs";
+import { firstValueFrom, of, Subscription, timer } from "rxjs";
 import { isDefined } from "../../../common/util/predicate";
 import { NzModalService } from "ng-zorro-antd/modal";
-import { ResultExportationComponent } from "../result-exportation/result-exportation.component";
-import { ReportGenerationService } from "../../service/report-generation/report-generation.service";
-import { ShareAccessComponent } from "src/app/dashboard/component/user/share-access/share-access.component";
 import { PanelService } from "../../service/panel/panel.service";
 import { DASHBOARD_USER_WORKFLOW } from "../../../app-routing.constant";
-import { ComputingUnitStatusService } from "../../service/computing-unit-status/computing-unit-status.service";
-import { ComputingUnitState } from "../../types/computing-unit-connection.interface";
-import { ComputingUnitSelectionComponent } from "../power-button/computing-unit-selection.component";
 
 /**
  * MenuComponent is the top level menu bar that shows
@@ -76,10 +68,9 @@ import { ComputingUnitSelectionComponent } from "../power-button/computing-unit-
   templateUrl: "menu.component.html",
   styleUrls: ["menu.component.scss"],
 })
-export class MenuComponent implements OnInit, OnDestroy {
+export class MenuComponent implements OnInit {
   public executionState: ExecutionState; // set this to true when the workflow is started
   public ExecutionState = ExecutionState; // make Angular HTML access enum definition
-  public ComputingUnitState = ComputingUnitState; // make Angular HTML access enum definition
   public emailNotificationEnabled: boolean = environment.workflowEmailNotificationEnabled;
   public isWorkflowValid: boolean = true; // this will check whether the workflow error or not
   public isWorkflowEmpty: boolean = false;
@@ -111,11 +102,6 @@ export class MenuComponent implements OnInit, OnDestroy {
   public displayParticularWorkflowVersion: boolean = false;
   public onClickRunHandler: () => void;
 
-  // Computing unit status variables
-  private computingUnitStatusSubscription: Subscription = new Subscription();
-  public computingUnitStatus: ComputingUnitState = ComputingUnitState.NoComputingUnit;
-
-  @ViewChild(ComputingUnitSelectionComponent) computingUnitSelectionComponent!: ComputingUnitSelectionComponent;
 
   constructor(
     public executeWorkflowService: ExecuteWorkflowService,
@@ -128,16 +114,12 @@ export class MenuComponent implements OnInit, OnDestroy {
     public workflowVersionService: WorkflowVersionService,
     public userService: UserService,
     private datePipe: DatePipe,
-    public workflowResultExportService: WorkflowResultExportService,
     public workflowUtilService: WorkflowUtilService,
-    private userProjectService: UserProjectService,
     private notificationService: NotificationService,
     public operatorMenu: OperatorMenuService,
     public coeditorPresenceService: CoeditorPresenceService,
     private modalService: NzModalService,
-    private reportGenerationService: ReportGenerationService,
     private panelService: PanelService,
-    private computingUnitStatusService: ComputingUnitStatusService
   ) {
     workflowWebsocketService
       .subscribeToEvent("ExecutionDurationUpdateEvent")
@@ -164,8 +146,6 @@ export class MenuComponent implements OnInit, OnDestroy {
     this.registerWorkflowModifiableChangedHandler();
     this.registerWorkflowIdUpdateHandler();
 
-    // Subscribe to computing unit status changes
-    this.subscribeToComputingUnitStatus();
   }
 
   public ngOnInit(): void {
@@ -187,38 +167,11 @@ export class MenuComponent implements OnInit, OnDestroy {
         this.applyRunButtonBehavior(this.getRunButtonBehavior());
       });
 
-    // Subscribe to WorkflowResultExportService observable
-    this.workflowResultExportService
-      .getExportOnAllOperatorsStatusStream()
-      .pipe(untilDestroyed(this))
-      .subscribe(hasResultToExport => {
-        this.isExportDeactivate = !this.workflowResultExportService.exportExecutionResultEnabled || !hasResultToExport;
-      });
-
     this.registerWorkflowMetadataDisplayRefresh();
     this.handleWorkflowVersionDisplay();
   }
 
-  ngOnDestroy(): void {
-    this.workflowResultExportService.resetFlags();
-    this.computingUnitStatusSubscription.unsubscribe();
-  }
 
-  /**
-   * Subscribe to computing unit status changes from the ComputingUnitStatusService
-   */
-  private subscribeToComputingUnitStatus(): void {
-    // Subscribe to get the computing unit status
-    this.computingUnitStatusSubscription.add(
-      this.computingUnitStatusService
-        .getStatus()
-        .pipe(untilDestroyed(this))
-        .subscribe(status => {
-          this.computingUnitStatus = status;
-          this.applyRunButtonBehavior(this.getRunButtonBehavior());
-        })
-    );
-  }
 
   /**
    * Dynamically adjusts the width of the workflow name input field
@@ -239,23 +192,6 @@ export class MenuComponent implements OnInit, OnDestroy {
     const width = Math.min(tempSpan.offsetWidth + 20, 800); // +20 for padding
     input.style.width = `${width}px`;
     document.body.removeChild(tempSpan);
-  }
-
-  public async onClickOpenShareAccess(): Promise<void> {
-    this.modalService.create({
-      nzContent: ShareAccessComponent,
-      nzData: {
-        writeAccess: this.writeAccess,
-        type: "workflow",
-        id: this.workflowId,
-        allOwners: await firstValueFrom(this.workflowPersistService.retrieveOwners()),
-        inWorkspace: true,
-      },
-      nzFooter: null,
-      nzTitle: "Share this workflow with others",
-      nzCentered: true,
-      nzWidth: "800px",
-    });
   }
 
   // apply a behavior to the run button via bound variables
@@ -292,25 +228,9 @@ export class MenuComponent implements OnInit, OnDestroy {
       };
     }
 
-    // This handles the case where a unit exists but we're not connected to it
-    if (this.computingUnitStatus !== ComputingUnitState.NoComputingUnit && !this.workflowWebsocketService.isConnected) {
-      return {
-        text: "Connecting",
-        icon: "loading",
-        disable: true,
-        onClick: () => {},
-      };
-    }
 
-    // no computing unit, show "Connect" button
-    if (this.computingUnitStatus === ComputingUnitState.NoComputingUnit) {
-      return {
-        text: "Connect",
-        icon: "plus-circle",
-        disable: false,
-        onClick: () => this.runWorkflow(),
-      };
-    }
+
+
 
     // Handle execution states when connected to a running computing unit
     switch (this.executionState) {
@@ -406,45 +326,8 @@ export class MenuComponent implements OnInit, OnDestroy {
     const workflowName = this.currentWorkflowName;
     const WorkflowContent: WorkflowContent = this.workflowActionService.getWorkflowContent();
 
-    // Extract operatorIDs from the parsed payload
-    const operatorIds = WorkflowContent.operators.map((operator: { operatorID: string }) => operator.operatorID);
 
-    // Invokes the method of the report printing service
-    this.reportGenerationService
-      .generateWorkflowSnapshot(workflowName)
-      .pipe(untilDestroyed(this))
-      .subscribe({
-        next: (workflowSnapshotURL: string) => {
-          this.reportGenerationService
-            .getAllOperatorResults(operatorIds)
-            .pipe(untilDestroyed(this))
-            .subscribe({
-              next: (allResults: { operatorId: string; html: string }[]) => {
-                const sortedResults = operatorIds.map(
-                  id => allResults.find(result => result.operatorId === id)?.html || ""
-                );
-                // Generate the final report as HTML after all results are retrieved
-                this.reportGenerationService.generateReportAsHtml(workflowSnapshotURL, sortedResults, workflowName);
-
-                // Close the notification after the report is generated
-                this.notificationService.remove();
-                this.notificationService.success("Report successfully generated.");
-              },
-              error: (error: unknown) => {
-                this.notificationService.error("Error in retrieving operator results: " + (error as Error).message);
-                // Close the notification on error
-                this.notificationService.remove();
-              },
-            });
-        },
-        error: (e: unknown) => {
-          this.notificationService.error((e as Error).message);
-          // Close the notification on error
-          this.notificationService.remove();
-        },
-      });
   }
-
   /**
    * This method will flip the current status of whether to draw grids in jointPaper.
    * This option is only for the current session and will be cleared on refresh.
@@ -464,21 +347,6 @@ export class MenuComponent implements OnInit, OnDestroy {
     this.workflowActionService.autoLayoutWorkflow();
   }
 
-  /**
-   * This is the handler for the execution result export button.
-   *
-   */
-  public onClickExportExecutionResult(): void {
-    this.modalService.create({
-      nzTitle: "Export All Operators Result",
-      nzContent: ResultExportationComponent,
-      nzData: {
-        workflowName: this.currentWorkflowName,
-        sourceTriggered: "menu",
-      },
-      nzFooter: null,
-    });
-  }
 
   /**
    * Restore paper default zoom ratio and paper offset
@@ -573,7 +441,6 @@ export class MenuComponent implements OnInit, OnDestroy {
           this.workflowActionService.setWorkflowMetadata(updatedWorkflow);
         }),
         filter(workflow => isDefined(localPid) && isDefined(workflow.wid)),
-        mergeMap(workflow => this.userProjectService.addWorkflowToProject(localPid!, workflow.wid!)),
         untilDestroyed(this)
       )
       .subscribe({
@@ -697,21 +564,6 @@ export class MenuComponent implements OnInit, OnDestroy {
   runWorkflow(): void {
     // Use the existing flags that were already updated via subscriptions
     if (!this.isWorkflowValid || this.isWorkflowEmpty) {
-      return;
-    }
-
-    // If computing unit manager is enabled and no computing unit is selected
-    if (this.computingUnitStatus === ComputingUnitState.NoComputingUnit) {
-      // Create a default name based on the workflow name
-      const defaultName = this.currentWorkflowName
-        ? `${this.currentWorkflowName}'s Computing Unit`
-        : "New Computing Unit";
-
-      // Set the default name in the computing unit selection component
-      this.computingUnitSelectionComponent.newComputingUnitName = defaultName;
-
-      // Show the existing modal in the ComputingUnitSelectionComponent
-      this.computingUnitSelectionComponent.showAddComputeUnitModalVisible();
       return;
     }
 

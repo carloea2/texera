@@ -24,8 +24,6 @@ import { StubOperatorMetadataService } from "src/app/workspace/service/operator-
 import { ContextMenuComponent } from "./context-menu.component";
 import { HttpClientModule } from "@angular/common/http";
 import { WorkflowActionService } from "src/app/workspace/service/workflow-graph/model/workflow-action.service";
-import { WorkflowResultService } from "src/app/workspace/service/workflow-result/workflow-result.service";
-import { WorkflowResultExportService } from "src/app/workspace/service/workflow-result-export/workflow-result-export.service";
 import { OperatorMenuService } from "src/app/workspace/service/operator-menu/operator-menu.service";
 import { of, BehaviorSubject } from "rxjs";
 import { ReactiveFormsModule } from "@angular/forms";
@@ -38,8 +36,6 @@ describe("ContextMenuComponent", () => {
   let component: ContextMenuComponent;
   let fixture: ComponentFixture<ContextMenuComponent>;
   let workflowActionService: jasmine.SpyObj<WorkflowActionService>;
-  let workflowResultService: jasmine.SpyObj<WorkflowResultService>;
-  let workflowResultExportService: jasmine.SpyObj<WorkflowResultExportService>;
   let operatorMenuService: any; // We'll define this more precisely below
   let jointGraphWrapperSpy: jasmine.SpyObj<any>;
   let validationWorkflowService: jasmine.SpyObj<ValidationWorkflowService>;
@@ -104,8 +100,6 @@ describe("ContextMenuComponent", () => {
       providers: [
         { provide: OperatorMetadataService, useClass: StubOperatorMetadataService },
         { provide: WorkflowActionService, useValue: workflowActionServiceSpy },
-        { provide: WorkflowResultService, useValue: workflowResultServiceSpy },
-        { provide: WorkflowResultExportService, useValue: workflowResultExportServiceSpy },
         { provide: OperatorMenuService, useValue: operatorMenuService },
         { provide: ValidationWorkflowService, useValue: validationWorkflowServiceSpy },
         NzModalService, // Provide NzModalService
@@ -120,10 +114,6 @@ describe("ContextMenuComponent", () => {
     }).compileComponents();
 
     workflowActionService = TestBed.inject(WorkflowActionService) as jasmine.SpyObj<WorkflowActionService>;
-    workflowResultService = TestBed.inject(WorkflowResultService) as jasmine.SpyObj<WorkflowResultService>;
-    workflowResultExportService = TestBed.inject(
-      WorkflowResultExportService
-    ) as jasmine.SpyObj<WorkflowResultExportService>;
     // operatorMenuService is already assigned
     validationWorkflowService = TestBed.inject(ValidationWorkflowService) as jasmine.SpyObj<ValidationWorkflowService>;
 

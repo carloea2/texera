@@ -21,12 +21,7 @@ import { AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, 
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { NzResizeEvent } from "ng-zorro-antd/resizable";
 import { CdkDragDrop, moveItemInArray } from "@angular/cdk/drag-drop";
-import { environment } from "../../../../environments/environment";
 import { OperatorMenuComponent } from "./operator-menu/operator-menu.component";
-import { VersionsListComponent } from "./versions-list/versions-list.component";
-import { WorkflowExecutionHistoryComponent } from "../../../dashboard/component/user/user-workflow/ngbd-modal-workflow-executions/workflow-execution-history.component";
-import { TimeTravelComponent } from "./time-travel/time-travel.component";
-import { SettingsComponent } from "./settings/settings.component";
 import { calculateTotalTranslate3d } from "../../../common/util/panel-dock";
 import { PanelService } from "../../service/panel/panel.service";
 @UntilDestroy()
@@ -49,25 +44,6 @@ export class LeftPanelComponent implements OnDestroy, OnInit, AfterViewInit {
   items = [
     { component: null, title: "", icon: "", enabled: true },
     { component: OperatorMenuComponent, title: "Operators", icon: "appstore", enabled: true },
-    { component: VersionsListComponent, title: "Versions", icon: "schedule", enabled: environment.userSystemEnabled },
-    {
-      component: SettingsComponent,
-      title: "Settings",
-      icon: "setting",
-      enabled: true,
-    },
-    {
-      component: WorkflowExecutionHistoryComponent,
-      title: "Execution History",
-      icon: "history",
-      enabled: environment.workflowExecutionsTrackingEnabled,
-    },
-    {
-      component: TimeTravelComponent,
-      title: "Time Travel",
-      icon: "clock-circle",
-      enabled: environment.userSystemEnabled && environment.timetravelEnabled,
-    },
   ];
 
   order = Array.from({ length: this.items.length - 1 }, (_, index) => index + 1);

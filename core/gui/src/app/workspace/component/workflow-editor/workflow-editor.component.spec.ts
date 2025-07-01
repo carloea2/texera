@@ -24,7 +24,6 @@ import { WorkflowUtilService } from "../../service/workflow-graph/util/workflow-
 import { ComponentFixture, TestBed, waitForAsync } from "@angular/core/testing";
 import { ValidationWorkflowService } from "../../service/validation/validation-workflow.service";
 import { WorkflowEditorComponent } from "./workflow-editor.component";
-import { NzModalCommentBoxComponent } from "./comment-box-modal/nz-modal-comment-box.component";
 import { OperatorMetadataService } from "../../service/operator-metadata/operator-metadata.service";
 import { StubOperatorMetadataService } from "../../service/operator-metadata/stub-operator-metadata.service";
 import { JointUIService } from "../../service/joint-ui/joint-ui.service";
@@ -49,15 +48,13 @@ import { NoopAnimationsModule } from "@angular/platform-browser/animations";
 import { tap } from "rxjs/operators";
 import { UserService } from "src/app/common/service/user/user.service";
 import { StubUserService } from "src/app/common/service/user/stub-user.service";
-import { WorkflowVersionService } from "../../../dashboard/service/user/workflow-version/workflow-version.service";
+import { WorkflowVersionService } from "../../../common/service/user/workflow-version/workflow-version.service";
 import { of } from "rxjs";
 import { NzContextMenuService, NzDropDownModule } from "ng-zorro-antd/dropdown";
 import { RouterTestingModule } from "@angular/router/testing";
 import { createYTypeFromObject } from "../../types/shared-editing.interface";
 import * as jQuery from "jquery";
 import { ContextMenuComponent } from "./context-menu/context-menu/context-menu.component";
-import { ComputingUnitStatusService } from "../../service/computing-unit-status/computing-unit-status.service";
-import { MockComputingUnitStatusService } from "../../service/computing-unit-status/mock-computing-unit-status.service";
 
 describe("WorkflowEditorComponent", () => {
   /**
@@ -87,7 +84,6 @@ describe("WorkflowEditorComponent", () => {
             provide: OperatorMetadataService,
             useClass: StubOperatorMetadataService,
           },
-          { provide: ComputingUnitStatusService, useClass: MockComputingUnitStatusService },
           WorkflowStatusService,
           ExecuteWorkflowService,
         ],
@@ -171,7 +167,7 @@ describe("WorkflowEditorComponent", () => {
 
     beforeEach(waitForAsync(() => {
       TestBed.configureTestingModule({
-        declarations: [WorkflowEditorComponent, NzModalCommentBoxComponent],
+        declarations: [WorkflowEditorComponent],
         imports: [RouterTestingModule, HttpClientTestingModule, NzModalModule, NzDropDownModule, NoopAnimationsModule],
         providers: [
           JointUIService,
@@ -243,33 +239,6 @@ describe("WorkflowEditorComponent", () => {
       jointCellView.$el.trigger("mousedown");
       fixture.detectChanges();
       expect(jointGraphWrapper.getCurrentHighlightedCommentBoxIDs()).toEqual([mockCommentBox.commentBoxID]);
-    });
-
-    it("should open commentBox as NzModal when user double clicks on a commentBox", () => {
-      const modalRef: NzModalRef = nzModalService.create({
-        nzTitle: "CommentBox",
-        nzContent: NzModalCommentBoxComponent,
-        nzData: { commentBox: createYTypeFromObject(mockCommentBox) },
-        nzAutofocus: null,
-        nzFooter: [
-          {
-            label: "OK",
-            onClick: () => {
-              modalRef.destroy();
-            },
-            type: "primary",
-          },
-        ],
-      });
-      spyOn(nzModalService, "create").and.returnValue(modalRef);
-      const jointGraphWrapper = workflowActionService.getJointGraphWrapper();
-      workflowActionService.addCommentBox(mockCommentBox);
-      jointGraphWrapper.highlightCommentBoxes(mockCommentBox.commentBoxID);
-      const jointCellView = component.paper.findViewByModel(mockCommentBox.commentBoxID);
-      jointCellView.$el.trigger("dblclick");
-      expect(nzModalService.create).toHaveBeenCalled();
-      fixture.detectChanges();
-      modalRef.destroy();
     });
 
     it("should unhighlight all highlighted operators when user mouse clicks on the blank space", () => {

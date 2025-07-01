@@ -17,7 +17,6 @@
  * under the License.
  */
 
-import { result } from "lodash";
 import { DashboardEntry } from "./dashboard-entry";
 import { SortMethod } from "./sort-method";
 
@@ -38,7 +37,7 @@ export const toQueryStrings = (
   start?: number,
   count?: number,
   type?: "workflow" | "project" | "file" | "dataset" | null,
-  orderBy?: SortMethod
+  orderBy?: SortMethod,
 ): string => {
   function* getQueryParameters(): Iterable<[name: string, value: string]> {
     if (keywords) {
@@ -67,6 +66,7 @@ export const toQueryStrings = (
       yield ["projectId", id.toString()];
     }
   }
+
   const concatenateQueryStrings = (queryStrings: ReturnType<typeof getQueryParameters>): string =>
     [
       ...queryStrings,
@@ -86,7 +86,7 @@ export const searchTestEntries = (
   keywords: string[],
   params: SearchFilterParameters,
   testEntries: DashboardEntry[],
-  type: "workflow" | "project" | "file" | "dataset" | null
+  type: "workflow" | "project" | "file" | "dataset" | null,
 ): DashboardEntry[] => {
   const endOfDay = (date: Date) => {
     date.setHours(23);
@@ -119,7 +119,7 @@ export const searchTestEntries = (
   }
   if (params.ids.length > 0) {
     testEntries = testEntries.filter(e =>
-      params.ids.some(i => e.type === "workflow" && e.workflow.workflow.wid && e.workflow.workflow.wid.toString() === i)
+      params.ids.some(i => e.type === "workflow" && e.workflow.workflow.wid && e.workflow.workflow.wid.toString() === i),
     );
   }
   if (params.operators.length > 0) {
@@ -127,15 +127,15 @@ export const searchTestEntries = (
       e =>
         e.type === "workflow" &&
         e.workflow.workflow.content.operators.some(operator =>
-          params.operators.some(operatorTypeFilterBy => operatorTypeFilterBy === operator.operatorType)
-        )
+          params.operators.some(operatorTypeFilterBy => operatorTypeFilterBy === operator.operatorType),
+        ),
     );
   }
   if (params.projectIds.length > 0) {
     testEntries = testEntries.filter(
       e =>
         e.type === "workflow" &&
-        e.workflow.projectIDs.some(id => params.projectIds.some(projectIdToFilterBy => projectIdToFilterBy == id))
+        e.workflow.projectIDs.some(id => params.projectIds.some(projectIdToFilterBy => projectIdToFilterBy == id)),
     );
   }
   if (type) {

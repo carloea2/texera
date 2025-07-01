@@ -26,10 +26,3 @@ export interface DashboardProject {
   color: string | null;
   accessLevel: string;
 }
-
-export interface PublicProject {
-  pid: number;
-  name: string;
-  owner: string;
-  creationTime: number;
-}

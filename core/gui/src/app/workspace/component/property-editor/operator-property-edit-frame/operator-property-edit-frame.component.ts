@@ -58,9 +58,8 @@ import { TYPE_CASTING_OPERATOR_TYPE } from "../typecasting-display/type-casting-
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { filter } from "rxjs/operators";
 import { NotificationService } from "../../../../common/service/notification/notification.service";
-import { PresetWrapperComponent } from "src/app/common/formly/preset-wrapper/preset-wrapper.component";
 import { environment } from "src/environments/environment";
-import { WorkflowVersionService } from "../../../../dashboard/service/user/workflow-version/workflow-version.service";
+import { WorkflowVersionService } from "../../../../common/service/user/workflow-version/workflow-version.service";
 import { QuillBinding } from "y-quill";
 import Quill from "quill";
 import QuillCursors from "quill-cursors";
@@ -456,20 +455,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         if (mappedField.type) {
           mappedField.type = "codearea";
         }
-      }
-      // if presetService is ready and operator property allows presets, setup formly field to display presets
-      if (
-        environment.userSystemEnabled &&
-        environment.userPresetEnabled &&
-        mapSource["enable-presets"] !== undefined &&
-        this.currentOperatorId !== undefined
-      ) {
-        PresetWrapperComponent.setupFieldConfig(
-          mappedField,
-          "operator",
-          this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType,
-          this.currentOperatorId
-        );
       }
 
       // TODO: we temporarily disable this due to Yjs update causing issues in Formly.

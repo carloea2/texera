@@ -19,8 +19,7 @@
 
 import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy } from "@angular/core";
 import { fromEvent, merge, Subject } from "rxjs";
-import { NzModalCommentBoxComponent } from "./comment-box-modal/nz-modal-comment-box.component";
-import { NzModalRef, NzModalService } from "ng-zorro-antd/modal";
+import { NzModalService } from "ng-zorro-antd/modal";
 import { environment } from "../../../../environments/environment";
 import { DragDropService } from "../../service/drag-drop/drag-drop.service";
 import { DynamicSchemaService } from "../../service/dynamic-schema/dynamic-schema.service";
@@ -34,7 +33,7 @@ import { LogicalPort, OperatorLink } from "../../types/workflow-common.interface
 import { auditTime, filter, map, takeUntil } from "rxjs/operators";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { UndoRedoService } from "../../service/undo-redo/undo-redo.service";
-import { WorkflowVersionService } from "../../../dashboard/service/user/workflow-version/workflow-version.service";
+import { WorkflowVersionService } from "../../../common/service/user/workflow-version/workflow-version.service";
 import { OperatorMenuService } from "../../service/operator-menu/operator-menu.service";
 import { NzContextMenuService } from "ng-zorro-antd/dropdown";
 import { ActivatedRoute, Router } from "@angular/router";
@@ -377,7 +376,6 @@ export class WorkflowEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private handleCellHighlight(): void {
-    this.handleHighlightMouseDBClickInput();
     this.handleHighlightMouseInput();
     this.handleElementHightlightEvent();
   }
@@ -445,24 +443,7 @@ export class WorkflowEditorComponent implements AfterViewInit, OnDestroy {
       });
   }
 
-  private handleHighlightMouseDBClickInput(): void {
-    // on user mouse double-clicks a comment box, open that comment box
-    fromJointPaperEvent(this.paper, "cell:pointerdblclick")
-      .pipe(untilDestroyed(this))
-      .subscribe(event => {
-        const clickedCommentBox = event[0].model;
-        if (
-          clickedCommentBox.isElement() &&
-          this.workflowActionService.getTexeraGraph().hasCommentBox(clickedCommentBox.id.toString())
-        ) {
-          this.wrapper.setMultiSelectMode(<boolean>event[1].shiftKey);
-          const elementID = event[0].model.id.toString();
-          if (this.workflowActionService.getTexeraGraph().hasCommentBox(elementID)) {
-            this.openCommentBox(elementID);
-          }
-        }
-      });
-  }
+
 
   /**
    * Handles user mouse down events to trigger logically highlight and unhighlight an operator or group.
@@ -618,25 +599,6 @@ export class WorkflowEditorComponent implements AfterViewInit, OnDestroy {
           });
         });
       });
-  }
-
-  private openCommentBox(commentBoxID: string): void {
-    const commentBox = this.workflowActionService.getTexeraGraph().getSharedCommentBoxType(commentBoxID);
-    const modalRef: NzModalRef = this.nzModalService.create({
-      // modal title
-      nzTitle: "Comments",
-      nzContent: NzModalCommentBoxComponent,
-      // set component @Input attributes
-      nzData: { commentBox: commentBox }, // set the index value and page size to the modal for navigation
-      // prevent browser focusing close button (ugly square highlight)
-      nzAutofocus: null,
-      // modal footer buttons
-      nzFooter: null,
-    });
-    modalRef.afterClose.pipe(untilDestroyed(this)).subscribe(() => {
-      this.wrapper.unhighlightCommentBoxes(commentBoxID);
-      this.setURLFragment(null);
-    });
   }
 
   private handleOperatorSuggestionHighlightEvent(): void {
@@ -1286,17 +1248,6 @@ export class WorkflowEditorComponent implements AfterViewInit, OnDestroy {
           this.setURLFragment(highlightedIds[0]);
         } else {
           this.setURLFragment(null);
-        }
-      });
-
-    // special case: open comment box when URL fragment is set
-    this.workflowActionService
-      .getTexeraGraph()
-      .getCommentBoxAddStream()
-      .pipe(untilDestroyed(this))
-      .subscribe(box => {
-        if (this.route.snapshot.fragment === box.commentBoxID) {
-          this.openCommentBox(box.commentBoxID);
         }
       });
   }

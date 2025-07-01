@@ -138,15 +138,5 @@
     execute to this operator
   </li>
 
-  <li
-    *ngIf="workflowResultExportService.hasResultToExportOnHighlightedOperators &&
-           this.workflowResultExportService.exportExecutionResultEnabled"
-    (click)="onClickExportHighlightedExecutionResult()"
-    nz-menu-item>
-    <span
-      nz-icon
-      nzType="cloud"
-      nzTheme="outline"></span>
-    Export result
-  </li>
+
 </ul>

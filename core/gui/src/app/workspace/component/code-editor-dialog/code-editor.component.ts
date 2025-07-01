@@ -20,7 +20,7 @@
 import { AfterViewInit, Component, ComponentRef, ElementRef, OnDestroy, Type, ViewChild } from "@angular/core";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { WorkflowActionService } from "../../service/workflow-graph/model/workflow-action.service";
-import { WorkflowVersionService } from "../../../dashboard/service/user/workflow-version/workflow-version.service";
+import { WorkflowVersionService } from "../../../common/service/user/workflow-version/workflow-version.service";
 import { YText } from "yjs/dist/src/types/YText";
 import { getWebsocketUrl } from "src/app/common/util/url";
 import { MonacoBinding } from "y-monaco";
@@ -30,7 +30,6 @@ import { DomSanitizer, SafeStyle } from "@angular/platform-browser";
 import { Coeditor } from "../../../common/type/user";
 import { YType } from "../../types/shared-editing.interface";
 import { FormControl } from "@angular/forms";
-import { AIAssistantService, TypeAnnotationResponse } from "../../service/ai-assistant/ai-assistant.service";
 import { AnnotationSuggestionComponent } from "./annotation-suggestion.component";
 import { MonacoEditorLanguageClientWrapper, UserConfig } from "monaco-editor-wrapper";
 import * as monaco from "monaco-editor";
@@ -39,8 +38,6 @@ import "@codingame/monaco-vscode-r-default-extension";
 import "@codingame/monaco-vscode-java-default-extension";
 import { isDefined } from "../../../common/util/predicate";
 import { filter, switchMap } from "rxjs/operators";
-import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
-import { CodeDebuggerComponent } from "./code-debugger.component";
 import { MonacoEditor } from "monaco-breakpoints/dist/types";
 
 export const LANGUAGE_SERVER_CONNECTION_TIMEOUT_MS = 1000;
@@ -63,7 +60,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
   @ViewChild("editor", { static: true }) editorElement!: ElementRef;
   @ViewChild("container", { static: true }) containerElement!: ElementRef;
   @ViewChild(AnnotationSuggestionComponent) annotationSuggestion!: AnnotationSuggestionComponent;
-  @ViewChild(BreakpointConditionInputComponent) breakpointConditionInput!: BreakpointConditionInputComponent;
   private code?: YText;
   private workflowVersionStreamSubject: Subject<void> = new Subject<void>();
   public currentOperatorId!: string;
@@ -107,7 +103,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     private workflowActionService: WorkflowActionService,
     private workflowVersionService: WorkflowVersionService,
     public coeditorPresenceService: CoeditorPresenceService,
-    private aiAssistantService: AIAssistantService
   ) {
     this.currentOperatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     const operatorType = this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType;
@@ -257,8 +252,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
           new Set([editor]),
           this.workflowActionService.getTexeraGraph().getSharedModelAwareness()
         );
-        this.setupAIAssistantActions(editor);
-        this.initCodeDebuggerComponent(editor);
       });
   }
 
@@ -297,171 +290,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     };
 
     this.editorWrapper.initAndStart(userConfig, this.editorElement.nativeElement);
-  }
-
-  private initCodeDebuggerComponent(editor: MonacoEditor) {
-    this.codeDebuggerComponent = CodeDebuggerComponent;
-    this.editorToPass = editor;
-  }
-
-  private setupAIAssistantActions(editor: MonacoEditor) {
-    // Check if the AI provider is "openai"
-    this.aiAssistantService
-      .checkAIAssistantEnabled()
-      .pipe(untilDestroyed(this))
-      .subscribe({
-        next: (isEnabled: string) => {
-          if (isEnabled === "OpenAI") {
-            // "Add Type Annotation" Button
-            editor.addAction({
-              id: "type-annotation-action",
-              label: "Add Type Annotation",
-              contextMenuGroupId: "1_modification",
-              contextMenuOrder: 1.0,
-              run: (editor: MonacoEditor) => {
-                // User selected code (including range and content)
-                const selection = editor.getSelection();
-                const model = editor.getModel();
-                if (!model || !selection) {
-                  return;
-                }
-                // All the code in Python UDF
-                const allCode = model.getValue();
-                // Content of user selected code
-                const userSelectedCode = model.getValueInRange(selection);
-                // Start line of the selected code
-                const lineNumber = selection.startLineNumber;
-                this.handleTypeAnnotation(userSelectedCode, selection, editor, lineNumber, allCode);
-              },
-            });
-          }
-
-          // "Add All Type Annotation" Button
-          editor.addAction({
-            id: "all-type-annotation-action",
-            label: "Add All Type Annotations",
-            contextMenuGroupId: "1_modification",
-            contextMenuOrder: 1.1,
-            run: (editor: MonacoEditor) => {
-              const selection = editor.getSelection();
-              const model = editor.getModel();
-              if (!model || !selection) {
-                return;
-              }
-
-              const selectedCode = model.getValueInRange(selection);
-              const allCode = model.getValue();
-
-              this.aiAssistantService
-                .locateUnannotated(selectedCode, selection.startLineNumber)
-                .pipe(untilDestroyed(this))
-                .subscribe(variablesWithoutAnnotations => {
-                  // If no unannotated variable, then do nothing.
-                  if (variablesWithoutAnnotations.length == 0) {
-                    return;
-                  }
-
-                  let offset = 0;
-                  let lastLine: number | undefined;
-
-                  this.isMultipleVariables = true;
-                  this.userResponseSubject = new Subject<void>();
-
-                  const processNextVariable = (index: number) => {
-                    if (index >= variablesWithoutAnnotations.length) {
-                      this.isMultipleVariables = false;
-                      this.userResponseSubject = undefined;
-                      return;
-                    }
-
-                    const currVariable = variablesWithoutAnnotations[index];
-
-                    const variableCode = currVariable.name;
-                    const variableLineNumber = currVariable.startLine;
-
-                    // Update range
-                    if (lastLine !== undefined && lastLine === variableLineNumber) {
-                      offset += this.currentSuggestion.length;
-                    } else {
-                      offset = 0;
-                    }
-
-                    const variableRange = new monaco.Range(
-                      currVariable.startLine,
-                      currVariable.startColumn + offset,
-                      currVariable.endLine,
-                      currVariable.endColumn + offset
-                    );
-
-                    const highlight = editor.createDecorationsCollection([
-                      {
-                        range: variableRange,
-                        options: {
-                          hoverMessage: { value: "Argument without Annotation" },
-                          isWholeLine: false,
-                          className: "annotation-highlight",
-                        },
-                      },
-                    ]);
-
-                    this.handleTypeAnnotation(variableCode, variableRange, editor, variableLineNumber, allCode);
-
-                    lastLine = variableLineNumber;
-
-                    // Make sure the currVariable will not go to the next one until the user click the accept/decline button
-                    if (isDefined(this.userResponseSubject)) {
-                      this.userResponseSubject
-                        .pipe(take(1)) // Only take one response (accept/decline)
-                        .pipe(untilDestroyed(this))
-                        .subscribe(() => {
-                          highlight.clear();
-                          processNextVariable(index + 1);
-                        });
-                    }
-                  };
-                  processNextVariable(0);
-                });
-            },
-          });
-        },
-      });
-  }
-
-  private handleTypeAnnotation(
-    code: string,
-    range: monaco.Range,
-    editor: MonacoEditor,
-    lineNumber: number,
-    allCode: string
-  ): void {
-    this.aiAssistantService
-      .getTypeAnnotations(code, lineNumber, allCode)
-      .pipe(untilDestroyed(this))
-      .subscribe((response: TypeAnnotationResponse) => {
-        const choices = response.choices || [];
-        if (!(choices.length > 0 && choices[0].message && choices[0].message.content)) {
-          throw Error("Error: OpenAI response does not contain valid message content " + response);
-        }
-        this.currentSuggestion = choices[0].message.content.trim();
-        this.currentCode = code;
-        this.currentRange = range;
-
-        const position = editor.getScrolledVisiblePosition(range.getStartPosition());
-        if (position) {
-          this.suggestionTop = position.top + 100;
-          this.suggestionLeft = position.left + 100;
-        }
-
-        this.showAnnotationSuggestion = true;
-
-        if (!this.annotationSuggestion) {
-          return;
-        }
-        this.annotationSuggestion.code = this.currentCode;
-        this.annotationSuggestion.suggestion = this.currentSuggestion;
-        this.annotationSuggestion.top = this.suggestionTop;
-        this.annotationSuggestion.left = this.suggestionLeft;
-      });
   }
 
   // Called when the user clicks the "accept" button

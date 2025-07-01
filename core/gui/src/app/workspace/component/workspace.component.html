@@ -23,15 +23,9 @@
     [nzSize]="'large'"
     nzTip="Loading workflow..."></nz-spin>
 </div>
-<div id="result">
-  <texera-result-panel></texera-result-panel>
-</div>
+
 <texera-workflow-editor></texera-workflow-editor>
-<texera-menu
-  [writeAccess]="writeAccess"
-  [pid]="pid">
-</texera-menu>
-<texera-mini-map class="box"></texera-mini-map>
+<texera-menu [writeAccess]="writeAccess" [pid]="pid"></texera-menu>
 <texera-left-panel> </texera-left-panel>
 <texera-property-editor></texera-property-editor>
 <ng-template #codeEditor></ng-template>
