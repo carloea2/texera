@@ -31,7 +31,7 @@ import edu.uci.ics.amber.util.JSONUtils.objectMapper
 class SleepOpDesc extends LogicalOp {
 
   @JsonProperty(required = true)
-  @JsonSchemaTitle("Sleep")
+  @JsonSchemaTitle("n")
   var time: Int = _
 
   override def getPhysicalOp(
@@ -58,7 +58,7 @@ class SleepOpDesc extends LogicalOp {
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
       "Sleep",
-      "Limit the number of output rows",
+      "Sleep n seconds between each tuple",
       OperatorGroupConstants.CONTROL_GROUP,
       inputPorts = List(InputPort()),
       outputPorts = List(OutputPort())
