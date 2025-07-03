@@ -36,7 +36,7 @@ import edu.uci.ics.amber.operator.metadata.annotations.{
 }
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 
-class SklearnLRTrainingClassifierOpDesc extends PythonOperatorDescriptor {
+class SklearnRFTrainingClassifierOpDesc extends PythonOperatorDescriptor {
 
   @JsonSchemaTitle("Target Attribute")
   @JsonPropertyDescription("Attribute in your dataset corresponding to target.")
@@ -80,10 +80,10 @@ class SklearnLRTrainingClassifierOpDesc extends PythonOperatorDescriptor {
   val tfidfTransformer: Boolean = false
 
   @JsonIgnore
-  def getImportStatements = "from sklearn.linear_model import LogisticRegression"
+  def getImportStatements = "from sklearn.ensemble import RandomForestClassifier"
 
   @JsonIgnore
-  def getUserFriendlyModelName = "Logistic Regression Training"
+  def getUserFriendlyModelName = "RandomForest Training"
 
   override def generatePythonCode(): String =
     s"""$getImportStatements

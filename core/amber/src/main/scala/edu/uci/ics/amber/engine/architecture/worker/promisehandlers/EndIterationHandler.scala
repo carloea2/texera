@@ -42,7 +42,7 @@ trait EndIterationHandler {
         workerInterface.nextIteration(EmptyRequest(), mkContext(request.worker))
       case _ =>
         dp.processOnFinish()
-        dp.outputManager.outputIterator.appendSpecialTupleToEnd(FinalizeIteration(request.worker))
+        dp.outputManager.finalizeIteration(request.worker)
     }
     EmptyReturn()
   }

@@ -52,7 +52,8 @@ import edu.uci.ics.amber.operator.randomksampling.RandomKSamplingOpDesc
 import edu.uci.ics.amber.operator.regex.RegexOpDesc
 import edu.uci.ics.amber.operator.reservoirsampling.ReservoirSamplingOpDesc
 import edu.uci.ics.amber.operator.sklearn._
-import edu.uci.ics.amber.operator.sklearn.training.SklearnLRTrainingClassifierOpDesc
+import edu.uci.ics.amber.operator.sklearn.testing.SklearnTestingOpDesc
+import edu.uci.ics.amber.operator.sklearn.training.SklearnRFTrainingClassifierOpDesc
 import edu.uci.ics.amber.operator.sleep.SleepOpDesc
 import edu.uci.ics.amber.operator.sort.SortOpDesc
 import edu.uci.ics.amber.operator.sortPartitions.SortPartitionsOpDesc
@@ -253,7 +254,7 @@ trait StateTransferFunc
     new Type(value = classOf[SklearnBaggingOpDesc], name = "SklearnBagging"),
     new Type(value = classOf[SklearnGradientBoostingOpDesc], name = "SklearnGradientBoosting"),
     new Type(value = classOf[SklearnAdaptiveBoostingOpDesc], name = "SklearnAdaptiveBoosting"),
-    new Type(value = classOf[SklearnLRTrainingClassifierOpDesc], name = "SklearnLRTraining"),
+    new Type(value = classOf[SklearnRFTrainingClassifierOpDesc], name = "SklearnRFTraining"),
     new Type(value = classOf[SklearnExtraTreesOpDesc], name = "SklearnExtraTrees"),
     new Type(value = classOf[SklearnGaussianNaiveBayesOpDesc], name = "SklearnGaussianNaiveBayes"),
     new Type(
@@ -270,6 +271,7 @@ trait StateTransferFunc
     ),
     new Type(value = classOf[SklearnDummyClassifierOpDesc], name = "SklearnDummyClassifier"),
     new Type(value = classOf[SklearnPredictionOpDesc], name = "SklearnPrediction"),
+    new Type(value = classOf[SklearnTestingOpDesc], name = "SklearnTesting"),
     new Type(
       value = classOf[HuggingFaceSentimentAnalysisOpDesc],
       name = "HuggingFaceSentimentAnalysis"
