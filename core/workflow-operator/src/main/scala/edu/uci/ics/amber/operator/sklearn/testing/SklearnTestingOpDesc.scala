@@ -46,7 +46,6 @@ class SklearnTestingOpDesc extends PythonOperatorDescriptor {
   override def generatePythonCode(): String =
     s"""from pytexera import *
        |from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-       |from sklearn.pipeline import Pipeline
        |class ProcessTupleOperator(UDFOperatorV2):
        |    @overrides
        |    def open(self) -> None:
@@ -60,9 +59,7 @@ class SklearnTestingOpDesc extends PythonOperatorDescriptor {
        |            table = Table(self.data)
        |            Y = table["$target"]
        |            X = table.drop("$target", axis=1)
-       |
        |            predictions = model.predict(X)
-       |
        |            tuple_["accuracy"] = round(accuracy_score(Y, predictions), 4)
        |            tuple_["f1"] = f1_score(Y, predictions)
        |            tuple_["precision"] = precision_score(Y, predictions)
@@ -72,7 +69,7 @@ class SklearnTestingOpDesc extends PythonOperatorDescriptor {
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
       "Sklearn Testing",
-      "Skleanr Testing Operator",
+      "Sklearn Testing Operator",
       OperatorGroupConstants.SKLEARN_GROUP,
       inputPorts = List(
         InputPort(PortIdentity(), "data"),
