@@ -73,7 +73,12 @@ class SklearnTestingOpDesc extends PythonOperatorDescriptor {
       OperatorGroupConstants.SKLEARN_GROUP,
       inputPorts = List(
         InputPort(PortIdentity(), "data"),
-        InputPort(PortIdentity(1), "model", dependencies = List(PortIdentity()), allowMultiLinks = true)
+        InputPort(
+          PortIdentity(1),
+          "model",
+          dependencies = List(PortIdentity()),
+          allowMultiLinks = true
+        )
       ),
       outputPorts = List(OutputPort())
     )
