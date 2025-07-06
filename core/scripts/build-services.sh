@@ -30,3 +30,4 @@ rm computing-unit-managing-service/target/universal/computing-unit-managing-serv
 
 unzip amber/target/universal/amber-*.zip -d amber/target/
 rm amber/target/universal/amber-*.zip
+
