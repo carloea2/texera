@@ -1,4 +1,4 @@
-frontend:
+gui:
   - changed-files:
       - any-glob-to-any-file:
           - 'core/gui/**'
