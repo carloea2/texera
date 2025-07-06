@@ -62,6 +62,6 @@ feature:
 fix:
   - head-branch: '^fix'
 
-refactoring:
+refactor:
   - head-branch: '^refactor'
 
