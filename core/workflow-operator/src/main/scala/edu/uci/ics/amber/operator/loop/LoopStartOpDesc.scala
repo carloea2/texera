@@ -51,6 +51,7 @@ class LoopStartOpDesc extends LogicalOp {
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
       .withSuggestedWorkerNum(1)
+      .withParallelizable(false)
   }
 
   override def operatorInfo: OperatorInfo =
