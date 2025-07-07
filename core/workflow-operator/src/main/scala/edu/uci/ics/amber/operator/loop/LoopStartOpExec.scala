@@ -42,4 +42,6 @@ class LoopStartOpExec(descString: String) extends OperatorExecutor {
     currentIteration += 1
     data.iterator
   }
+
+  override def close(): Unit = data.clear()
 }
