@@ -64,6 +64,13 @@ class Operator(ABC):
         """
         pass
 
+    def reset(self) -> None:
+        """
+        Reset the operator to its initial state.
+        """
+        self.close()
+        self.open()
+
     def process_state(self, state: State, port: int) -> Optional[State]:
         """
         Process an input State from the given link.

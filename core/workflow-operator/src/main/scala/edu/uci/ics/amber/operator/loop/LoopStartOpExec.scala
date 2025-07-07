@@ -43,5 +43,4 @@ class LoopStartOpExec(descString: String) extends OperatorExecutor {
     data.iterator
   }
 
-  override def close(): Unit = data.clear()
 }

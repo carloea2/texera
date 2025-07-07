@@ -295,8 +295,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
             EmbeddedControlMessageType.PORT_ALIGNMENT,
             EndIterationRequest(worker_id),
         )
-        self.context.executor_manager.executor.close()
-        self.context.executor_manager.executor.open()
+        self.context.executor_manager.executor.reset()
 
     def _process_ecm(self, ecm_element: ECMElement):
         """
