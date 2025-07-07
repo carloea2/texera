@@ -25,7 +25,6 @@ from core.models.internal_marker import EndIteration
 
 class EndIterationHandler(ControlHandler):
     async def end_iteration(self, req: EndIterationRequest) -> EmptyReturn:
-        print("ergerhgerherh")
         self.context.tuple_processing_manager.current_internal_marker = EndIteration(
             req.worker
         )
