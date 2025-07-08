@@ -76,6 +76,7 @@ class WorkflowAggregatedState(betterproto.Enum):
     FAILED = 7
     UNKNOWN = 8
     KILLED = 9
+    TERMINATED = 10
 
 
 @dataclass(eq=False, repr=False)
@@ -952,6 +953,23 @@ class WorkerServiceStub(betterproto.ServiceStub):
             metadata=metadata,
         )
 
+    async def end_worker(
+        self,
+        empty_request: "EmptyRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "EmptyReturn":
+        return await self._unary_unary(
+            "/edu.uci.ics.amber.engine.architecture.rpc.WorkerService/EndWorker",
+            empty_request,
+            EmptyReturn,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
     async def start_channel(
         self,
         empty_request: "EmptyRequest",
@@ -1566,6 +1584,9 @@ class WorkerServiceBase(ServiceBase):
     ) -> "WorkerStateResponse":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
+    async def end_worker(self, empty_request: "EmptyRequest") -> "EmptyReturn":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
     async def start_channel(self, empty_request: "EmptyRequest") -> "EmptyReturn":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
@@ -1690,6 +1711,13 @@ class WorkerServiceBase(ServiceBase):
     ) -> None:
         request = await stream.recv_message()
         response = await self.start_worker(request)
+        await stream.send_message(response)
+
+    async def __rpc_end_worker(
+        self, stream: "grpclib.server.Stream[EmptyRequest, EmptyReturn]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.end_worker(request)
         await stream.send_message(response)
 
     async def __rpc_start_channel(
@@ -1827,6 +1855,12 @@ class WorkerServiceBase(ServiceBase):
                 grpclib.const.Cardinality.UNARY_UNARY,
                 EmptyRequest,
                 WorkerStateResponse,
+            ),
+            "/edu.uci.ics.amber.engine.architecture.rpc.WorkerService/EndWorker": grpclib.const.Handler(
+                self.__rpc_end_worker,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                EmptyRequest,
+                EmptyReturn,
             ),
             "/edu.uci.ics.amber.engine.architecture.rpc.WorkerService/StartChannel": grpclib.const.Handler(
                 self.__rpc_start_channel,
