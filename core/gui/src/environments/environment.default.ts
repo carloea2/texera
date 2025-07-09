@@ -32,7 +32,7 @@ export const defaultEnvironment = {
   /**
    * whether export execution result is supported
    */
-  exportExecutionResultEnabled: false,
+  exportExecutionResultEnabled: true,
 
   /**
    * whether automatically correcting attribute name on change is enabled
@@ -104,7 +104,7 @@ export const defaultEnvironment = {
   /**
    * the file size limit for dataset upload
    */
-  singleFileUploadMaximumSizeMB: 20,
+  singleFileUploadMaximumSizeMB: 2000000,
 
   /**
    * the maximum number of file chunks that can be held in the memory;
