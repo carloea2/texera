@@ -48,7 +48,7 @@ export const defaultEnvironment = {
   /**
    * whether workflow computing unit manager is enabled (requires k8s)
    */
-  computingUnitManagerEnabled: false,
+  computingUnitManagerEnabled: true,
 
   /**
    * whether selecting files from datasets instead of the local file system.
