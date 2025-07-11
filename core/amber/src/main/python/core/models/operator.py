@@ -122,6 +122,9 @@ class TupleOperatorV2(Operator):
         """
         yield
 
+    def on_finish_all(self):
+        yield
+
 
 class SourceOperator(TupleOperatorV2):
     __internal_is_source = True

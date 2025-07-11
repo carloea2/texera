@@ -87,7 +87,7 @@ class DataProcessor(Runnable, Stoppable):
                 elif isinstance(marker, EndOfInputPort):
                     self._set_output_state(executor.produce_state_on_finish(port_id))
                     self._switch_context()
-                    if isinstance(executor, TableOperator):
+                    if isinstance(executor, TableOperator) and port_id != 1:
                         self._set_output_tuple(executor.on_finish(port_id))
                         if self._context.input_manager.all_ports_completed:
                             self._set_output_tuple(executor.on_finish_all())
@@ -120,7 +120,7 @@ class DataProcessor(Runnable, Stoppable):
                     self._context.worker_id,
                     self._context.console_message_manager.print_buf,
                 ):
-                    if isinstance(executor, TableOperator):
+                    if isinstance(executor, TableOperator) and port_id != 1:
                         self._set_output_tuple(executor.process_tuple(tuple_, port_id))
                     else:
                         method_name = f'process_tuple_{port_id}'

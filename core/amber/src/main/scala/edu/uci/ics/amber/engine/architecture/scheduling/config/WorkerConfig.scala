@@ -27,17 +27,21 @@ import edu.uci.ics.amber.engine.architecture.scheduling.Region
 
 case object WorkerConfig {
   def generateWorkerConfigs(physicalOp: PhysicalOp, region:Region): List[WorkerConfig] = {
-    val workerCount = if (physicalOp.parallelizable) {
-      physicalOp.suggestedWorkerNum match {
-        // Keep suggested number of workers
-        case Some(num) => num
-        // If no suggested number, use default value
-        case None => AmberConfig.numWorkerPerOperatorByDefault
+
+    val workerCount =
+      if (region.id.id == 0 && physicalOp.isPythonBased) {
+        4
+      } else if (physicalOp.parallelizable) {
+        physicalOp.suggestedWorkerNum match {
+          // Keep suggested number of workers
+          case Some(num) => num
+          // If no suggested number, use default value
+          case None => AmberConfig.numWorkerPerOperatorByDefault
+        }
+      } else {
+        // Non parallelizable operator has only 1 worker
+        1
       }
-    } else {
-      // Non parallelizable operator has only 1 worker
-      1
-    }
 
     (0 until workerCount).toList.map(idx =>
       WorkerConfig(
