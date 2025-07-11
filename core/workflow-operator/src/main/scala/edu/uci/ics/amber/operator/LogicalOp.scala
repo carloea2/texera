@@ -64,6 +64,7 @@ import edu.uci.ics.amber.operator.randomksampling.RandomKSamplingOpDesc
 import edu.uci.ics.amber.operator.regex.RegexOpDesc
 import edu.uci.ics.amber.operator.reservoirsampling.ReservoirSamplingOpDesc
 import edu.uci.ics.amber.operator.sklearn._
+import edu.uci.ics.amber.operator.sleep.SleepOpDesc
 import edu.uci.ics.amber.operator.sklearn.training.{
   SklearnTrainingAdaptiveBoostingOpDesc,
   SklearnTrainingBaggingOpDesc,
@@ -218,6 +219,7 @@ trait StateTransferFunc
     new Type(value = classOf[LimitOpDesc], name = "Limit"),
     new Type(value = classOf[LoopStartOpDesc], name = "LoopStart"),
     new Type(value = classOf[LoopEndOpDesc], name = "LoopEnd"),
+    new Type(value = classOf[SleepOpDesc], name = "Sleep"),
     new Type(value = classOf[RandomKSamplingOpDesc], name = "RandomKSampling"),
     new Type(value = classOf[ReservoirSamplingOpDesc], name = "ReservoirSampling"),
     new Type(value = classOf[HashJoinOpDesc[String]], name = "HashJoin"),
