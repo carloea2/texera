@@ -78,14 +78,11 @@ class WorkflowCompiler(
               if (physicalOp.isPythonBased) {
                 val code = physicalOp.getCode
 
-                // add a try catch block to handle code generation errors
-
 
                 val backend = HttpURLConnectionBackend()
                 // Use ujson to build and serialize JSON safely
                 val json = ujson.Obj(
-                  "code" -> code,
-                  "line_number" -> 3
+                  "code" -> code
                 )
 
                 try {
