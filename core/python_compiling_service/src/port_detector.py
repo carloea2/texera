@@ -264,6 +264,7 @@ def f(x, y):
     tree = ast.parse(source_code)
     # graph = ast_to_graphviz(tree)
     # graph.render('ast_output', view=True)  # This will create ast_output.pdf and open it
+    graph.render('output/ast_output', view=True)  # This will create ast_output.pdf and open it
 
     port_origin, stmt_to_port = detect_ports_and_classify_statements(source_code)
     # print(port_origin)
@@ -327,6 +328,8 @@ def f(x, y):
     # Build and visualize the variable dependency graph
     # var_graph = build_variable_dependency_graph(source_code)
     # var_graph.render('variable_dependency_graph', view=True)
+    var_graph = build_variable_dependency_graph(source_code)
+    var_graph.render('output/variable_dependency_graph', view=True)
 
     import ast
 
@@ -379,6 +382,7 @@ def visualize_dep_graph_with_lineno(dep_graph, node_labels):
             if dep in node_labels:
                 g.edge(dep, var)
     g.render('ssa_variable_dependency_graph', view=True)
+    g.render('output/ssa_variable_dependency_graph', view=True)
 
 # Example usage:
 tree = ast.parse(source_code)
