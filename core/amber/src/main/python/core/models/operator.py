@@ -254,11 +254,14 @@ class GeneralOperator(Operator):
     """
     def __init__(self):
         super().__init__()
-        self.__internal_is_source: bool = False
+        self.__internal_is_source: bool = True
         self.TABLE_DATA_INTERNAL: Mapping[int, List[Tuple]] = defaultdict(list)
 
     def collect(self, tuple_: Tuple, port: int) -> None:
         self.TABLE_DATA_INTERNAL[port].append(tuple_)
+        yield
+
+    def process(self):
         yield
 
     def on_finish_all(self):

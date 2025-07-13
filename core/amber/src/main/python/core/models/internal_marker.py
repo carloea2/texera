@@ -36,16 +36,14 @@ class StartOfInputPort(InternalMarker):
     pass
 
 
+
 @dataclass
 class EndOfInputPort(InternalMarker):
     pass
 
 
-@dataclass
-class StartOfOutputPorts(InternalMarker):
-    pass
-
 
 @dataclass
-class EndOfOutputPorts(InternalMarker):
+class EndOfInputPorts(InternalMarker):
     pass
+

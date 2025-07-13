@@ -72,7 +72,6 @@ public enum AttributeType implements Serializable {
     TIMESTAMP("timestamp", Timestamp.class),
     BINARY("binary", byte[].class),
     ANY("ANY", Object.class);
-
     private final String name;
     private final Class<?> fieldClass;
 
