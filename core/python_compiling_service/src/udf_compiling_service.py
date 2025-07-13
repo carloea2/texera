@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-HTTP Service for Code Splitting API
+HTTP Service for UDF Compiling API
 
 This service provides an API endpoint that receives Python code snippets
-and returns the compiled split code using the Split() function.
+and returns the compiled operator class using the compile() function.
 """
 
 from flask import Flask, request, jsonify
@@ -16,7 +16,7 @@ import os
 # Add the src directory to the path so we can import our modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from UDF_splitter import Split
+from UDF_splitter import compile
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -26,14 +26,14 @@ def health_check():
     """Health check endpoint."""
     return jsonify({
         'status': 'healthy',
-        'service': 'code-splitter-api',
+        'service': 'udf-compiling-api',
         'version': '1.0.0'
     })
 
-@app.route('/split', methods=['POST'])
-def split_code():
+@app.route('/compile', methods=['POST'])
+def compile_code():
     """
-    API endpoint to split Python code.
+    API endpoint to compile Python code into an operator class.
     
     Expected JSON payload:
     {
@@ -91,8 +91,8 @@ def split_code():
                     'error': 'line_number must be a positive integer'
                 }), 400
         
-        # Call the Split function
-        result = Split(code, line_number)
+        # Call the compile function
+        result = compile(code, line_number)
         
         # Convert the result to JSON-serializable format
         serializable_result = {
@@ -109,7 +109,7 @@ def split_code():
         
     except Exception as e:
         # Log the error for debugging
-        print(f"Error in split_code endpoint: {str(e)}")
+        print(f"Error in compile_code endpoint: {str(e)}")
         print(traceback.format_exc())
         
         return jsonify({
@@ -117,8 +117,8 @@ def split_code():
             'error': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/split', methods=['GET'])
-def split_code_get():
+@app.route('/compile', methods=['GET'])
+def compile_code_get():
     """
     GET endpoint for testing - accepts code as query parameter.
     """
@@ -148,7 +148,7 @@ def split_code_get():
     
     # Use the same logic as POST endpoint
     try:
-        result = Split(code, line_number)
+        result = compile(code, line_number)
         
         serializable_result = {
             'ranked_cuts': result['ranked_cuts'],
@@ -163,7 +163,7 @@ def split_code_get():
         return result['operator_class']
         
     except Exception as e:
-        print(f"Error in split_code_get endpoint: {str(e)}")
+        print(f"Error in compile_code_get endpoint: {str(e)}")
         print(traceback.format_exc())
         
         return jsonify({
@@ -199,23 +199,21 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
     
     example_request = {
         'code': example_code,
-        'line_number': 4  # optional
+        'line_number': 5  # Optional: specify a specific line to cut at
     }
     
     return jsonify({
         'example_request': example_request,
-        'description': 'Send this JSON to /split endpoint via POST request. The code can include import statements and will return a complete operator class with imports and process table methods.'
+        'description': 'This is an example of the expected request format for the compile endpoint.'
     })
 
 if __name__ == '__main__':
-    # Run the Flask app
-    print("Starting Code Splitter HTTP Service...")
+    print("Starting UDF Compiling Service...")
     print("Available endpoints:")
-    print("  GET  /health     - Health check")
-    print("  POST /split      - Split code (JSON payload)")
-    print("  GET  /split      - Split code (query parameters)")
-    print("  GET  /example    - Get example request format")
-    print()
-    print("Server will start on http://localhost:5000")
+    print("  GET  /health - Health check")
+    print("  POST /compile - Compile Python code to operator class")
+    print("  GET  /compile - Test endpoint (use query parameters)")
+    print("  GET  /example - Get example request format")
+    print("\nService will be available at http://localhost:9999")
     
-    app.run(host='0.0.0.0', port=9999, debug=True)
+    app.run(host='0.0.0.0', port=9999, debug=True) 

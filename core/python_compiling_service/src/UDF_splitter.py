@@ -3,46 +3,114 @@ import astor
 from collections import defaultdict, deque
 import re
 
+# Import the loop transformer
+try:
+    from .loop_transformer import transform_code as transform_loop_code
+except ImportError:
+    # Fallback for when running as script
+    import sys
+    import os
+    sys.path.append(os.path.dirname(__file__))
+    from loop_transformer import transform_code as transform_loop_code
+
 
 def preprocess_code(code_snippet: str) -> str:
     """
-    Preprocess code by removing empty lines and comments.
-    
+    Preprocess code by removing docstrings, comments, and empty lines.
+    Ensures that empty function/class/module bodies have a 'pass' statement.
     Args:
         code_snippet (str): A string containing source code
-        
     Returns:
-        str: Cleaned code without empty lines and comments
+        str: Cleaned code without docstrings, comments, or empty lines, and valid Python structure
     """
-    lines = code_snippet.split('\n')
+    # Step 1: Remove docstrings using AST
+    class DocstringRemover(ast.NodeTransformer):
+        def visit_FunctionDef(self, node):
+            self.generic_visit(node)
+            if (node.body and isinstance(node.body[0], ast.Expr) and
+                isinstance(node.body[0].value, ast.Str)):
+                node.body = node.body[1:]
+            return node
+        def visit_AsyncFunctionDef(self, node):
+            self.generic_visit(node)
+            if (node.body and isinstance(node.body[0], ast.Expr) and
+                isinstance(node.body[0].value, ast.Str)):
+                node.body = node.body[1:]
+            return node
+        def visit_ClassDef(self, node):
+            self.generic_visit(node)
+            if (node.body and isinstance(node.body[0], ast.Expr) and
+                isinstance(node.body[0].value, ast.Str)):
+                node.body = node.body[1:]
+            return node
+        def visit_Module(self, node):
+            self.generic_visit(node)
+            if (node.body and isinstance(node.body[0], ast.Expr) and
+                isinstance(node.body[0].value, ast.Str)):
+                node.body = node.body[1:]
+            return node
+
+    try:
+        tree = ast.parse(code_snippet)
+        tree = DocstringRemover().visit(tree)
+        code_wo_docstrings = astor.to_source(tree)
+    except Exception:
+        # If AST parsing fails, fallback to original code
+        code_wo_docstrings = code_snippet
+
+    # Step 2: Remove comments and empty lines, but preserve indentation
+    lines = code_wo_docstrings.split('\n')
     cleaned_lines = []
-    
     for line in lines:
-        # Remove leading/trailing whitespace
-        stripped_line = line.strip()
-        
+        stripped_line = line.lstrip()
         # Skip empty lines
         if not stripped_line:
             continue
-            
-        # Skip comment-only lines (lines that start with #)
+        # Skip comment-only lines
         if stripped_line.startswith('#'):
             continue
-            
-        # Remove inline comments (everything after #)
-        if '#' in stripped_line:
-            # Find the position of the first #
-            comment_pos = stripped_line.find('#')
-            # Keep only the part before the comment
-            stripped_line = stripped_line[:comment_pos].rstrip()
-            # Skip if the line becomes empty after removing comment
-            if not stripped_line:
+        # Remove inline comments (everything after #), but keep indentation
+        if '#' in line:
+            comment_pos = line.find('#')
+            code_part = line[:comment_pos].rstrip()
+            if not code_part.strip():
                 continue
-        
-        # Add the cleaned line
-        cleaned_lines.append(line)
-    
-    return '\n'.join(cleaned_lines)
+            cleaned_lines.append(code_part)
+        else:
+            cleaned_lines.append(line.rstrip())
+    cleaned_code = '\n'.join(cleaned_lines)
+
+    # Step 3: Ensure all function/class/module bodies are not empty (insert 'pass' if needed)
+    class EmptyBodyFixer(ast.NodeTransformer):
+        def visit_FunctionDef(self, node):
+            self.generic_visit(node)
+            if not node.body:
+                node.body = [ast.Pass()]
+            return node
+        def visit_AsyncFunctionDef(self, node):
+            self.generic_visit(node)
+            if not node.body:
+                node.body = [ast.Pass()]
+            return node
+        def visit_ClassDef(self, node):
+            self.generic_visit(node)
+            if not node.body:
+                node.body = [ast.Pass()]
+            return node
+        def visit_Module(self, node):
+            self.generic_visit(node)
+            if not node.body:
+                node.body = [ast.Pass()]
+            return node
+
+    try:
+        tree = ast.parse(cleaned_code)
+        tree = EmptyBodyFixer().visit(tree)
+        fixed_code = astor.to_source(tree)
+        return fixed_code
+    except Exception:
+        # If AST parsing fails, fallback to cleaned code
+        return cleaned_code
 
 
 def SSA(code_snippet: str) -> str:
@@ -50,17 +118,14 @@ def SSA(code_snippet: str) -> str:
     Convert a function definition to Static Single Assignment (SSA) format.
     
     Args:
-        code_snippet (str): A string containing a function definition
+        code_snippet (str): A string containing a function definition (already cleaned)
         
     Returns:
         str: The function converted to SSA format
     """
     try:
-        # Preprocess the code to remove empty lines and comments
-        cleaned_code = preprocess_code(code_snippet)
-        
-        # Parse the code into an AST
-        tree = ast.parse(cleaned_code)
+        # Parse the code into an AST (code is already cleaned)
+        tree = ast.parse(code_snippet)
         
         # Transform the AST to SSA format
         ssa_transformer = SSATransformer()
@@ -1142,7 +1207,282 @@ class DependencyVisitor(ast.NodeVisitor):
         return var_name
 
 
-def Split(code: str, line_number=None):
+def infer_types_from_code(code: str) -> dict:
+    """
+    Infer argument and variable types from the function code.
+    
+    Args:
+        code (str): Function code string
+        
+    Returns:
+        dict: Dictionary mapping variable names to their inferred types
+    """
+    try:
+        # Parse the code
+        tree = ast.parse(code)
+        
+        # Find the function definition
+        func_def = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                func_def = node
+                break
+        
+        if not func_def:
+            return {}
+        
+        type_info = {}
+        
+        # Extract argument types from type annotations
+        for arg in func_def.args.args:
+            if arg.annotation:
+                type_str = astor.to_source(arg.annotation).strip()
+                inferred_type = _parse_type_annotation(type_str)
+                type_info[arg.arg] = inferred_type
+        
+        # Analyze function body to infer variable types from assignments
+        for stmt in func_def.body:
+            if isinstance(stmt, ast.Assign):
+                # Get the type of the right-hand side
+                rhs_type = _infer_type_from_expression(stmt.value, type_info)
+                
+                # Assign this type to all targets
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        type_info[target.id] = rhs_type
+                    elif isinstance(target, ast.Tuple):
+                        # Handle tuple unpacking
+                        if isinstance(stmt.value, ast.Tuple):
+                            for i, elt in enumerate(target.elts):
+                                if isinstance(elt, ast.Name) and i < len(stmt.value.elts):
+                                    elt_type = _infer_type_from_expression(stmt.value.elts[i], type_info)
+                                    type_info[elt.id] = elt_type
+        
+        return type_info
+        
+    except Exception as e:
+        print(f"Warning: Type inference failed: {e}")
+        return {}
+
+
+def _parse_type_annotation(type_str: str) -> str:
+    """Parse type annotation string to extract type information."""
+    type_str = type_str.lower()
+    
+    # DataFrame types
+    if 'dataframe' in type_str or 'pd.dataframe' in type_str:
+        return 'DataFrame'
+    elif 'series' in type_str or 'pd.series' in type_str:
+        return 'Series'
+    
+    # Basic types
+    elif 'int' in type_str:
+        return 'int'
+    elif 'float' in type_str:
+        return 'float'
+    elif 'str' in type_str or 'string' in type_str:
+        return 'str'
+    elif 'bool' in type_str:
+        return 'bool'
+    elif 'list' in type_str:
+        return 'list'
+    elif 'dict' in type_str:
+        return 'dict'
+    elif 'tuple' in type_str:
+        return 'tuple'
+    elif 'set' in type_str:
+        return 'set'
+    
+    # Default to unknown
+    return 'unknown'
+
+
+def _infer_type_from_expression(expr, type_info: dict) -> str:
+    """Infer the type of an expression based on its structure and context."""
+    if isinstance(expr, ast.Call):
+        # Function call
+        if isinstance(expr.func, ast.Name):
+            func_name = expr.func.id
+            if func_name in ['pd.DataFrame', 'DataFrame']:
+                return 'DataFrame'
+            elif func_name in ['pd.Series', 'Series']:
+                return 'Series'
+        elif isinstance(expr.func, ast.Attribute):
+            # Method call like df1['activity']
+            if isinstance(expr.func.value, ast.Name):
+                var_name = expr.func.value.id
+                if var_name in type_info and type_info[var_name] == 'DataFrame':
+                    return 'Series'  # DataFrame column access returns Series
+    
+    elif isinstance(expr, ast.Subscript):
+        # Subscript operation like df1['activity']
+        if isinstance(expr.value, ast.Name):
+            var_name = expr.value.id
+            if var_name in type_info and type_info[var_name] == 'DataFrame':
+                return 'Series'  # DataFrame column access returns Series
+    
+    elif isinstance(expr, ast.Compare):
+        # Comparison operation - result is boolean
+        return 'bool'
+    
+    elif isinstance(expr, ast.BinOp):
+        # Binary operation - infer from operands
+        left_type = _infer_type_from_expression(expr.left, type_info)
+        right_type = _infer_type_from_expression(expr.right, type_info)
+        
+        # If both operands are numeric, result is numeric
+        if left_type in ['int', 'float', 'numeric'] and right_type in ['int', 'float', 'numeric']:
+            if left_type == 'float' or right_type == 'float':
+                return 'float'
+            else:
+                return 'int'
+        
+        # String concatenation
+        if left_type == 'str' and right_type == 'str':
+            return 'str'
+        
+        return 'unknown'
+    
+    elif isinstance(expr, ast.Constant):
+        # Constant value
+        if isinstance(expr.value, str):
+            return 'str'
+        elif isinstance(expr.value, (int, float)):
+            return 'numeric'
+        elif isinstance(expr.value, bool):
+            return 'bool'
+    
+    elif isinstance(expr, ast.Name):
+        # Variable reference - use known type if available
+        return type_info.get(expr.id, 'unknown')
+    
+    elif isinstance(expr, ast.Attribute):
+        # Attribute access like df1.columns
+        if isinstance(expr.value, ast.Name):
+            var_name = expr.value.id
+            if var_name in type_info:
+                base_type = type_info[var_name]
+                if base_type == 'DataFrame':
+                    if expr.attr in ['columns', 'index', 'shape']:
+                        return 'list'
+                    elif expr.attr in ['dtypes', 'info']:
+                        return 'dict'
+    
+    return 'unknown'
+
+
+def compile_baseline(code: str) -> dict:
+    """
+    Compile code in baseline mode - creates a single process_tables method.
+    
+    Args:
+        code (str): A string containing a function definition with "#baseline" as first line
+        
+    Returns:
+        dict: Contains the baseline operator class and related information
+    """
+    # Remove the "#baseline" line
+    lines = code.split('\n')
+    lines = lines[1:]  # Skip the first line which is "#baseline"
+    
+    # Separate import statements from function definition
+    import_statements = []
+    function_code = []
+    
+    for line in lines:
+        stripped_line = line.strip()
+        if stripped_line.startswith('import ') or stripped_line.startswith('from '):
+            import_statements.append(line)
+        else:
+            function_code.append(line)
+    
+    # Reconstruct the function code without imports
+    function_code_str = '\n'.join(function_code)
+    
+    # Parse the function to extract its definition
+    try:
+        tree = ast.parse(function_code_str)
+        func_def = tree.body[0]
+        if not isinstance(func_def, ast.FunctionDef):
+            raise ValueError("Input must be a function definition")
+        
+        # Get function arguments with type annotations
+        args_with_types = []
+        for arg in func_def.args.args:
+            if arg.annotation:
+                type_annotation = astor.to_source(arg.annotation).strip()
+                args_with_types.append(f"{arg.arg}: {type_annotation}")
+            else:
+                args_with_types.append(arg.arg)
+        
+        # Get the function body
+        body_lines = []
+        for stmt in func_def.body:
+            if isinstance(stmt, ast.Return):
+                # Convert return to yield
+                return_code = astor.to_source(stmt).strip()
+                if return_code == 'return' or return_code == 'return None':
+                    body_lines.append('        yield None')
+                else:
+                    # Replace 'return' with 'yield'
+                    yield_code = return_code.replace('return', 'yield', 1)
+                    body_lines.append(f'        {yield_code}')
+            else:
+                stmt_code = astor.to_source(stmt)
+                # Add proper indentation for the method body
+                stmt_lines = stmt_code.split('\n')
+                for stmt_line in stmt_lines:
+                    if stmt_line.strip():  # Skip empty lines
+                        body_lines.append(f'        {stmt_line.strip()}')
+        
+        # If no return statement found, add yield None
+        if not any('yield' in line for line in body_lines):
+            body_lines.append('        yield None')
+        
+        # Create the process_tables method
+        args_str = ', '.join(['self'] + args_with_types)
+        method_body = '\n'.join(body_lines)
+        
+        # Determine return type annotation
+        return_type = ""
+        if func_def.returns:
+            return_type = f" -> {astor.to_source(func_def.returns).strip()}"
+        
+        process_tables_method = f"    def process_tables({args_str}){return_type}:\n{method_body}"
+        
+        # Create the operator class
+        operator_class = "from pytexera import *\n"
+        
+        # Add original import statements (clean them of leading whitespace)
+        if import_statements:
+            clean_imports = []
+            for imp in import_statements:
+                clean_imports.append(imp.lstrip())
+            operator_class += '\n'.join(clean_imports) + '\n'
+        
+        operator_class += "\nclass Operator(UDFGeneralOperator):\n"
+        operator_class += process_tables_method + "\n"
+        
+        # Return baseline compilation result
+        return {
+            'ranked_cuts': [],
+            'ssa_code': function_code_str,  # Original function code
+            'converted_code': function_code_str,  # No conversion needed for baseline
+            'process_tables': {'process_tables': process_tables_method},
+            'operator_class': operator_class,
+            'num_args': len(func_def.args.args),
+            'cuts_used': [],
+            'filtered_cuts': [],
+            'import_statements': import_statements,
+            'cleaned_code': function_code_str,
+            'baseline_mode': True
+        }
+        
+    except Exception as e:
+        raise ValueError(f"Failed to compile in baseline mode: {e}")
+
+
+def compile(code: str, line_number=None):
     """
     Apply SSA transformation, build dependency graph, and find valid cut points.
     Rank cuts by variable size and convert SSA variables to self.<var> format.
@@ -1156,11 +1496,18 @@ def Split(code: str, line_number=None):
         dict: Contains ranked cuts, SSA code, converted code with self.<var>, 
               process tables, and sub-functions
     """
+    # Check if the first line is "#baseline" for baseline compilation
+    lines = code.split('\n')
+    first_line = lines[0].strip() if lines else ""
+    
+    if first_line == "#baseline":
+        # Handle baseline compilation
+        return compile_baseline(code)
+    
     # Step 0: Separate import statements from function definition
     import_statements = []
     function_code = []
     
-    lines = code.split('\n')
     for line in lines:
         stripped_line = line.strip()
         if stripped_line.startswith('import ') or stripped_line.startswith('from '):
@@ -1171,72 +1518,134 @@ def Split(code: str, line_number=None):
     # Reconstruct the function code without imports
     function_code_str = '\n'.join(function_code)
     
-    # Step 1: Apply SSA transformation
-    ssa_code = SSA(function_code_str)
+    # Step 0.5: Clean the function code by removing empty lines and comments
+    cleaned_function_code = preprocess_code(function_code_str)
+    print(f"DEBUG: Original function code length: {len(function_code_str)}")
+    print(f"DEBUG: Cleaned function code length: {len(cleaned_function_code)}")
     
-    # Step 2: Convert SSA variables to self.<var> format
-    def convert_ssa_to_self(ssa_code):
+    # Step 1: Infer types from the cleaned code
+    type_info = infer_types_from_code(cleaned_function_code)
+    print(f"DEBUG: Inferred types: {type_info}")
+    
+    # Step 2: Apply SSA transformation to the cleaned code
+    ssa_code = SSA(cleaned_function_code)
+    
+    # Step 3: Convert SSA variables to self.<var> format
+    def convert_ssa_to_self(ssa_code, type_info=None):
         # Parse the function to get input arguments (use cleaned code)
-        cleaned_code = preprocess_code(function_code_str)
-        tree = ast.parse(cleaned_code)
+        tree = ast.parse(cleaned_function_code)
         func_def = tree.body[0]
         if isinstance(func_def, ast.FunctionDef):
             input_args = [arg.arg for arg in func_def.args.args]
         else:
-            input_args = []  # No default fallback needed
+            input_args = []
         
-        def replace_ssa_vars(line):
-            def repl(match):
-                var = match.group(0)
-                for arg in input_args:
-                    if var.startswith(arg) and var != arg:
-                        return f"self.{arg}"
-                return var
-            # Replace X1, X2, ..., Y1, Y2, Z1, Z2, ... but not X, Y, Z themselves
-            if input_args:
-                pattern = r'\b(' + '|'.join([f'{arg}\\d+' for arg in input_args]) + r')\b'
-                return re.sub(pattern, repl, line)
-            else:
-                return line
+        # Parse the SSA code to extract local variables from it
+        ssa_tree = ast.parse(ssa_code)
+        ssa_func_def = ssa_tree.body[0]
         
-        # Convert each line
-        lines = ssa_code.split('\n')
-        converted_lines = []
-        for line in lines:
-            if line.strip() and not line.strip().startswith('def'):
-                converted_line = replace_ssa_vars(line)
+        # Extract local variables from the SSA function body
+        local_vars = set()
+        for stmt in ssa_func_def.body:
+            if isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        local_vars.add(target.id)
+                    elif isinstance(target, ast.Tuple):
+                        for elt in target.elts:
+                            if isinstance(elt, ast.Name):
+                                local_vars.add(elt.id)
+            elif isinstance(stmt, ast.AugAssign):
+                if isinstance(stmt.target, ast.Name):
+                    local_vars.add(stmt.target.id)
+        
+        # Debug print: Show all local variables found
+        print(f"DEBUG: Local variables extracted from SSA code: {sorted(local_vars)}")
+        print(f"DEBUG: Input arguments: {input_args}")
+        if type_info:
+            print(f"DEBUG: Type information: {type_info}")
+        
+        # Create AST transformer to add self. prefix to local variables
+        class SelfPrefixTransformer(ast.NodeTransformer):
+            def __init__(self, local_vars, input_args, type_info=None):
+                self.local_vars = local_vars
+                self.input_args = input_args
+                self.type_info = type_info or {}
+                self.transformed_vars = set()  # Track which variables were transformed
+            
+            def visit_Name(self, node):
+                var_name = node.id
                 
-                # Post-process to add parentheses where needed for precedence
-                # Fix cases like 'k1 & k1 + Z' to 'k1 & (k1 + Z)'
-                if '&' in converted_line and '+' in converted_line:
-                    # Look for patterns like 'var & var + var'
-                    pattern = r'(\w+)\s*&\s*(\w+)\s*\+\s*(\w+)'
-                    match = re.search(pattern, converted_line)
-                    if match:
-                        var1, var2, var3 = match.groups()
-                        if var1 == var2:  # Same variable on both sides of &
-                            # Replace with parentheses around the addition
-                            replacement = f"{var1} & ({var2} + {var3})"
-                            converted_line = re.sub(pattern, replacement, converted_line)
+                # Skip if it's already prefixed with self.
+                if var_name.startswith('self.'):
+                    return node
                 
-                converted_lines.append(converted_line)
-            else:
-                converted_lines.append(line)
+                # Skip if it's a function argument
+                if var_name in self.input_args:
+                    return node
+                
+                # Skip if it's a built-in name
+                if var_name in __builtins__:
+                    return node
+                
+                # Skip if it's a keyword
+                keywords = {'True', 'False', 'None', 'self', 'yield', 'return', 'import', 'from', 'as'}
+                if var_name in keywords:
+                    return node
+                
+                # Add self. prefix to local variables in both Load and Store contexts
+                if var_name in self.local_vars:
+                    self.transformed_vars.add(var_name)
+                    var_type = self.type_info.get(var_name, 'unknown')
+                    print(f"DEBUG: Transforming variable '{var_name}' (type: {var_type}) to 'self.{var_name}' ({type(node.ctx).__name__} context)")
+                    return ast.Attribute(
+                        value=ast.Name(id='self', ctx=ast.Load()),
+                        attr=var_name,
+                        ctx=node.ctx
+                    )
+                else:
+                    print(f"DEBUG: Variable '{var_name}' not in local_vars, context: {type(node.ctx).__name__}")
+                
+                return node
         
-        return '\n'.join(converted_lines)
+        # Apply the transformer to the SSA code
+        try:
+            transformer = SelfPrefixTransformer(local_vars, input_args, type_info)
+            modified_tree = transformer.visit(ssa_tree)
+            
+            # Debug print: Show which variables were actually transformed
+            print(f"DEBUG: Variables actually transformed: {sorted(transformer.transformed_vars)}")
+            
+            # Convert back to source code
+            converted_code = astor.to_source(modified_tree)
+            return converted_code
+            
+        except Exception as e:
+            # If AST transformation fails, fall back to the original SSA code
+            print(f"Warning: AST transformation failed: {e}. Using original SSA code.")
+            return ssa_code
     
-    converted_code = convert_ssa_to_self(ssa_code)
+    converted_code = convert_ssa_to_self(ssa_code, type_info)
     
-    # Step 3: Build variable dependency graph
+    # Step 4: Build variable dependency graph with type information (using cleaned code)
     graph = VariableDependencyGraph(ssa_code)
     
-    # Step 4: Find valid cut points
+    # Update the graph's variable types with our inferred types
+    if type_info:
+        for var_name, var_type in type_info.items():
+            # Find all versions of this variable in the graph
+            for vertex in graph.vertices:
+                vertex_var, vertex_line = vertex
+                if graph._get_base_variable_name(vertex_var) == var_name:
+                    graph.variable_types[vertex_var] = var_type
+    
+    # Step 5: Find valid cut points
     valid_cuts = graph.find_valid_cuts()
     
-    # Step 5: Rank cuts by variable size
+    # Step 6: Rank cuts by variable size
     ranked_cuts = graph.rank_cuts_by_variable_size(valid_cuts)
     
-    # Step 6: If specific line number is provided, filter cuts to use that line
+    # Step 7: If specific line number is provided, filter cuts to use that line
     if line_number is not None:
         # Find the cut at the specified line number
         specified_cut = None
@@ -1252,10 +1661,10 @@ def Split(code: str, line_number=None):
             # If the specified line is not a valid cut, use the best available cut
             print(f"Warning: Line {line_number} is not a valid cut point. Using best available cut.")
     
-    # Step 7: Generate process tables and split code
-    split_result = generate_process_tables_and_split(converted_code, ranked_cuts, function_code_str)
+    # Step 8: Generate process tables and split code (using cleaned code)
+    split_result = generate_process_tables_and_split(converted_code, ranked_cuts, cleaned_function_code, type_info)
     
-    # Step 8: Add import statements to the operator class
+    # Step 9: Add import statements to the operator class
     operator_class_with_imports = ""
     if import_statements:
         # Ensure import statements are not indented
@@ -1275,11 +1684,136 @@ def Split(code: str, line_number=None):
         'num_args': split_result['num_args'],
         'cuts_used': split_result['cuts_used'],
         'filtered_cuts': split_result['filtered_cuts'],
-        'import_statements': import_statements
+        'import_statements': import_statements,
+        'cleaned_code': cleaned_function_code
     }
 
 
-def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, original_code: str) -> dict:
+def apply_loop_transformation_to_process_table(process_table_code: str, table_name: str) -> str:
+    """
+    Apply loop transformation to a process table method if it contains loop patterns.
+    
+    Args:
+        process_table_code (str): The process table method code
+        table_name (str): Name of the process table (e.g., 'process_table_0')
+        
+    Returns:
+        str: Transformed process table code or original if no transformation needed
+    """
+    try:
+        # Extract the function body to check for loop patterns
+        # Find the method body by locating the first ':' and extracting everything after it
+        colon_pos = process_table_code.find(':')
+        if colon_pos == -1:
+            return process_table_code  # No method signature found
+        
+        method_body = process_table_code[colon_pos + 1:]
+        lines = method_body.split('\n')
+        
+        # Filter out empty lines and lines that are clearly part of method signature
+        body_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.endswith('):') and not stripped.startswith('def '):
+                body_lines.append(line)
+        
+        if not body_lines:
+            return process_table_code  # No meaningful body found
+        
+        # Fix indentation for the temporary function
+        fixed_lines = []
+        
+        # Find the base indentation (minimum non-zero indentation)
+        base_indent = None
+        for line in body_lines:
+            if line.strip():
+                current_indent = len(line) - len(line.lstrip())
+                if current_indent > 0 and (base_indent is None or current_indent < base_indent):
+                    base_indent = current_indent
+        
+        if base_indent is None:
+            base_indent = 8  # Default if no indentation found
+        
+        # Normalize indentation for function body
+        for line in body_lines:
+            if line.strip():
+                current_indent = len(line) - len(line.lstrip())
+                relative_indent = max(0, current_indent - base_indent)
+                fixed_lines.append('    ' + ' ' * relative_indent + line.lstrip())
+            else:
+                fixed_lines.append('')
+        
+        temp_func_code = f"def temp_func():\n" + '\n'.join(fixed_lines)
+        
+        # Debug output (can be removed for production)
+        # print(f"  Debug: Temp function code for {table_name}:")
+        # print(f"  {temp_func_code}")
+        
+        # Apply loop transformation to the temporary function
+        try:
+            # Try different import paths since this might be called from different contexts
+            try:
+                from loop_transformer import LoopTransformer
+            except ImportError:
+                from src.loop_transformer import LoopTransformer
+            
+            transformer = LoopTransformer()
+            transformed_temp = transformer.transform_function(temp_func_code)
+            
+            # Check if transformation actually occurred (if code changed)
+            if transformed_temp.strip() == temp_func_code.strip():
+                # No transformation needed, return original
+                return process_table_code
+            
+            print(f"  Applying loop transformation to {table_name}...")
+            
+        except ImportError as e:
+            # Fallback if loop_transformer is not available
+            print(f"  Warning: LoopTransformer not available ({e}), using original code")
+            return process_table_code
+        
+        # Extract the transformed body and reformat back to process table method
+        transformed_tree = ast.parse(transformed_temp)
+        if transformed_tree.body and isinstance(transformed_tree.body[0], ast.FunctionDef):
+            transformed_func = transformed_tree.body[0]
+            
+            # Get the original method signature
+            method_signature = process_table_code[:process_table_code.find(':') + 1]
+            
+            # Reconstruct the transformed method body with proper indentation
+            transformed_body_lines = []
+            for stmt in transformed_func.body:
+                stmt_code = astor.to_source(stmt)
+                # Handle multi-line statements properly while preserving relative indentation
+                lines = stmt_code.split('\n')
+                
+                # Find the base indentation from the first non-empty line
+                base_indent = 0
+                for line in lines:
+                    if line.strip():
+                        base_indent = len(line) - len(line.lstrip())
+                        break
+                
+                # Add each line with proper method body indentation (8 spaces) + relative indent
+                for line in lines:
+                    if line.strip():  # Skip empty lines
+                        current_indent = len(line) - len(line.lstrip())
+                        relative_indent = max(0, current_indent - base_indent)
+                        transformed_body_lines.append(f"        {' ' * relative_indent}{line.strip()}")
+            
+            transformed_process_table = method_signature + "\n" + "\n".join(transformed_body_lines)
+            
+            print(f"  Loop transformation applied successfully to {table_name}")
+            return transformed_process_table
+        
+    except Exception as e:
+        print(f"  Warning: Loop transformation failed for {table_name}: {e}")
+        print(f"  Using original code.")
+    
+    return process_table_code
+
+
+def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, original_code: str, type_info: dict = None) -> dict:
     """
     Generate process tables for each argument, where each process table contains
     a part of the converted code split by N-1 cuts into N parts.
@@ -1289,6 +1823,7 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
         converted_code (str): The converted code with self.<var> format
         ranked_cuts (list): List of ranked cut points
         original_code (str): The original code
+        type_info (dict): Dictionary mapping variable names to their types
         
     Returns:
         dict: Contains process tables with code parts wrapped in Operator class
@@ -1311,102 +1846,34 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
         
         return list(used_args)
     
-    def extract_local_variables(body_lines):
-        """Extract all local variables defined in the function body."""
-        local_vars = set()
+    def get_type_annotation(var_name: str) -> str:
+        """Get the type annotation for a variable."""
+        if not type_info:
+            return ""
         
-        for line in body_lines:
-            # Look for assignment patterns like "var = ..."
-            import re
-            # Pattern to match variable assignments
-            assignment_pattern = r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*='
-            match = re.match(assignment_pattern, line)
-            if match:
-                var_name = match.group(1)
-                local_vars.add(var_name)
-        
-        return local_vars
-    
-    def add_self_to_local_vars(code_lines, arg_name, local_vars, input_args):
-        """Add self. prefix to local variables that are not the current argument."""
-        processed_lines = []
-        
-        # Keywords and operators that should not be prefixed
-        keywords = {'def', 'self', 'if', 'else', 'for', 'while', 'return', 'pass', 'True', 'False', 'None', 'in', 'is', 'not', 'and', 'or', 'yield', 'import', 'from', 'as'}
-        operators = {'!=', '==', '>=', '<=', '>', '<', '=', '+', '-', '*', '/', '&', '|', '^', '(', ')', '[', ']', '{', '}', ',', '.', ':', ';'}
-        
-        for line in code_lines:
-            # Skip import statements entirely
-            stripped_line = line.strip()
-            if stripped_line.startswith('import ') or stripped_line.startswith('from '):
-                processed_lines.append(line)
-                continue
-            
-            # Use regex to find variable names and replace them with self. prefix
-            # But exclude keywords, operators, string literals, and method calls
-            import re
-            
-            def replace_var(match):
-                var_name = match.group(0)
-                
-                # Skip if it's already prefixed with self.
-                if var_name.startswith('self.'):
-                    return var_name
-                
-                # Skip if it's the current argument
-                if var_name == arg_name:
-                    return var_name
-                
-                # Skip if it's a function argument
-                if var_name in input_args:
-                    return var_name
-                
-                # Skip if it's a keyword or operator
-                if var_name in keywords or var_name in operators:
-                    return var_name
-                
-                # Skip if it's a number
-                if var_name.isdigit() or var_name.replace('.', '').isdigit():
-                    return var_name
-                
-                # Get context around the match
-                line_before = line[:match.start()]
-                line_after = line[match.end():]
-                
-                # Skip if it's a method call (preceded by .)
-                if line_before.endswith('.'):
-                    return var_name
-                
-                # Skip if it's a string literal (preceded by ' or ")
-                if line_before.endswith("'") or line_before.endswith('"'):
-                    return var_name
-                
-                # Skip if it's a method name (followed by .)
-                if line_after.startswith('.'):
-                    return var_name
-                
-                # Skip if it's a string literal (followed by ' or ")
-                if line_after.startswith("'") or line_after.startswith('"'):
-                    return var_name
-                
-                # Special case: if it's followed by [ and it's a local variable, it's likely a DataFrame/array access
-                # like filtered['user_id'] - this should get self. prefix
-                if line_after.startswith('[') and var_name in local_vars:
-                    return f'self.{var_name}'
-                
-                # Add self. prefix to local variables
-                if var_name in local_vars:
-                    return f'self.{var_name}'
-                
-                return var_name
-            
-            # Pattern to match variable names in complex expressions
-            # This handles cases like df1['activity'], filtered['user_id'], etc.
-            pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b'
-            processed_line = re.sub(pattern, replace_var, line)
-            processed_lines.append(processed_line)
-        
-        return processed_lines
+        var_type = type_info.get(var_name, 'unknown')
+        if var_type == 'DataFrame':
+            return ': pd.DataFrame'
+        elif var_type == 'Series':
+            return ': pd.Series'
+        elif var_type == 'int':
+            return ': int'
+        elif var_type == 'float':
+            return ': float'
+        elif var_type == 'str':
+            return ': str'
+        elif var_type == 'bool':
+            return ': bool'
+        elif var_type == 'list':
+            return ': list'
+        elif var_type == 'dict':
+            return ': dict'
+        elif var_type == 'tuple':
+            return ': tuple'
+        elif var_type == 'set':
+            return ': set'
+        else:
+            return ""
     
     def convert_return_to_yield(code_lines):
         """Convert return statements to yield statements and add yield None if no return."""
@@ -1440,6 +1907,39 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
         
         return processed_lines
     
+    def add_type_annotations_to_lines(code_lines):
+        """Add type annotations to local variable assignments."""
+        if not type_info:
+            return code_lines
+        
+        processed_lines = []
+        for line in code_lines:
+            # Look for assignment patterns like "self.var = ..."
+            import re
+            assignment_pattern = r'^(\s*)(self\.[a-zA-Z_][a-zA-Z0-9_]*)\s*='
+            match = re.match(assignment_pattern, line)
+            
+            if match:
+                indent, var_name = match.groups()
+                # Extract the base variable name (remove 'self.')
+                base_var_name = var_name.replace('self.', '')
+                var_type = type_info.get(base_var_name, 'unknown')
+                
+                if var_type != 'unknown':
+                    type_annotation = get_type_annotation(base_var_name)
+                    # Add type annotation to the variable
+                    annotated_line = f"{indent}{var_name}{type_annotation} ="
+                    # Add the rest of the line after the assignment
+                    rest_of_line = line[match.end():]
+                    annotated_line += rest_of_line
+                    processed_lines.append(annotated_line)
+                else:
+                    processed_lines.append(line)
+            else:
+                processed_lines.append(line)
+        
+        return processed_lines
+    
     # Parse the function to get input arguments
     tree = ast.parse(converted_code)
     func_def = tree.body[0]
@@ -1449,30 +1949,26 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
     input_args = [arg.arg for arg in func_def.args.args]
     num_args = len(input_args)
     
-    # Use the cleaned code (same as SSA format) for splitting
-    # Parse the cleaned code to get body lines
-    cleaned_code = preprocess_code(original_code)  # Use the original code, not converted_code
-    cleaned_tree = ast.parse(cleaned_code)
-    cleaned_func_def = cleaned_tree.body[0]
+    # Extract function body lines from converted code (which already has self. prefixes)
+    converted_body_lines = []
     
-    # Extract function body lines from cleaned code (excluding function definition and return)
-    body_lines = []
-    return_line = None
-    
-    for stmt in cleaned_func_def.body:
+    for stmt in func_def.body:
         if isinstance(stmt, ast.Return):
             return_line = astor.to_source(stmt).strip()
             # Include return statement in body lines
-            body_lines.append(return_line)
+            converted_body_lines.append(return_line)
         else:
-            body_lines.append(astor.to_source(stmt).strip())
-    
-    # Extract all local variables from the entire function
-    local_vars = extract_local_variables(body_lines)
+            # Preserve indentation for multi-line statements
+            stmt_code = astor.to_source(stmt)
+            # Split into lines and add each line separately to preserve indentation
+            lines = stmt_code.split('\n')
+            for line in lines:
+                if line.strip():  # Skip empty lines
+                    converted_body_lines.append(line.rstrip())  # Remove trailing whitespace but keep leading
     
     # Filter out invalid cuts: only allow cuts where 2 < line_number < len(body_lines) + 1
     valid_cut_min = 3
-    valid_cut_max = len(body_lines)
+    valid_cut_max = len(converted_body_lines)
     filtered_cuts = [cut for cut in ranked_cuts if valid_cut_min <= cut['line_number'] <= valid_cut_max]
     ranked_cuts = filtered_cuts
 
@@ -1480,9 +1976,49 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
     process_tables = {}
     
     if num_args <= 1:
-        # For 0 or 1 arguments, just create empty process tables
+        # For 0 or 1 arguments, create process tables with the full code
         for i, arg in enumerate(input_args, 0):
-            process_tables[f'process_table_{i}'] = f'    def process_table_{i}(self, {arg}):\n        yield None'
+            arg_type = get_type_annotation(arg)
+            
+            if converted_body_lines:
+                # Create temporary process table for loop transformation
+                temp_lines = add_type_annotations_to_lines(converted_body_lines)
+                temp_process_table_body = '\n'.join(f'        {line}' for line in temp_lines)
+                
+                # Analyze which arguments are actually used
+                used_args = analyze_used_arguments(temp_lines, input_args)
+                
+                # Create method signature with type annotations
+                if used_args:
+                    args_with_types = []
+                    for used_arg in used_args:
+                        used_arg_type = get_type_annotation(used_arg)
+                        args_with_types.append(f'{used_arg}{used_arg_type}')
+                    args_str = ', '.join(['self'] + args_with_types)
+                else:
+                    args_str = 'self'
+                
+                temp_process_table_code = f'    def process_table_{i}({args_str}):\n{temp_process_table_body}'
+                
+                # Apply loop transformation FIRST (before converting returns to yields)
+                table_name = f'process_table_{i}'
+                transformed_process_table_code = apply_loop_transformation_to_process_table(temp_process_table_code, table_name)
+                
+                # Then convert any remaining return statements to yield statements
+                # Extract body lines from the transformed code and apply return-to-yield conversion
+                transformed_lines = transformed_process_table_code.split('\n')
+                body_start = next(i for i, line in enumerate(transformed_lines) if ':' in line) + 1
+                body_lines = [line[8:] if line.startswith('        ') else line.strip() for line in transformed_lines[body_start:] if line.strip()]
+                
+                if body_lines:
+                    processed_lines = convert_return_to_yield(body_lines)
+                    process_table_body = '\n'.join(f'        {line}' for line in processed_lines)
+                    transformed_process_table_code = f'    def process_table_{i}({args_str}):\n{process_table_body}'
+            else:
+                process_table_code = f'    def process_table_{i}(self, {arg}{arg_type}):\n        yield None'
+                transformed_process_table_code = process_table_code
+            
+            process_tables[f'process_table_{i}'] = transformed_process_table_code
     else:
         # Use the best N-1 valid cuts to split the code into N parts
         best_cuts = filtered_cuts[:num_args - 1]
@@ -1493,41 +2029,63 @@ def generate_process_tables_and_split(converted_code: str, ranked_cuts: list, or
         for i in range(num_args):
             if i < len(sorted_cuts):
                 # Use the cut point to determine the end of this part
-                # To cut before line N, use body_lines[0:N-2] for the first part
+                # To cut before line N, use converted_body_lines[0:N-2] for the first part
                 cut_line = sorted_cuts[i]['line_number'] - 2
-                part_lines = body_lines[start_line:cut_line]
+                part_lines = converted_body_lines[start_line:cut_line]
                 start_line = cut_line
             else:
                 # This is the last part (from last cut to end)
-                part_lines = body_lines[start_line:]
+                part_lines = converted_body_lines[start_line:]
             
             # Create process table with this part of the code
             arg_name = input_args[i]
             
             if part_lines:
-                # Add self. prefix to local variables
-                processed_lines = add_self_to_local_vars(part_lines, arg_name, local_vars, input_args)
-                # Convert return statements to yield statements
-                processed_lines = convert_return_to_yield(processed_lines)
-                process_table_body = '\n'.join(f'        {line}' for line in processed_lines)
+                # Add type annotations to local variables first
+                temp_lines = add_type_annotations_to_lines(part_lines)
+                temp_process_table_body = '\n'.join(f'        {line}' for line in temp_lines)
                 
                 # Analyze which arguments are actually used in this process table's body
-                used_args = analyze_used_arguments(processed_lines, input_args)
+                used_args = analyze_used_arguments(temp_lines, input_args)
                 
-                # Create method signature with only the arguments that are actually used
+                # Create method signature with type annotations
                 if used_args:
-                    args_str = ', '.join(['self'] + used_args)
+                    args_with_types = []
+                    for arg in used_args:
+                        arg_type = get_type_annotation(arg)
+                        args_with_types.append(f'{arg}{arg_type}')
+                    args_str = ', '.join(['self'] + args_with_types)
                 else:
                     args_str = 'self'
                 
-                process_table_code = f'    def process_table_{i}({args_str}):\n{process_table_body}'
+                temp_process_table_code = f'    def process_table_{i}({args_str}):\n{temp_process_table_body}'
+                
+                # Apply loop transformation FIRST (before converting returns to yields)
+                table_name = f'process_table_{i}'
+                transformed_process_table_code = apply_loop_transformation_to_process_table(temp_process_table_code, table_name)
+                
+                # Then convert any remaining return statements to yield statements
+                # Extract body lines from the transformed code and apply return-to-yield conversion
+                transformed_lines = transformed_process_table_code.split('\n')
+                body_start = next(i for i, line in enumerate(transformed_lines) if ':' in line) + 1
+                body_lines = [line[8:] if line.startswith('        ') else line.strip() for line in transformed_lines[body_start:] if line.strip()]
+                
+                if body_lines:
+                    processed_lines = convert_return_to_yield(body_lines)
+                    process_table_body = '\n'.join(f'        {line}' for line in processed_lines)
+                    transformed_process_table_code = f'    def process_table_{i}({args_str}):\n{process_table_body}'
             else:
-                process_table_code = f'    def process_table_{i}(self):\n        yield None'
+                arg_type = get_type_annotation(arg_name)
+                temp_process_table_code = f'    def process_table_{i}(self, {arg_name}{arg_type}):\n        yield None'
+                
+                # Apply loop transformation even for empty process tables
+                table_name = f'process_table_{i}'
+                transformed_process_table_code = apply_loop_transformation_to_process_table(temp_process_table_code, table_name)
             
-            process_tables[f'process_table_{i}'] = process_table_code
+            process_tables[f'process_table_{i}'] = transformed_process_table_code
     
     # Wrap all process tables in an Operator class
-    operator_class_code = "class Operator(UDFTableOperator):\n"
+    operator_class_code = "from pytexera import *\nclass Operator(UDFGeneralOperator):\n"
     for table_name, table_code in process_tables.items():
         # The process table code already has proper indentation, just add it as is
         operator_class_code += table_code + "\n"
@@ -1569,28 +2127,38 @@ if __name__ == "__main__":
 #     return result
 #     """
 
+#     test_code = """
+# from pytexera import *
+# import pandas as pd
+# import numpy as np
+
+# def compare_texts_vectorized(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+#     s1_full = df1['text'].fillna("").str.strip().str.lower()
+#     n = min(len(s1_full), len(df2))
+#     s1 = s1_full.head(n)
+#     s2 = df2['text'].head(n).fillna("").str.strip().str.lower()
+#     exact_mask = s1.eq(s2)
+#     partial_mask = s1.str.contains(s2, regex=False) | s2.str.contains(s1, regex=False)
+#     match_type = np.select([exact_mask, partial_mask], ['exact', 'partial'], default='none')
+#     return pd.DataFrame({'df1_text': s1, 'df2_text': s2, 'match_type': match_type})
+#     """
     test_code = """
+from pytexera import *
 import pandas as pd
-def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
-    # Step 1: Filter df1
-    df1_filtered = df1[df1['activity'] != 'idle']
+import numpy as np
 
-    # Step 2: Merge df1 with df2 on user_id
-    merged = pd.merge(df1_filtered, df2, on='user_id', how='inner')
-
-    # Step 3: Define a simple activity -> value mapping
-    activity_points = {
-        'login': 1,
-        'logout': 0.5,
-        'purchase': 5,
-        'comment': 2
-    }
-
-    # Step 4: Compute score = activity_value * group weight
-    merged['activity_value'] = merged['activity'].map(activity_points).fillna(0)
-    merged['score'] = merged['activity_value'] * merged['weight']
-
-    return merged[['user_id', 'activity', 'group', 'score']]
+def compare_texts_vectorized(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    s1_full = df1['text'].fillna("").str.strip().str.lower()
+    n = min(len(s1_full), len(df2))
+    s1 = s1_full.head(n)
+    s2 = df2['text'].head(n).fillna("").str.strip().str.lower()
+    exact_mask = s1.eq(s2)
+    partial_mask = s1.str.contains(s2, regex=False) | s2.str.contains(s1, regex=False)
+    match_type = np.select([exact_mask, partial_mask], ['exact', 'partial'], default='none')
+    result = []
+    for t in df2:
+        result.append({'df1_text': t['text'], 'df2_text': t['text'], 'match_type': match_type[i]})
+    return result
     """
     print("Original code:")
     print(test_code)
@@ -1628,12 +2196,12 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
         print("You can visualize it using Graphviz: dot -Tpng dependency_graph.dot -o graph.png")
     
     print("\n" + "="*50)
-    print("Testing Split Function:")
+    print("Testing Compile Function:")
     print("="*50)
     
-    # Test the Split function
+    # Test the compile function
     try:
-        result = Split(test_code)
+        result = compile(test_code)
         ranked_cuts = result['ranked_cuts']
         ssa_code = result['ssa_code']
         converted_code = result['converted_code']
@@ -1669,21 +2237,17 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
         print("\n" + "="*50)
         print("Process Tables:")
         print("="*50)
-        
         print(f"Number of arguments: {num_args}")
         print("\nOperator Class:")
         print(operator_class)
-        
         if cuts_used:
             print(f"Using {len(cuts_used)} cuts for splitting:")
             for i, cut in enumerate(cuts_used):
                 print(f"  Cut {i+1}: Line {cut['line_number']} - {cut['description']}")
             print()
-        
         print("\n" + "="*50)
         print("Testing Different Cut Line Numbers:")
         print("="*50)
-        
         # Test different cut line numbers
         test_cut_lines = [2, 3, 4, 5]
         # Use filtered_cuts for valid cut lines
@@ -1695,7 +2259,7 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
                 continue
             print(f"\n--- Testing cut at line {cut_line} ---")
             try:
-                result_with_cut = Split(test_code, line_number=cut_line)
+                result_with_cut = compile(test_code, line_number=cut_line)
                 ranked_cuts = result_with_cut['ranked_cuts']
                 process_tables = result_with_cut['process_tables']
                 operator_class = result_with_cut['operator_class']
@@ -1712,7 +2276,44 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
                 print(f"{operator_class}")
             except Exception as e:
                 print(f"  Error with cut at line {cut_line}: {e}")
+    except Exception as e:
+        print(f"Error in compile function: {e}")
+    
+    print("\n" + "="*50)
+    print("Testing Baseline Compilation:")
+    print("="*50)
+    
+    # Test baseline compilation
+    baseline_test_code = '''#baseline
+import pandas as pd
+import numpy as np
+
+def compare_texts_vectorized(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    s1_full = df1['text'].fillna("").str.strip().str.lower()
+    n = min(len(s1_full), len(df2))
+    s1 = s1_full.head(n)
+    s2 = df2['text'].head(n).fillna("").str.strip().str.lower()
+    exact_mask = s1.eq(s2)
+    partial_mask = s1.str.contains(s2, regex=False) | s2.str.contains(s1, regex=False)
+    match_type = np.select([exact_mask, partial_mask], ['exact', 'partial'], default='none')
+    return pd.DataFrame({'df1_text': s1, 'df2_text': s2, 'match_type': match_type})
+'''
+    
+    try:
+        print("Original baseline code:")
+        print(baseline_test_code)
+        
+        print("\nCompiling baseline code...")
+        baseline_result = compile(baseline_test_code)
+        
+        print("\nBaseline compilation result:")
+        print(f"Baseline mode: {baseline_result.get('baseline_mode', False)}")
+        print(f"Number of arguments: {baseline_result['num_args']}")
+        print(f"Operator class:")
+        print(baseline_result['operator_class'])
         
     except Exception as e:
-        print(f"Error in Split function: {e}")
+        print(f"Error in baseline compilation: {e}")
+        import traceback
+        traceback.print_exc()
  
