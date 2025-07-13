@@ -31,6 +31,7 @@ from .operator import (
     TupleOperatorV2,
     BatchOperator,
     SourceOperator,
+    GeneralOperator,
 )
 from .payload import DataFrame, DataPayload, MarkerFrame
 
@@ -57,6 +58,7 @@ __all__ = [
     "TableOperator",
     "BatchOperator",
     "SourceOperator",
+    "GeneralOperator",
     "DataFrame",
     "DataPayload",
     "MarkerFrame",

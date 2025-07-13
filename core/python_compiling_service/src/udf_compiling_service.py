@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-HTTP Service for Code Splitting API
+HTTP Service for UDF Compiling API
 
 This service provides an API endpoint that receives Python code snippets
-and returns the compiled split code using the Split() function.
+and returns the compiled operator class using the compile() function.
 """
 
 from flask import Flask, request, jsonify
@@ -16,7 +16,7 @@ import os
 # Add the src directory to the path so we can import our modules
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from UDF_splitter import Split
+from UDF_splitter import compile
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -26,20 +26,22 @@ def health_check():
     """Health check endpoint."""
     return jsonify({
         'status': 'healthy',
-        'service': 'code-splitter-api',
+        'service': 'udf-compiling-api',
         'version': '1.0.0'
     })
 
-@app.route('/split', methods=['POST'])
-def split_code():
+@app.route('/compile', methods=['POST'])
+def compile_code():
     """
-    API endpoint to split Python code.
+    API endpoint to compile Python code into an operator class.
     
     Expected JSON payload:
     {
-        "code": "import pandas as pd\ndef function(X, Y):\n    X = X + 1\n    return X",
-        "line_number": 3  // optional
+        "code": "#3\nimport pandas as pd\ndef function(X, Y):\n    X = X + 1\n    return X"
     }
+    
+    If the first line of code is a comment with a number (e.g., "#3"), that number will be used as the line number to split.
+    If the first line is "#baseline", baseline compilation mode will be used.
     
     Returns:
     {
@@ -73,9 +75,6 @@ def split_code():
                 'error': 'No code provided in request'
             }), 400
         
-        # Extract optional line number
-        line_number = data.get('line_number')
-        
         # Validate that code is a string
         if not isinstance(code, str):
             return jsonify({
@@ -83,16 +82,20 @@ def split_code():
                 'error': 'Code must be a string'
             }), 400
         
-        # Validate line_number if provided
-        if line_number is not None:
-            if not isinstance(line_number, int) or line_number < 1:
-                return jsonify({
-                    'success': False,
-                    'error': 'line_number must be a positive integer'
-                }), 400
+        # Parse line number from first line if it's a comment with a number
+        line_number = None
+        lines = code.split('\n')
+        if lines:
+            first_line = lines[0].strip()
+            if first_line.startswith('#') and len(first_line) > 1:
+                # Check if the part after # is a number
+                comment_content = first_line[1:].strip()
+                if comment_content.isdigit():
+                    line_number = int(comment_content)
+                    print(f"Extracted line number {line_number} from first line: {first_line}")
         
-        # Call the Split function
-        result = Split(code, line_number)
+        # Call the compile function
+        result = compile(code, line_number)
         
         # Convert the result to JSON-serializable format
         serializable_result = {
@@ -109,7 +112,7 @@ def split_code():
         
     except Exception as e:
         # Log the error for debugging
-        print(f"Error in split_code endpoint: {str(e)}")
+        print(f"Error in compile_code endpoint: {str(e)}")
         print(traceback.format_exc())
         
         return jsonify({
@@ -117,13 +120,13 @@ def split_code():
             'error': f'Internal server error: {str(e)}'
         }), 500
 
-@app.route('/split', methods=['GET'])
-def split_code_get():
+@app.route('/compile', methods=['GET'])
+def compile_code_get():
     """
     GET endpoint for testing - accepts code as query parameter.
+    If the first line of code is a comment with a number (e.g., "#3"), that number will be used as the line number to split.
     """
     code = request.args.get('code')
-    line_number = request.args.get('line_number')
     
     if not code:
         return jsonify({
@@ -131,24 +134,21 @@ def split_code_get():
             'error': 'No code provided in query parameter'
         }), 400
     
-    # Convert line_number to int if provided
-    if line_number:
-        try:
-            line_number = int(line_number)
-        except ValueError:
-            return jsonify({
-                'success': False,
-                'error': 'line_number must be a valid integer'
-            }), 400
-    
-    # Create a mock POST request
-    mock_data = {'code': code}
-    if line_number:
-        mock_data['line_number'] = line_number
+    # Parse line number from first line if it's a comment with a number
+    line_number = None
+    lines = code.split('\n')
+    if lines:
+        first_line = lines[0].strip()
+        if first_line.startswith('#') and len(first_line) > 1:
+            # Check if the part after # is a number
+            comment_content = first_line[1:].strip()
+            if comment_content.isdigit():
+                line_number = int(comment_content)
+                print(f"Extracted line number {line_number} from first line: {first_line}")
     
     # Use the same logic as POST endpoint
     try:
-        result = Split(code, line_number)
+        result = compile(code, line_number)
         
         serializable_result = {
             'ranked_cuts': result['ranked_cuts'],
@@ -163,7 +163,7 @@ def split_code_get():
         return result['operator_class']
         
     except Exception as e:
-        print(f"Error in split_code_get endpoint: {str(e)}")
+        print(f"Error in compile_code_get endpoint: {str(e)}")
         print(traceback.format_exc())
         
         return jsonify({
@@ -174,7 +174,10 @@ def split_code_get():
 @app.route('/example', methods=['GET'])
 def get_example():
     """Get an example of the expected request format."""
-    example_code = '''import pandas as pd
+    
+    # Example 1: Normal compilation with specific line cut
+    example_code_with_cut = '''#5
+import pandas as pd
 
 def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
     # Step 1: Filter df1
@@ -197,25 +200,57 @@ def enrich_and_score(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
     
     return merged[['user_id', 'activity', 'group', 'score']]'''
     
-    example_request = {
-        'code': example_code,
-        'line_number': 4  # optional
+    # Example 2: Baseline compilation
+    example_code_baseline = '''#baseline
+import pandas as pd
+
+def simple_function(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    merged = pd.merge(df1, df2, on='user_id', how='inner')
+    return merged[['user_id', 'activity', 'score']]'''
+    
+    # Example 3: Auto compilation (no line number)
+    example_code_auto = '''import pandas as pd
+
+def auto_compile(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    df1_filtered = df1[df1['activity'] != 'idle']
+    merged = pd.merge(df1_filtered, df2, on='user_id', how='inner')
+    return merged[['user_id', 'activity', 'score']]'''
+    
+    examples = {
+        'example_with_line_cut': {
+            'code': example_code_with_cut,
+            'description': 'Compilation with specific line cut. The first line "#5" specifies to cut at line 5.'
+        },
+        'example_baseline': {
+            'code': example_code_baseline,
+            'description': 'Baseline compilation. The first line "#baseline" creates a single process_tables method.'
+        },
+        'example_auto': {
+            'code': example_code_auto,
+            'description': 'Auto compilation. No line number specified, will use optimal cuts based on dependency analysis.'
+        }
     }
     
     return jsonify({
-        'example_request': example_request,
-        'description': 'Send this JSON to /split endpoint via POST request. The code can include import statements and will return a complete operator class with imports and process table methods.'
+        'examples': examples,
+        'instructions': {
+            'line_cut': 'Start your code with "#<number>" to specify a line to cut at',
+            'baseline': 'Start your code with "#baseline" for baseline compilation (single method)',
+            'auto': 'No special first line for automatic optimal cutting'
+        }
     })
 
 if __name__ == '__main__':
-    # Run the Flask app
-    print("Starting Code Splitter HTTP Service...")
+    print("Starting UDF Compiling Service...")
     print("Available endpoints:")
-    print("  GET  /health     - Health check")
-    print("  POST /split      - Split code (JSON payload)")
-    print("  GET  /split      - Split code (query parameters)")
-    print("  GET  /example    - Get example request format")
-    print()
-    print("Server will start on http://localhost:5000")
+    print("  GET  /health - Health check")
+    print("  POST /compile - Compile Python code to operator class")
+    print("  GET  /compile - Test endpoint (use query parameters)")
+    print("  GET  /example - Get example request formats")
+    print("\nCode compilation modes:")
+    print("  #<number>  - Cut at specific line number (e.g., '#5')")
+    print("  #baseline  - Baseline compilation (single process_tables method)")
+    print("  (no prefix) - Auto compilation with optimal cuts")
+    print("\nService will be available at http://localhost:9999")
     
-    app.run(host='0.0.0.0', port=9999, debug=True)
+    app.run(host='0.0.0.0', port=9999, debug=True) 

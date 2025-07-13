@@ -98,6 +98,7 @@ class ExecutorManager:
         executors = list(
             filter(self.is_concrete_operator, executor_module.__dict__.values())
         )
+
         # assert len(executors) == 1, "There should be one and only one Operator defined"
         return executors[-1]
 
@@ -134,30 +135,16 @@ class ExecutorManager:
         :param language: The language of the operator code.
         :return:
         """
-        if language == "r-tuple":
-            # Have to import it here and not at the top in case R_HOME from udf.conf
-            # is not defined, otherwise an error will occur
-            # If R_HOME is not defined and rpy2 cannot find the
-            # R_HOME environment variable, an error will occur here
-            from core.models.RTupleExecutor import RTupleSourceExecutor, RTupleExecutor
 
-            self.executor = (
-                RTupleSourceExecutor(code) if is_source else RTupleExecutor(code)
-            )
-        elif language == "r-table":
-            # Have to import it here and not at the top in case R_HOME from udf.conf
-            # is not defined, otherwise an error will occur
-            # If R_HOME is not defined and rpy2 cannot find the
-            # R_HOME environment variable, an error will occur here
-            from core.models.RTableExecutor import RTableSourceExecutor, RTableExecutor
+        executor: type(Operator) = self.load_executor_definition(code)
+        self.executor = executor()
 
-            self.executor = (
-                RTableSourceExecutor(code) if is_source else RTableExecutor(code)
-            )
-        else:
-            executor: type(Operator) = self.load_executor_definition(code)
-            self.executor = executor()
-            self.executor.is_source = is_source
+        self.executor.is_source = is_source
+        # inspect the executor's source code
+        source_code = inspect.getsource(self.executor.__class__)
+        # check if the source code is valid has process_table_0 method
+
+        logger.info("got source code\n" + source_code)
         assert (
             isinstance(self.executor, SourceOperator) == self.executor.is_source
         ), "Please use SourceOperator API for source operators."

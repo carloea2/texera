@@ -18,12 +18,12 @@
 import os
 import sys
 import traceback
-from threading import Event
-
 from loguru import logger
+from threading import Event
 from typing import Iterator, Optional
+
 from core.architecture.managers import Context
-from core.models import ExceptionInfo, State, TupleLike, TableOperator
+from core.models import ExceptionInfo, State, TupleLike
 from core.models.internal_marker import StartOfInputPort, EndOfInputPort
 from core.models.marker import Marker
 from core.models.table import all_output_to_tuple
@@ -71,31 +71,46 @@ class DataProcessor(Runnable, Stoppable):
             executor = self._context.executor_manager.executor
             port_id = self._context.tuple_processing_manager.get_input_port_id()
             with replace_print(
-                self._context.worker_id,
-                self._context.console_message_manager.print_buf,
+                    self._context.worker_id,
+                    self._context.console_message_manager.print_buf,
             ):
                 if isinstance(marker, StartOfInputPort):
-                    method_name = f'open_{marker.port_id}'
+                    method_name = f'on_start_{marker.port_id}'
+
+                    # Check if the executor has this method
                     process_method = getattr(executor, method_name, None)
                     if callable(process_method):
                         process_method()
                     else:
-                        logger.info(f"open for port {marker.port_id} not found, skipped.")
+                        logger.info(
+                            f"open for port {marker.port_id} not found, skipped.")
                     self._set_output_state(executor.produce_state_on_start(port_id))
                 elif isinstance(marker, State):
                     self._set_output_state(executor.process_state(marker, port_id))
                 elif isinstance(marker, EndOfInputPort):
                     self._set_output_state(executor.produce_state_on_finish(port_id))
                     self._switch_context()
-                    if isinstance(executor, TableOperator) and port_id != 1:
-                        self._set_output_tuple(executor.on_finish(port_id))
-                        if self._context.input_manager.all_ports_completed:
-                            self._set_output_tuple(executor.on_finish_all())
-                    else:
-                        method_name = f'on_finish_{port_id}'
+                    method_name = "process_table_" + str(port_id)
+                    if hasattr(executor, method_name):
+                        from core.models.table import Table
+                        table = Table(executor.TABLE_DATA_INTERNAL[port_id])
+                        method_name = 'process_table_' + str(port_id)
                         process_method = getattr(executor, method_name, None)
-                        it = process_method()
-                        self._set_output_tuple(it)
+                        self._set_output_tuple(process_method(table))
+                    else:
+
+                        method_name = f'on_finish_{port_id}'
+                        # Check if the executor has this method
+                        process_method = getattr(executor, method_name, None)
+                        if callable(process_method):
+                            it = process_method()
+                            self._set_output_tuple(it)
+                        else:
+                            logger.info(f"on_finish for port {port_id} not "
+                                        f"found, skipped.")
+                            self._set_output_tuple([])
+                    if self._context.input_manager.all_ports_completed:
+                        self._set_output_tuple(executor.on_finish_all())
 
         except Exception as err:
             logger.exception(err)
@@ -117,16 +132,18 @@ class DataProcessor(Runnable, Stoppable):
                 port_id = self._context.tuple_processing_manager.get_input_port_id()
                 tuple_ = self._context.tuple_processing_manager.get_input_tuple()
                 with replace_print(
-                    self._context.worker_id,
-                    self._context.console_message_manager.print_buf,
+                        self._context.worker_id,
+                        self._context.console_message_manager.print_buf,
                 ):
-                    if isinstance(executor, TableOperator) and port_id != 1:
-                        self._set_output_tuple(executor.process_tuple(tuple_, port_id))
-                    else:
-                        method_name = f'process_tuple_{port_id}'
-                        process_method = getattr(executor, method_name, None)
-                        it = process_method(tuple_)
+                    method_name = f'process_tuple_{port_id}'
+                    # Check if the executor has this method
+                    process_method = getattr(executor, method_name, None)
+                    if callable(process_method):
+                        it = process_method(tuple_, port_id)
                         self._set_output_tuple(it)
+                    else:
+                        # table api
+                        self._set_output_tuple(executor.collect(tuple_, port_id))
 
             except Exception as err:
                 logger.exception(err)
@@ -141,9 +158,11 @@ class DataProcessor(Runnable, Stoppable):
         """
         Set the output tuple after processing by the executor.
         """
+        self._context.tuple_processing_manager.finished_current.clear()
         for output in output_iterator:
             # output could be a None, a TupleLike, or a TableLike.
             for output_tuple in all_output_to_tuple(output):
+                logger.info("Output tuple: " + str(output_tuple))
                 if output_tuple is not None:
                     output_tuple.finalize(
                         self._context.output_manager.get_port().get_schema()

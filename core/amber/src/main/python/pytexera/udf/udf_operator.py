@@ -129,3 +129,9 @@ class UDFBatchOperator(BatchOperator):
         Close the context of the operator.
         """
         pass
+
+class UDFGeneralOperator(GeneralOperator):
+    """
+    Base class for general user-defined operators. A concrete implement
+    ation must
+    """

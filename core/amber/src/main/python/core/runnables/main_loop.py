@@ -311,6 +311,7 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
         :param _: EndOfOutputPorts
         """
+
         self.context.output_manager.close_port_storage_writers()
 
         for to, batch in self.context.output_manager.emit_marker(EndOfInputChannel()):
@@ -324,13 +325,14 @@ class MainLoop(StoppableQueueBlockingRunnable):
             )
             self._check_and_process_control()
 
-        import pickle
-        import re
-        s = self.context.worker_id
-        if re.search(r'-\d+$', s):
-            s = s.rsplit('-', 1)[0]
-        with open(f'{s}.pkl', 'wb') as f:
-            pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
+        if not hasattr(self.context.executor_manager, "process_tables"):
+            import pickle
+            import re
+            s = self.context.worker_id
+            if re.search(r'-\d+$', s):
+                s = s.rsplit('-', 1)[0]
+            with open(f'{s}.pkl', 'wb') as f:
+                pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
 
         # Need to send port completed even if there is no downstream link
         for port_id in self.context.output_manager.get_port_ids():

@@ -33,17 +33,29 @@ class InitializeExecutorHandler(ControlHandler):
         self.context.executor_manager.initialize_executor(
             op_exec_with_code.code, req.is_source, op_exec_with_code.language
         )
-        import pickle
-        import re
-        s = self.context.worker_id
-        if re.search(r'-\d+$', s):
-            s = s.rsplit('-', 1)[0]
-        import os
-        pkl_path = f'{s}.pkl'
-        if os.path.exists(pkl_path):
-            with open(pkl_path, 'rb') as f:
-                self.context.executor_manager.executor = pickle.load(f)
-                self.context.executor_manager.state_loaded = True
-                logger.info(self.context.executor_manager.executor)
-                logger.info(f"operator state reloaded from {pkl_path}")
+
+        if not hasattr(self.context.executor_manager.executor, 'process_tables'):
+            import pickle
+            import re
+            s = self.context.worker_id
+            if re.search(r'-\d+$', s):
+                s = s.rsplit('-', 1)[0]
+            import os
+            pkl_path = f'{s}.pkl'
+            if os.path.exists(pkl_path):
+                # Load the executor state from a pickle file if it exists
+                try:
+                    with open(pkl_path, 'rb') as f:
+
+                        self.context.executor_manager.executor = pickle.load(f)
+                        self.context.executor_manager.state_loaded = True
+                        logger.info(self.context.executor_manager.executor)
+                        logger.info(f"operator state reloaded from {pkl_path}")
+                except:
+                    logger.error(f"Failed to load executor state from {pkl_path}. The executor will be initialized from scratch.")
+                    self.context.executor_manager.state_loaded = False
+                    # remove the file
+                    os.remove(pkl_path)
+
+
         return EmptyReturn()
