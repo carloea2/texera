@@ -26,6 +26,7 @@ from .udf.udf_operator import (
     UDFTableOperator,
     UDFBatchOperator,
     UDFSourceOperator,
+    UDFGeneralOperator,
 )
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "UDFTableOperator",
     "UDFBatchOperator",
     "UDFSourceOperator",
+    "UDFGeneralOperator",
     "DatasetFileDocument",
     # export external tools to be used
     "overrides",

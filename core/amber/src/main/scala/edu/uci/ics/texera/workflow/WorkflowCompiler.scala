@@ -77,6 +77,10 @@ class WorkflowCompiler(
 
               if (physicalOp.isPythonBased) {
                 val code = physicalOp.getCode
+
+                // add a try catch block to handle code generation errors
+
+
                 val backend = HttpURLConnectionBackend()
                 // Use ujson to build and serialize JSON safely
                 val json = ujson.Obj(
@@ -84,18 +88,25 @@ class WorkflowCompiler(
                   "line_number" -> 3
                 )
 
-                val request = basicRequest
-                  .post(uri"http://localhost:9999/compile")
-                  .contentType(MediaType.ApplicationJson)
-                  .body(json.render())
+                try {
+                  val request = basicRequest
+                    .post(uri"http://localhost:9999/compile")
+                    .contentType(MediaType.ApplicationJson)
+                    .body(json.render())
 
-                val response = request.send(backend)
+                  val response = request.send(backend)
 
-                println(response.body)
-                response.body match {
-                  case Left(value) =>
-                  case Right(value) => physicalOp.setCode(value)
+
+                  response.body match {
+                    case Left(value) => physicalOp.setCode(code)
+                    case Right(value) => physicalOp.setCode(value)
+                  }
+                } catch {
+                  case e: Exception =>
+                    physicalOp.setCode(code)
                 }
+
+
               }
 
               // Add the operator to the physical plan

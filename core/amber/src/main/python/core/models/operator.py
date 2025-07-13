@@ -51,18 +51,6 @@ class Operator(ABC):
     def is_source(self, value: bool) -> None:
         self.__internal_is_source = value
 
-    def open(self) -> None:
-        """
-        Open a context of the operator. Usually can be used for loading/initiating some
-        resources, such as a file, a model, or an API client.
-        """
-        pass
-
-    def close(self) -> None:
-        """
-        Close the context of the operator.
-        """
-        pass
 
     def process_state(self, state: State, port: int) -> Optional[State]:
         """
@@ -92,6 +80,12 @@ class Operator(ABC):
         :param port: int, input port index of the current exhausted port.
         :return: State, producing one State object
         """
+        pass
+
+    def open(self) -> None:
+        pass
+
+    def close(self) -> None:
         pass
 
 
@@ -246,5 +240,33 @@ class TableOperator(TupleOperatorV2):
 
     def process_tables(self, *args):
         yield from iter([])
+
+
+
+class GeneralOperator(Operator):
+    """
+    A general operator that can handle both tuples and states.
+    It is not recommended to use this operator directly, but rather
+    extend it to create a specific operator.
+    """
+    def __init__(self):
+        super().__init__()
+        self.__internal_is_source: bool = False
+        self.TABLE_DATA_INTERNAL: Mapping[int, List[Tuple]] = defaultdict(list)
+
+    def collect(self, tuple_: Tuple, port: int) -> None:
+        self.TABLE_DATA_INTERNAL[port].append(tuple_)
+        yield
+
+    def on_finish_all(self):
+        # if self has the "process_tables" method, call it
+        if hasattr(self, "process_tables"):
+            sorted_values = [Table(self.TABLE_DATA_INTERNAL[k]) for k in sorted(
+                self.TABLE_DATA_INTERNAL)]
+            yield from self.process_tables(*sorted_values)
+        else:
+            # otherwise, yield an empty iterator
+            yield from iter([])
+
 
 
