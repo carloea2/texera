@@ -25,7 +25,6 @@ from typing import Iterator, Optional
 
 from core.architecture.managers.context import Context
 from core.architecture.managers.pause_manager import PauseType
-from core.architecture.packaging.input_manager import EndOfOutputPorts
 from core.architecture.rpc.async_rpc_client import AsyncRPCClient
 from core.architecture.rpc.async_rpc_server import AsyncRPCServer
 from core.models import (
@@ -33,7 +32,7 @@ from core.models import (
     Tuple,
 )
 from core.models.internal_marker import (
-    StartOfOutputPorts,
+    EndOfInputPorts,
     EndOfInputPort,
     StartOfInputPort,
 )
@@ -195,30 +194,39 @@ class MainLoop(StoppableQueueBlockingRunnable):
         for output_tuple in self.process_tuple_with_udf():
             self._check_and_process_control()
             if output_tuple is not None:
-                self.context.statistics_manager.increase_output_statistics(
-                    PortIdentity(0), output_tuple.in_mem_size()
-                )
-                for to, batch in self.context.output_manager.tuple_to_batch(
-                    output_tuple
-                ):
-                    self._output_queue.put(
-                        DataElement(
-                            tag=ChannelIdentity(
-                                ActorVirtualIdentity(self.context.worker_id), to, False
-                            ),
-                            payload=batch,
-                        )
+                real_output_tuple, output_port = output_tuple
+                if output_port is None:
+                    output_port = 0
+                if real_output_tuple is not None:
+
+                    if not self.context.output_manager.get_port(output_port).started:
+                        self._process_start_of_output_port(output_port)
+                    self.context.statistics_manager.increase_output_statistics(
+                        PortIdentity(output_port), real_output_tuple.in_mem_size()
                     )
-                self.context.output_manager.save_tuple_to_storage_if_needed(
-                    output_tuple
-                )
+                    for to, batch in self.context.output_manager.tuple_to_batch(
+                            real_output_tuple, output_port
+                    ):
+                        self._output_queue.put(
+                            DataElement(
+                                tag=ChannelIdentity(
+                                    ActorVirtualIdentity(self.context.worker_id), to, False
+                                ),
+                                payload=batch,
+                            )
+                        )
+                    self.context.output_manager.save_tuple_to_storage_if_needed(
+                        real_output_tuple, output_port
+                    )
+
 
     def process_input_state(self) -> None:
         self._switch_context()
         output_state = self.context.marker_processing_manager.get_output_state()
         self._switch_context()
         if output_state is not None:
-            for to, batch in self.context.output_manager.emit_marker(output_state):
+            for to, batch in self.context.output_manager.emit_marker(output_state,
+                                                                     0):
                 self._output_queue.put(
                     DataElement(
                         tag=ChannelIdentity(
@@ -254,7 +262,9 @@ class MainLoop(StoppableQueueBlockingRunnable):
 
     def _process_tuple(self, tuple_: Tuple) -> None:
         self.context.tuple_processing_manager.current_input_tuple = tuple_
+
         self.process_input_tuple()
+
         self._check_and_process_control()
 
     def _process_state(self, state_: State) -> None:
@@ -282,16 +292,15 @@ class MainLoop(StoppableQueueBlockingRunnable):
                     input=True,
                 )
             )
+        if self.context.input_manager.all_ports_completed:
+            self._process_end_of_input_ports()
 
-    def _process_start_of_output_ports(self, _: StartOfOutputPorts) -> None:
+    def _process_start_of_output_port(self, port_id) -> None:
         """
-        Upon receipt of an StartOfAllMarker,
-        which indicates the start of any input links,
         send the StartOfInputChannel to all downstream workers.
-
-        :param _: StartOfAny Internal Marker
         """
-        for to, batch in self.context.output_manager.emit_marker(StartOfInputChannel()):
+        for to, batch in self.context.output_manager.emit_marker(StartOfInputChannel(
+        ),port_id):
             self._output_queue.put(
                 DataElement(
                     tag=ChannelIdentity(
@@ -302,28 +311,27 @@ class MainLoop(StoppableQueueBlockingRunnable):
             )
             self._check_and_process_control()
 
-    def _process_end_of_output_ports(self, _: EndOfOutputPorts) -> None:
+    def _process_end_of_input_ports(self) -> None:
         """
-        Upon receipt of an EndOfAllMarker, which indicates the end of all input links,
-        send the last data batches to all downstream workers.
-
-        It will also invoke complete() of this DataProcessor.
-
-        :param _: EndOfOutputPorts
         """
+        self.context.marker_processing_manager.current_input_marker = EndOfInputPorts()
+
+        # self.process_input_state()
+        self.process_input_tuple()
 
         self.context.output_manager.close_port_storage_writers()
-
-        for to, batch in self.context.output_manager.emit_marker(EndOfInputChannel()):
-            self._output_queue.put(
-                DataElement(
-                    tag=ChannelIdentity(
-                        ActorVirtualIdentity(self.context.worker_id), to, False
-                    ),
-                    payload=batch,
+        for port_id in self.context.output_manager.get_port_ids():
+            for to, batch in self.context.output_manager.emit_marker(EndOfInputChannel(
+            ), port_id.id):
+                self._output_queue.put(
+                    DataElement(
+                        tag=ChannelIdentity(
+                            ActorVirtualIdentity(self.context.worker_id), to, False
+                        ),
+                        payload=batch,
+                    )
                 )
-            )
-            self._check_and_process_control()
+                self._check_and_process_control()
 
         if not hasattr(self.context.executor_manager, "process_tables"):
             import pickle
@@ -340,7 +348,6 @@ class MainLoop(StoppableQueueBlockingRunnable):
                 PortCompletedRequest(port_id=port_id, input=False)
             )
         self.complete()
-
     def _process_channel_marker_payload(self, marker_elem: ChannelMarkerElement):
         """
         Processes a received channel marker payload and handles synchronization,
@@ -447,10 +454,6 @@ class MainLoop(StoppableQueueBlockingRunnable):
                     self._process_start_of_input_port,
                     EndOfInputPort,
                     self._process_end_of_input_port,
-                    StartOfOutputPorts,
-                    self._process_start_of_output_ports,
-                    EndOfOutputPorts,
-                    self._process_end_of_output_ports,
                     State,
                     self._process_state,
                 )

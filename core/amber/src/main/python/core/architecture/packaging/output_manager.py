@@ -71,7 +71,11 @@ from proto.edu.uci.ics.amber.engine.architecture.sendsemantics import (
 class OutputManager:
     def __init__(self, worker_id: str):
         self.worker_id = worker_id
-        self._partitioners: OrderedDict[PhysicalLink, Partitioning] = OrderedDict()
+        from collections import defaultdict
+        self._partitioners: OrderedDict[PortIdentity, OrderedDict[PortIdentity,
+        Partitioner]] = defaultdict(dict)
+
+
         self._partitioning_to_partitioner: dict[
             type(Partitioning), type(Partitioner)
         ] = {
@@ -129,7 +133,7 @@ class OutputManager:
         )
 
     def get_port(self, port_id=None) -> WorkerPort:
-        return list(self._ports.values())[0]
+        return self._ports[list(filter(lambda p: p.id == port_id, self._ports))[0]]
 
     def get_port_ids(self) -> typing.List[PortIdentity]:
         return list(self._ports.keys())
@@ -186,27 +190,32 @@ class OutputManager:
                 channel_id.is_control = False
                 self._channels[channel_id] = Channel()
         partitioner = self._partitioning_to_partitioner[type(the_partitioning)]
-        self._partitioners[tag] = (
+
+        self._partitioners[tag.from_port_id.id][tag.to_port_id.id] = (
             partitioner(the_partitioning)
             if partitioner != OneToOnePartitioner
             else partitioner(the_partitioning, self.worker_id)
         )
 
+
+
+
+
     def tuple_to_batch(
-        self, tuple_: Tuple
+        self, tuple_: Tuple, port_id
     ) -> Iterator[typing.Tuple[ActorVirtualIdentity, DataFrame]]:
         return chain(
             *(
                 (
-                    (receiver, self.tuple_to_frame(tuples))
+                    (receiver, self.tuple_to_frame(tuples, port_id))
                     for receiver, tuples in partitioner.add_tuple_to_batch(tuple_)
                 )
-                for partitioner in self._partitioners.values()
+                for partitioner in self._partitioners[port_id].values()
             )
         )
 
     def emit_marker_to_channel(
-        self, to: ActorVirtualIdentity, marker: ChannelMarkerPayload
+        self, to: ActorVirtualIdentity, marker: ChannelMarkerPayload, port_id
     ) -> Iterable[DataPayload]:
         return chain(
             *(
@@ -214,16 +223,16 @@ class OutputManager:
                     (
                         payload
                         if isinstance(payload, ChannelMarkerPayload)
-                        else self.tuple_to_frame(payload)
+                        else self.tuple_to_frame(payload, port_id)
                     )
                     for payload in partitioner.flush(to, marker)
                 )
-                for partitioner in self._partitioners.values()
+                for partitioner in self._partitioners[port_id].values()
             )
         )
 
     def emit_marker(
-        self, marker: Marker
+        self, marker: Marker, port_id
     ) -> Iterable[typing.Tuple[ActorVirtualIdentity, DataPayload]]:
         return chain(
             *(
@@ -233,22 +242,23 @@ class OutputManager:
                         (
                             MarkerFrame(payload)
                             if isinstance(payload, Marker)
-                            else self.tuple_to_frame(payload)
+                            else self.tuple_to_frame(payload, port_id)
                         ),
                     )
                     for receiver, payload in partitioner.flush_marker(marker)
                 )
-                for partitioner in self._partitioners.values()
+                for partitioner in self._partitioners[port_id].values()
             )
         )
 
-    def tuple_to_frame(self, tuples: typing.List[Tuple]) -> DataFrame:
+    def tuple_to_frame(self, tuples: typing.List[Tuple], port_id) -> DataFrame:
+        schema = self.get_port(port_id).get_schema()
         return DataFrame(
             frame=Table.from_pydict(
                 {
                     name: [t[name] for t in tuples]
-                    for name in self.get_port().get_schema().get_attr_names()
+                    for name in schema.get_attr_names()
                 },
-                schema=self.get_port().get_schema().as_arrow_schema(),
+                schema=schema.as_arrow_schema(),
             )
         )

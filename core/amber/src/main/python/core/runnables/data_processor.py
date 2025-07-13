@@ -24,7 +24,7 @@ from typing import Iterator, Optional
 
 from core.architecture.managers import Context
 from core.models import ExceptionInfo, State, TupleLike
-from core.models.internal_marker import StartOfInputPort, EndOfInputPort
+from core.models.internal_marker import StartOfInputPort, EndOfInputPort, EndOfInputPorts
 from core.models.marker import Marker
 from core.models.table import all_output_to_tuple
 from core.util import Stoppable
@@ -88,6 +88,8 @@ class DataProcessor(Runnable, Stoppable):
                 elif isinstance(marker, State):
                     self._set_output_state(executor.process_state(marker, port_id))
                 elif isinstance(marker, EndOfInputPort):
+
+
                     self._set_output_state(executor.produce_state_on_finish(port_id))
                     self._switch_context()
                     method_name = "process_table_" + str(port_id)
@@ -109,8 +111,10 @@ class DataProcessor(Runnable, Stoppable):
                             logger.info(f"on_finish for port {port_id} not "
                                         f"found, skipped.")
                             self._set_output_tuple([])
-                    if self._context.input_manager.all_ports_completed:
-                        self._set_output_tuple(executor.on_finish_all())
+                elif isinstance(marker, EndOfInputPorts):
+                    # End of all input ports, finalize the processing.
+                    self._set_output_tuple(executor.on_finish_all())
+
 
         except Exception as err:
             logger.exception(err)
@@ -139,7 +143,7 @@ class DataProcessor(Runnable, Stoppable):
                     # Check if the executor has this method
                     process_method = getattr(executor, method_name, None)
                     if callable(process_method):
-                        it = process_method(tuple_, port_id)
+                        it = process_method(tuple_)
                         self._set_output_tuple(it)
                     else:
                         # table api
@@ -160,17 +164,26 @@ class DataProcessor(Runnable, Stoppable):
         """
         self._context.tuple_processing_manager.finished_current.clear()
         for output in output_iterator:
+            from typing import Tuple
+            if (isinstance(output, Tuple) and len(output) == 2 and isinstance(output[
+                                                                                  1], int)):
+                real_output = output[0]
+                output_port = output[1]
             # output could be a None, a TupleLike, or a TableLike.
-            for output_tuple in all_output_to_tuple(output):
+            else:
+                real_output = output
+                output_port = 0
+            for output_tuple in all_output_to_tuple(real_output):
                 logger.info("Output tuple: " + str(output_tuple))
                 if output_tuple is not None:
                     output_tuple.finalize(
-                        self._context.output_manager.get_port().get_schema()
+                        self._context.output_manager.get_port(output_port).get_schema()
                     )
                 self._switch_context()
                 self._context.tuple_processing_manager.current_output_tuple = (
                     output_tuple
                 )
+                self._context.tuple_processing_manager.current_output_port_id = output_port
                 self._switch_context()
         self._context.tuple_processing_manager.finished_current.set()
 

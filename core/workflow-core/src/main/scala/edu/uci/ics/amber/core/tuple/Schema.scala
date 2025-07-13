@@ -201,4 +201,13 @@ object Schema {
         new Attribute(name, AttributeType.valueOf(attrType))
     }.toList)
   }
+
+  def main(args: Array[String]): Unit = {
+    // Example usage
+    val schema = Schema()
+      .add(new Attribute("id", AttributeType.INTEGER))
+      .add(new Attribute("name", AttributeType.BINARY))
+
+    println(schema.toRawSchema) // Output: Schema[id: INTEGER, name: STRING]
+  }
 }

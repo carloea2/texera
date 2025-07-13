@@ -115,6 +115,10 @@ class DocumentFactory:
                     amber_tuples_to_arrow_table,
                     arrow_table_to_amber_tuples,
                 )
+                from loguru import logger
+                logger.info(
+                    f"Opened document with storage key: {storage_key} and schema: {amber_schema}"
+                )
                 return document, amber_schema
             else:
                 raise ValueError(f"Resource type {resource_type} is not supported")

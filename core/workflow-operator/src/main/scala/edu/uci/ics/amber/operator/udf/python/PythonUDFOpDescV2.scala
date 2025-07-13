@@ -20,16 +20,25 @@
 package edu.uci.ics.amber.operator.udf.python
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
+import com.fasterxml.jackson.core.`type`.TypeReference
 import com.google.common.base.Preconditions
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OpExecWithCode
-import edu.uci.ics.amber.core.tuple.{Attribute, Schema}
+import edu.uci.ics.amber.core.tuple.Schema
 import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow._
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.operator.{LogicalOp, PortDescription, StateTransferFunc}
+import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
+import scala.jdk.CollectionConverters.MapHasAsScala
 import scala.util.{Success, Try}
+/** One entry of the annotation map. */
+case class OutSpec(
+                    retainInput:      Boolean               = false,
+                    input:            Option[Int]           = None,          // 0-based input-port index
+                    newColumns:       Map[String, String]   = Map.empty      // name → type
+                  )
 
 class PythonUDFOpDescV2 extends LogicalOp {
   @JsonProperty(
@@ -67,17 +76,11 @@ class PythonUDFOpDescV2 extends LogicalOp {
   @JsonPropertyDescription("Specify how many parallel workers to lunch")
   var workers: Int = Int.box(1)
 
-  @JsonProperty(required = true, defaultValue = "true")
-  @JsonSchemaTitle("Retain input columns")
-  @JsonPropertyDescription("Keep the original input columns?")
-  var retainInputColumns: Boolean = Boolean.box(false)
 
-  @JsonProperty
-  @JsonSchemaTitle("Extra output column(s)")
-  @JsonPropertyDescription(
-    "Name of the newly added output columns that the UDF will produce, if any"
-  )
-  var outputColumns: List[Attribute] = List()
+  @JsonProperty(required = true, defaultValue = "")
+  @JsonSchemaTitle("Output schema annotation")
+  @JsonPropertyDescription("Annotate output schema with this JSON string")
+  var schemaAnnotation: String = ""
 
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
@@ -91,25 +94,55 @@ class PythonUDFOpDescV2 extends LogicalOp {
       opInfo.inputPorts.map(_ => None)
     }
 
-    val propagateSchema = (inputSchemas: Map[PortIdentity, Schema]) => {
-      val inputSchema = inputSchemas(operatorInfo.inputPorts.head.id)
-      var outputSchema = if (retainInputColumns) inputSchema else Schema()
 
-      // Add custom output columns if defined
-      if (outputColumns != null) {
-        if (retainInputColumns) {
-          // Check for duplicate column names
-          for (column <- outputColumns) {
-            if (inputSchema.containsAttribute(column.getName)) {
-              throw new RuntimeException(s"Column name ${column.getName} already exists!")
-            }
-          }
-        }
-        // Add output columns to the schema
-        outputSchema = outputSchema.add(outputColumns)
+
+    /** Parses `schemaAnnotation` into a Map[portId → OutSpec]. */
+    lazy val annotation: Map[String, OutSpec] =
+      if (schemaAnnotation.trim.isEmpty) Map.empty
+      else {
+        val tRef = new TypeReference[java.util.Map[String, OutSpec]](){}
+        objectMapper
+          .readValue(schemaAnnotation, tRef)
+          .asScala
+          .toMap         // convert to Scala Map
       }
 
-      Map(operatorInfo.outputPorts.head.id -> outputSchema)
+
+    val propagateSchema: Map[PortIdentity, Schema] => Map[PortIdentity, Schema] =
+      inputSchemas => {
+
+        // Convenience: index input schemas by *position* (0,1,2,…)
+        val inputByPos: Array[Schema] =
+          operatorInfo.inputPorts
+            .map(_.id)
+            .zipWithIndex
+            .map { case (pid, idx) => idx -> inputSchemas(pid) }
+            .toArray
+            .sortBy(_._1)
+            .map(_._2)
+
+        val outputs: Seq[(PortIdentity, Schema)] =
+          operatorInfo.outputPorts.map { outPort =>
+
+            val spec  = annotation.getOrElse(outPort.id.id.toString,
+              throw new RuntimeException(
+                s"No schema-annotation for output port '${outPort.id.id}'"))
+
+            // ── 1. start with either an empty schema or a retained input schema ──
+            val base: Schema =
+              if (spec.retainInput) {
+                val idx = spec.input.getOrElse(0)
+                if (idx >= inputByPos.length)
+                  throw new RuntimeException(s"Input index $idx out of range")
+                inputByPos(idx)
+              } else Schema()
+
+            // ── 2. append new columns (duplicate-name check) ─────────────────────
+            outPort.id -> base.add(Schema.fromRawSchema(spec.newColumns))
+          }
+
+        Map.from(outputs)
+
     }
 
     val physicalOp = if (workers > 1) {

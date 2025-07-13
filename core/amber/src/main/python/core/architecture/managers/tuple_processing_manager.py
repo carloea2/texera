@@ -27,6 +27,7 @@ class TupleProcessingManager:
         self.current_input_port_id: Optional[PortIdentity] = None
         self.current_input_tuple_iter: Optional[Iterator[Tuple]] = None
         self.current_output_tuple: Optional[Tuple] = None
+        self.current_output_port_id: Optional[PortIdentity] = None
         self.context_switch_condition: Condition = Condition()
         self.finished_current: Event = Event()
 
@@ -35,7 +36,12 @@ class TupleProcessingManager:
         return ret
 
     def get_output_tuple(self) -> Optional[Tuple]:
-        ret, self.current_output_tuple = self.current_output_tuple, None
+        ret = (self.current_output_tuple, self.current_output_port_id)
+
+        # clear the slots
+        self.current_output_tuple = None
+        self.current_output_port_id = None
+
         return ret
 
     def get_input_port_id(self) -> int:
