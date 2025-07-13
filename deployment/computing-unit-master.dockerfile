@@ -46,6 +46,7 @@ WORKDIR /core/amber
 COPY --from=build /core/amber/r-requirements.txt /tmp/r-requirements.txt
 COPY --from=build /core/amber/requirements.txt /tmp/requirements.txt
 COPY --from=build /core/amber/operator-requirements.txt /tmp/operator-requirements.txt
+COPY --from=build /core/python_compiling_service/requirements.txt /tmp/udf-compiling-requirements.txt
 
 # Install Python & R runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -83,7 +84,8 @@ RUN curl -O https://cran.r-project.org/src/base/R-4/R-${R_VERSION}.tar.gz && \
     rm -rf R-${R_VERSION}* && R --version && pip3 install --upgrade pip setuptools wheel && \
     pip3 install -r /tmp/requirements.txt && \
     pip3 install -r /tmp/operator-requirements.txt && \
-    pip3 install -r /tmp/r-requirements.txt
+    pip3 install -r /tmp/r-requirements.txt && \
+    pip3 install -r /tmp/udf-compiling-requirements.txt
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.r-project.org')); \
                 install.packages(c('coro', 'arrow', 'dplyr'), \
                                  Ncpus = parallel::detectCores())"
@@ -98,7 +100,27 @@ COPY --from=build /core/workflow-core/src/main/resources /core/workflow-core/src
 COPY --from=build /core/file-service/src/main/resources /core/file-service/src/main/resources
 # Copy code for python & R UDF
 COPY --from=build /core/amber/src/main/python /core/amber/src/main/python
+# Copy the UDF compiling service
+COPY --from=build /core/python_compiling_service /core/python_compiling_service
 
-CMD ["bin/computing-unit-master"]
+# Create startup script to run both services
+RUN echo '#!/bin/bash' > /core/amber/start-services.sh && \
+    echo 'echo "Starting UDF Compiling Service..."' >> /core/amber/start-services.sh && \
+    echo 'cd /core/python_compiling_service' >> /core/amber/start-services.sh && \
+    echo 'python3 src/udf_compiling_service.py 2>&1 | sed "s/^/[UDF-COMPILE] /" &' >> /core/amber/start-services.sh && \
+    echo 'UDF_PID=$!' >> /core/amber/start-services.sh && \
+    echo 'cd /core/amber' >> /core/amber/start-services.sh && \
+    echo 'echo "Starting Computing Unit Master..."' >> /core/amber/start-services.sh && \
+    echo 'bin/computing-unit-master 2>&1 | sed "s/^/[COMPUTE-UNIT] /" &' >> /core/amber/start-services.sh && \
+    echo 'COMPUTE_PID=$!' >> /core/amber/start-services.sh && \
+    echo 'echo "Both services started:"' >> /core/amber/start-services.sh && \
+    echo 'echo "  UDF Compiling Service PID: $UDF_PID"' >> /core/amber/start-services.sh && \
+    echo 'echo "  Computing Unit Master PID: $COMPUTE_PID"' >> /core/amber/start-services.sh && \
+    echo 'echo "UDF Compiling Service available at http://localhost:9999"' >> /core/amber/start-services.sh && \
+    echo 'echo "Computing Unit Master available at http://localhost:8085"' >> /core/amber/start-services.sh && \
+    echo 'wait $UDF_PID $COMPUTE_PID' >> /core/amber/start-services.sh && \
+    chmod +x /core/amber/start-services.sh
 
-EXPOSE 8085
+CMD ["/core/amber/start-services.sh"]
+
+EXPOSE 8085 9999
