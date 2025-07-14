@@ -336,12 +336,20 @@ class MainLoop(StoppableQueueBlockingRunnable):
         if not hasattr(self.context.executor_manager, "process_tables"):
             import pickle
             import re
-            s = self.context.worker_id
-            if re.search(r'-\d+$', s):
-                s = s.rsplit('-', 1)[0]
-            with open(f'{s}.pkl', 'wb') as f:
-                pickle.dump(self.context.executor_manager.executor, f, pickle.HIGHEST_PROTOCOL)
+            worker_id = self.context.worker_id               # e.g. …-main-10002
+            m = re.search(r'-(\d+)$', worker_id)             # capture final digits
+            tail_num = int(m.group(1)) if m else 0           # 10002
+            prefix   = worker_id[:m.start()] if m else worker_id  # strip last -digits
 
+            # ② Build file name  prefix-{tail % 10000}.pkl
+            file_name = f'{prefix}-{tail_num % 10000}.pkl'
+
+            # ③ Persist executor state
+            with open(file_name, 'wb') as f:
+                pickle.dump(self.context.executor_manager.executor, f,
+                            pickle.HIGHEST_PROTOCOL)
+
+            logger.info(f"{worker_id} operator state saved to {file_name}")
         # Need to send port completed even if there is no downstream link
         for port_id in self.context.output_manager.get_port_ids():
             self._async_rpc_client.controller_stub().port_completed(
