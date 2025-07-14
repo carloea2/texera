@@ -174,7 +174,7 @@ class DataProcessor(Runnable, Stoppable):
                 real_output = output
                 output_port = 0
             for output_tuple in all_output_to_tuple(real_output):
-                logger.info("Output tuple: " + str(output_tuple))
+                # logger.info("Output tuple: " + str(output_tuple))
                 if output_tuple is not None:
                     output_tuple.finalize(
                         self._context.output_manager.get_port(output_port).get_schema()
