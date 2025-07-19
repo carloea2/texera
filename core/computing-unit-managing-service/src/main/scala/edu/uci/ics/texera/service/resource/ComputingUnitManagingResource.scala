@@ -77,6 +77,12 @@ object ComputingUnitManagingResource {
       .get,
     EnvironmentalVariable.ENV_USER_SYS_ENABLED -> EnvironmentalVariable
       .get(EnvironmentalVariable.ENV_USER_SYS_ENABLED)
+      .get,
+    EnvironmentalVariable.ENV_FLOW_CONTROL_MAX_CREDIT_ALLOWED_IN_BYTES_PER_CHANNEL -> EnvironmentalVariable
+      .get(EnvironmentalVariable.ENV_FLOW_CONTROL_MAX_CREDIT_ALLOWED_IN_BYTES_PER_CHANNEL)
+      .get,
+    EnvironmentalVariable.ENV_FLOW_CONTROL_CREDIT_POLL_INTERVAL_IN_MS -> EnvironmentalVariable
+      .get(EnvironmentalVariable.ENV_FLOW_CONTROL_CREDIT_POLL_INTERVAL_IN_MS)
       .get
   )
 
