@@ -191,6 +191,10 @@ texeraEnvVars:
     value: "2Gi"
   - name: KUBERNETES_COMPUTING_UNIT_GPU_LIMIT_OPTIONS
     value: "0"
+  - name: FLOW_CONTROL_MAX_CREDIT_ALLOWED_IN_BYTES_PER_CHANNEL
+    value: "-1"
+  - name: FLOW_CONTROL_CREDIT_POLL_INTERVAL_IN_MS
+    value: "200"
 
 # Ingress dependency configs
 ingress-nginx:
