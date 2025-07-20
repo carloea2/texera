@@ -35,8 +35,10 @@ export class WorkflowExecutionsService {
   /**
    * retrieves a list of execution for a particular workflow from backend database
    */
-  retrieveWorkflowExecutions(wid: number): Observable<WorkflowExecutionsEntry[]> {
-    return this.http.get<WorkflowExecutionsEntry[]>(`${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}`);
+  retrieveWorkflowExecutions(wid: number, cuid: number | undefined = undefined): Observable<WorkflowExecutionsEntry[]> {
+    const urlPath =
+      cuid != undefined ? `${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}?cuid=${cuid}` : `${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}`
+    return this.http.get<WorkflowExecutionsEntry[]>(urlPath);
   }
 
   groupSetIsBookmarked(wid: number, eIds: number[], isBookmarked: boolean): Observable<Object> {
@@ -62,7 +64,9 @@ export class WorkflowExecutionsService {
     });
   }
 
-  retrieveWorkflowRuntimeStatistics(wid: number, eId: number): Observable<WorkflowRuntimeStatistics[]> {
-    return this.http.get<WorkflowRuntimeStatistics[]>(`${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}/${eId}`);
+  retrieveWorkflowRuntimeStatistics(wid: number, eId: number, cuid: number | undefined = undefined): Observable<WorkflowRuntimeStatistics[]> {
+    const urlPath =
+      cuid != undefined ? `${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}/${eId}?cuid=${cuid}` : `${WORKFLOW_EXECUTIONS_API_BASE_URL}/${wid}/${eId}`
+    return this.http.get<WorkflowRuntimeStatistics[]>(urlPath);
   }
 }

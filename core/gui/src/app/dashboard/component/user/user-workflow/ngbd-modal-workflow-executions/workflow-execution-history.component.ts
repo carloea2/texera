@@ -30,6 +30,10 @@ import { NZ_MODAL_DATA, NzModalRef, NzModalService } from "ng-zorro-antd/modal";
 import { WorkflowRuntimeStatisticsComponent } from "./workflow-runtime-statistics/workflow-runtime-statistics.component";
 import * as Plotly from "plotly.js-basic-dist-min";
 import { ActivatedRoute } from "@angular/router";
+import {
+  ComputingUnitStatusService
+} from "../../../../../workspace/service/computing-unit-status/computing-unit-status.service";
+import {DashboardWorkflowComputingUnit} from "../../../../../workspace/types/workflow-computing-unit";
 
 const MAX_TEXT_SIZE = 20;
 const MAX_RGB = 255;
@@ -132,15 +136,24 @@ export class WorkflowExecutionHistoryComponent implements OnInit, AfterViewInit 
   public setOfExecution = new Set<WorkflowExecutionsEntry>();
   public averageProcessingTimeDivider: number = 10;
   modalRef?: NzModalRef;
+  selectedComputingUnit: DashboardWorkflowComputingUnit | null = null;
 
   constructor(
     private workflowExecutionsService: WorkflowExecutionsService,
     private notificationService: NotificationService,
     private runtimeStatisticsModal: NzModalService,
     private workflowActionService: WorkflowActionService,
+    private computingUnitStatusService: ComputingUnitStatusService,
     private route: ActivatedRoute,
     @Optional() @Inject(NZ_MODAL_DATA) private modalData: any
-  ) {}
+  ) {
+    this.computingUnitStatusService
+      .getSelectedComputingUnit()
+      .pipe(untilDestroyed(this))
+      .subscribe(unit => {
+        this.selectedComputingUnit = unit;
+      });
+  }
 
   ngOnInit(): void {
     this.wid = this.modalData?.wid || this.route.snapshot.params["id"] || 0;
@@ -150,7 +163,7 @@ export class WorkflowExecutionHistoryComponent implements OnInit, AfterViewInit 
 
   ngAfterViewInit() {
     this.workflowExecutionsService
-      .retrieveWorkflowExecutions(this.wid)
+      .retrieveWorkflowExecutions(this.wid, this.selectedComputingUnit?.computingUnit.cuid)
       .pipe(untilDestroyed(this))
       .subscribe(workflowExecutions => {
         // generate charts data
@@ -260,7 +273,7 @@ export class WorkflowExecutionHistoryComponent implements OnInit, AfterViewInit 
    */
   displayWorkflowExecutions(): void {
     this.workflowExecutionsService
-      .retrieveWorkflowExecutions(this.wid)
+      .retrieveWorkflowExecutions(this.wid, this.selectedComputingUnit?.computingUnit.cuid)
       .pipe(untilDestroyed(this))
       .subscribe(workflowExecutions => {
         this.allExecutionEntries = workflowExecutions;
@@ -705,7 +718,7 @@ export class WorkflowExecutionHistoryComponent implements OnInit, AfterViewInit 
 
   showRuntimeStatistics(eId: number): void {
     this.workflowExecutionsService
-      .retrieveWorkflowRuntimeStatistics(this.wid, eId)
+      .retrieveWorkflowRuntimeStatistics(this.wid, eId, this.selectedComputingUnit?.computingUnit.cuid)
       .pipe(untilDestroyed(this))
       .subscribe(workflowRuntimeStatistics => {
         this.modalRef = this.runtimeStatisticsModal.create({
