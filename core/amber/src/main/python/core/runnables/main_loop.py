@@ -122,12 +122,13 @@ class MainLoop(StoppableQueueBlockingRunnable):
         processing lifecycle. Thus, this method's invocation could appear in any
         stage while processing a DataElement.
         """
-        while (
-            not self._input_queue.is_control_empty()
-            or not self._input_queue.is_data_enabled()
-        ):
-            next_entry = self.interruptible_get()
-            self._process_control_element(next_entry)
+        # while (
+        #     not self._input_queue.is_control_empty()
+        #     or not self._input_queue.is_data_enabled()
+        # ):
+        #     next_entry = self.interruptible_get()
+        #     self._process_control_element(next_entry)
+        return None
 
     @overrides
     def pre_start(self) -> None:
