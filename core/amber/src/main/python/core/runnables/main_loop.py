@@ -22,6 +22,8 @@ from loguru import logger
 from overrides import overrides
 from pampy import match
 from typing import Iterator, Optional
+from pathlib import Path
+import uuid
 
 from core.architecture.managers.context import Context
 from core.architecture.managers.pause_manager import PauseType
@@ -88,12 +90,17 @@ class MainLoop(StoppableQueueBlockingRunnable):
         threading.Thread(
             target=self.data_processor.run, daemon=True, name="data_processor_thread"
         ).start()
+        self._ts_file: Path = Path(
+            f"time-stamp-{uuid.uuid4()}.log"
+        )
 
     def complete(self) -> None:
         """
         Complete the DataProcessor, marking state to COMPLETED, and notify the
         controller.
         """
+        with self._ts_file.open("a") as f:                         # ⬅️ NEW
+            f.write(f"END {time.time_ns()}\n")
         # flush the buffered console prints
         self._check_and_report_console_messages(force_flush=True)
         self.context.executor_manager.executor.close()
@@ -127,6 +134,8 @@ class MainLoop(StoppableQueueBlockingRunnable):
         self.context.state_manager.assert_state(WorkerState.UNINITIALIZED)
         self.context.state_manager.transit_to(WorkerState.READY)
         self.context.statistics_manager.initialize_worker_start_time(time.time_ns())
+        with self._ts_file.open("a") as f:                         # ⬅️ NEW
+            f.write(f"START {time.time_ns()}\n")                   # ⬅️ NEW
 
     @overrides
     def post_stop(self) -> None:

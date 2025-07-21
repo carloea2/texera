@@ -102,6 +102,8 @@ COPY --from=build /core/file-service/src/main/resources /core/file-service/src/m
 COPY --from=build /core/amber/src/main/python /core/amber/src/main/python
 # Copy the UDF compiling service
 COPY --from=build /core/python_compiling_service /core/python_compiling_service
+# Copy the needed scripts
+COPY --from=build /core/amber/*.py /core/amber/
 
 # Create startup script to run both services
 RUN echo '#!/bin/bash' > /core/amber/start-services.sh && \
