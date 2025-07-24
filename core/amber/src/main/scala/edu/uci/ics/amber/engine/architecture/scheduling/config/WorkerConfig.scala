@@ -56,9 +56,11 @@ case object WorkerConfig {
         // If no suggested number, use default value
         case None => AmberConfig.numWorkerPerOperatorByDefault
       }
-    } else if (physicalOp.isPythonBased && region.id.id == 0) {
-      readPythonWorkerCount()
-    } else {
+    }
+//    else if (physicalOp.isPythonBased && region.id.id == 0) {
+//      readPythonWorkerCount()
+//    }
+    else {
       // Non parallelizable operator has only 1 worker
       1
     }
