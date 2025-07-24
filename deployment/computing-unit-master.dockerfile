@@ -104,6 +104,10 @@ COPY --from=build /core/amber/src/main/python /core/amber/src/main/python
 COPY --from=build /core/python_compiling_service /core/python_compiling_service
 # Copy the needed scripts
 COPY --from=build /core/amber/*.py /core/amber/
+# Copy needed source code
+COPY --from=build /core/amber/src/main/scala /core/amber/src/main/scala
+COPY --from=build /core/workflow-core/src/main/scala /core/workflow-core/src/main/scala
+COPY --from=build /core/workflow-operator/src/main/scala /core/workflow-operator/src/main/scala
 
 # Create startup script to run both services
 RUN echo '#!/bin/bash' > /core/amber/start-services.sh && \
