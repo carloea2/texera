@@ -98,47 +98,73 @@ jobs:
         run: cd core && sbt clean package
       - name: Run backend tests
         run: cd core && sbt test
+  
+python_udf:
+  runs-on: ${{ matrix.os }}
+  strategy:
+    matrix:
+      os:
+        - ubuntu-latest
+      python-version: ['3.9', '3.10', '3.11', '3.12']
 
-  python_udf:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-        python-version: [ '3.9', '3.10', '3.11', '3.12' ]
+  steps:
+    - name: Checkout Texera
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-    steps:
-      - name: Checkout Texera
-        uses: actions/checkout@v2
-      - name: Set up R for R-UDF
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: '4.3.3'
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          cache: false
-          working-directory: "./core/amber"
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f core/amber/requirements.txt ]; then pip install -r core/amber/requirements.txt; fi
-          if [ -f core/amber/r-requirements.txt ]; then pip install -r core/amber/r-requirements.txt; fi
-          if [ -f core/amber/operator-requirements.txt ]; then pip install -r core/amber/operator-requirements.txt; fi
-      - name: Install PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql
-      - name: Start PostgreSQL Service
-        run: sudo systemctl start postgresql
-      - name: Create Database and User
-        run: |
-          cd core/scripts/sql && sudo -u postgres psql -f iceberg_postgres_catalog.sql
-      - name: Lint with flake8 and black
-        run: |
-          cd core/amber/src/main/python && flake8 && black . --check
-      - name: Test with pytest
-        run: |
-          cd core/amber/src/main/python && pytest -sv
+    - name: Detect relevant changes
+      id: changes
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          python_code:
+            - 'core/amber/src/main/python/**'
+
+    - name: Early exit if no Python changes
+      run: |
+        if [ "${{ steps.changes.outputs.python_code }}" != "true" ]; then
+          echo "No changes in core/amber/src/main/python — skipping."
+          exit 0
+        fi
+
+    - name: Set up R for R-UDF
+      uses: r-lib/actions/setup-r@v2
+      with:
+        r-version: '4.3.3'
+
+    - name: Install R dependencies
+      uses: r-lib/actions/setup-r-dependencies@v2
+      with:
+        cache: false
+        working-directory: "./core/amber"
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f core/amber/requirements.txt ]; then pip install -r core/amber/requirements.txt; fi
+        if [ -f core/amber/r-requirements.txt ]; then pip install -r core/amber/r-requirements.txt; fi
+        if [ -f core/amber/operator-requirements.txt ]; then pip install -r core/amber/operator-requirements.txt; fi
+
+    - name: Install PostgreSQL
+      run: sudo apt-get update && sudo apt-get install -y postgresql
+
+    - name: Start PostgreSQL Service
+      run: sudo systemctl start postgresql
+
+    - name: Create Database and User
+      run: |
+        cd core/scripts/sql && sudo -u postgres psql -f iceberg_postgres_catalog.sql
+
+    - name: Lint with flake8 and black
+      run: |
+        cd core/amber/src/main/python && flake8 && black . --check
+
+    - name: Test with pytest
+      run: |
+        cd core/amber/src/main/python && pytest -sv
