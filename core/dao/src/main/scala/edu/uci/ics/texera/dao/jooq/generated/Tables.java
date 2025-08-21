@@ -21,6 +21,7 @@
 package edu.uci.ics.texera.dao.jooq.generated;
 
 
+import edu.uci.ics.texera.dao.jooq.generated.tables.ComputingUnitUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Dataset;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserLikes;
@@ -31,6 +32,8 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorPortExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Project;
 import edu.uci.ics.texera.dao.jooq.generated.tables.ProjectUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.PublicProject;
+import edu.uci.ics.texera.dao.jooq.generated.tables.SiteSettings;
+import edu.uci.ics.texera.dao.jooq.generated.tables.TimeLog;
 import edu.uci.ics.texera.dao.jooq.generated.tables.User;
 import edu.uci.ics.texera.dao.jooq.generated.tables.UserActivity;
 import edu.uci.ics.texera.dao.jooq.generated.tables.UserConfig;
@@ -51,6 +54,11 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.WorkflowViewCount;
  */
 @SuppressWarnings({ "all", "unchecked", "rawtypes" })
 public class Tables {
+
+    /**
+     * The table <code>texera_db.computing_unit_user_access</code>.
+     */
+    public static final ComputingUnitUserAccess COMPUTING_UNIT_USER_ACCESS = ComputingUnitUserAccess.COMPUTING_UNIT_USER_ACCESS;
 
     /**
      * The table <code>texera_db.dataset</code>.
@@ -101,6 +109,16 @@ public class Tables {
      * The table <code>texera_db.public_project</code>.
      */
     public static final PublicProject PUBLIC_PROJECT = PublicProject.PUBLIC_PROJECT;
+
+    /**
+     * The table <code>texera_db.site_settings</code>.
+     */
+    public static final SiteSettings SITE_SETTINGS = SiteSettings.SITE_SETTINGS;
+
+    /**
+     * The table <code>texera_db.time_log</code>.
+     */
+    public static final TimeLog TIME_LOG = TimeLog.TIME_LOG;
 
     /**
      * The table <code>texera_db.user</code>.

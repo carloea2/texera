@@ -21,6 +21,7 @@
 package edu.uci.ics.texera.dao.jooq.generated;
 
 
+import edu.uci.ics.texera.dao.jooq.generated.tables.ComputingUnitUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Dataset;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserLikes;
@@ -31,6 +32,8 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorPortExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Project;
 import edu.uci.ics.texera.dao.jooq.generated.tables.ProjectUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.PublicProject;
+import edu.uci.ics.texera.dao.jooq.generated.tables.SiteSettings;
+import edu.uci.ics.texera.dao.jooq.generated.tables.TimeLog;
 import edu.uci.ics.texera.dao.jooq.generated.tables.User;
 import edu.uci.ics.texera.dao.jooq.generated.tables.UserActivity;
 import edu.uci.ics.texera.dao.jooq.generated.tables.UserConfig;
@@ -65,6 +68,11 @@ public class TexeraDb extends SchemaImpl {
      * The reference instance of <code>texera_db</code>
      */
     public static final TexeraDb TEXERA_DB = new TexeraDb();
+
+    /**
+     * The table <code>texera_db.computing_unit_user_access</code>.
+     */
+    public final ComputingUnitUserAccess COMPUTING_UNIT_USER_ACCESS = ComputingUnitUserAccess.COMPUTING_UNIT_USER_ACCESS;
 
     /**
      * The table <code>texera_db.dataset</code>.
@@ -115,6 +123,16 @@ public class TexeraDb extends SchemaImpl {
      * The table <code>texera_db.public_project</code>.
      */
     public final PublicProject PUBLIC_PROJECT = PublicProject.PUBLIC_PROJECT;
+
+    /**
+     * The table <code>texera_db.site_settings</code>.
+     */
+    public final SiteSettings SITE_SETTINGS = SiteSettings.SITE_SETTINGS;
+
+    /**
+     * The table <code>texera_db.time_log</code>.
+     */
+    public final TimeLog TIME_LOG = TimeLog.TIME_LOG;
 
     /**
      * The table <code>texera_db.user</code>.
@@ -197,6 +215,7 @@ public class TexeraDb extends SchemaImpl {
     @Override
     public final List<Table<?>> getTables() {
         return Arrays.asList(
+            ComputingUnitUserAccess.COMPUTING_UNIT_USER_ACCESS,
             Dataset.DATASET,
             DatasetUserAccess.DATASET_USER_ACCESS,
             DatasetUserLikes.DATASET_USER_LIKES,
@@ -207,6 +226,8 @@ public class TexeraDb extends SchemaImpl {
             Project.PROJECT,
             ProjectUserAccess.PROJECT_USER_ACCESS,
             PublicProject.PUBLIC_PROJECT,
+            SiteSettings.SITE_SETTINGS,
+            TimeLog.TIME_LOG,
             User.USER,
             UserActivity.USER_ACTIVITY,
             UserConfig.USER_CONFIG,
