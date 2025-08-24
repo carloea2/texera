@@ -20,8 +20,14 @@
 import { DashboardFile } from "./dashboard-file.interface";
 import { DashboardWorkflow } from "./dashboard-workflow.interface";
 import { DashboardProject } from "./dashboard-project.interface";
-import { DashboardDataset } from "./dashboard-dataset.interface";
-import { isDashboardDataset, isDashboardFile, isDashboardProject, isDashboardWorkflow } from "./type-predicates";
+import { DashboardDataset, DashboardModel } from "./dashboard-dataset.interface";
+import {
+  isDashboardDataset,
+  isDashboardFile,
+  isDashboardModel,
+  isDashboardProject,
+  isDashboardWorkflow,
+} from "./type-predicates";
 import { EntityType } from "../../hub/service/hub.service";
 
 export interface UserInfo {
@@ -49,7 +55,7 @@ export class DashboardEntry {
   isLiked: boolean;
   accessibleUserIds: number[];
 
-  constructor(public value: DashboardWorkflow | DashboardProject | DashboardFile | DashboardDataset) {
+  constructor(public value: DashboardWorkflow | DashboardProject | DashboardFile | DashboardDataset | DashboardModel) {
     if (isDashboardWorkflow(value)) {
       this.type = EntityType.Workflow;
       this.id = value.workflow.wid;
@@ -122,6 +128,24 @@ export class DashboardEntry {
       this.likeCount = 0;
       this.isLiked = false;
       this.accessibleUserIds = [];
+    } else if (isDashboardModel(value)) {
+      this.type = EntityType.Model;
+      this.id = value.model.mid;
+      this.name = value.model.name;
+      this.description = value.model.description;
+      this.creationTime = value.model.creationTime;
+      this.lastModifiedTime = value.model.creationTime;
+      this.accessLevel = value.accessPrivilege;
+      this.ownerName = "";
+      this.ownerEmail = value.ownerEmail;
+      this.ownerGoogleAvatar = "";
+      this.ownerId = value.model.ownerUid;
+      this.size = value.size;
+      this.viewCount = 0;
+      this.cloneCount = 0;
+      this.likeCount = 0;
+      this.isLiked = false;
+      this.accessibleUserIds = [];
     } else {
       throw new Error("Unexpected type in DashboardEntry.");
     }
@@ -177,6 +201,13 @@ export class DashboardEntry {
   get dataset(): DashboardDataset {
     if (!isDashboardDataset(this.value)) {
       throw new Error("Value is not of type DashboardDataset");
+    }
+    return this.value;
+  }
+
+  get model(): DashboardModel {
+    if (!isDashboardModel(this.value)) {
+      throw new Error("Value is not of type DashboardModel");
     }
     return this.value;
   }

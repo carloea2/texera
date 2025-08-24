@@ -67,9 +67,13 @@ object UnifiedResourceSchema {
       projectOwnerId: Field[Integer] = DSL.cast(null, classOf[Integer]),
       projectColor: Field[String] = DSL.inline(""),
       did: Field[Integer] = DSL.cast(null, classOf[Integer]),
+      mid: Field[Integer] = DSL.cast(null, classOf[Integer]),
       datasetStoragePath: Field[String] = DSL.cast(null, classOf[String]),
       isDatasetPublic: Field[java.lang.Boolean] = DSL.cast(null, classOf[java.lang.Boolean]),
-      datasetUserAccess: Field[PrivilegeEnum] = DSL.castNull(classOf[PrivilegeEnum])
+      datasetUserAccess: Field[PrivilegeEnum] = DSL.castNull(classOf[PrivilegeEnum]),
+      modelStoragePath: Field[String] = DSL.cast(null, classOf[String]),
+  isModelPublic: Field[java.lang.Boolean] = DSL.cast(null, classOf[java.lang.Boolean]),
+      modelUserAccess: Field[PrivilegeEnum] = DSL.castNull(classOf[PrivilegeEnum])
   ): UnifiedResourceSchema = {
     new UnifiedResourceSchema(
       Seq(
@@ -89,6 +93,10 @@ object UnifiedResourceSchema {
         projectOwnerId -> projectOwnerId.as("owner_uid"),
         projectColor -> projectColor.as("color"),
         did -> did.as("did"),
+        mid -> mid.as("mid"),
+        modelStoragePath -> modelStoragePath.as("model_storage_path"),
+        modelUserAccess -> modelUserAccess.as("user_model_access"),
+        isModelPublic -> isModelPublic.as("is_model_public"),
         datasetStoragePath -> datasetStoragePath.as("dataset_storage_path"),
         datasetUserAccess -> datasetUserAccess.as("user_dataset_access"),
         isDatasetPublic -> isDatasetPublic.as("is_dataset_public")

@@ -21,23 +21,8 @@ package edu.uci.ics.texera.web.resource.dashboard.hub
 
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.jooq.generated.Tables._
-import HubResource.{
-  AccessResponse,
-  CountResponse,
-  LikedResponse,
-  UserRequest,
-  ViewRequest,
-  fetchDashboardDatasetsByDids,
-  fetchDashboardWorkflowsByWids,
-  isLikedHelper,
-  recordLikeActivity,
-  recordUserActivity
-}
-import edu.uci.ics.texera.web.resource.dashboard.user.workflow.WorkflowResource.{
-  DashboardWorkflow,
-  baseWorkflowSelect,
-  mapWorkflowEntries
-}
+import HubResource.{AccessResponse, CountResponse, LikedResponse, UserRequest, ViewRequest, fetchDashboardDatasetsByDids, fetchDashboardWorkflowsByWids, isLikedHelper, recordLikeActivity, recordUserActivity}
+import edu.uci.ics.texera.web.resource.dashboard.user.workflow.WorkflowResource.{DashboardWorkflow, baseWorkflowSelect, mapWorkflowEntries}
 import org.jooq.impl.DSL
 
 import java.util.regex.Pattern
@@ -55,6 +40,7 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.User.USER
 import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetUserAccess}
 import edu.uci.ics.texera.web.resource.dashboard.DashboardResource.DashboardClickableFileEntry
 import edu.uci.ics.texera.web.resource.dashboard.hub.ActionType.{Clone, Like, Unlike, View}
+import edu.uci.ics.texera.web.resource.dashboard.hub.EntityType.Model
 import edu.uci.ics.texera.web.resource.dashboard.user.dataset.DatasetResource.DashboardDataset
 import io.dropwizard.auth.Auth
 import org.jooq.Table
@@ -614,7 +600,7 @@ class HubResource {
           } else Map.empty
 
         val cloneMap: Map[Int, Int] =
-          if (requestedActions.contains(ActionType.Clone) && etype != EntityType.Dataset) {
+          if (requestedActions.contains(ActionType.Clone) && etype != EntityType.Dataset && etype !=EntityType.Model) {
             val cloneTbl = CloneTable(etype)
             context
               .select(cloneTbl.idColumn, DSL.count().`as`("cnt"))
@@ -679,6 +665,8 @@ class HubResource {
             (WORKFLOW_USER_ACCESS: Table[_], WORKFLOW_USER_ACCESS.WID, WORKFLOW_USER_ACCESS.UID)
           case EntityType.Dataset =>
             (DATASET_USER_ACCESS: Table[_], DATASET_USER_ACCESS.DID, DATASET_USER_ACCESS.UID)
+          case EntityType.Model =>
+            (MODEL_USER_ACCESS: Table[_], MODEL_USER_ACCESS.MID, MODEL_USER_ACCESS.UID)
         }
 
         val records = context

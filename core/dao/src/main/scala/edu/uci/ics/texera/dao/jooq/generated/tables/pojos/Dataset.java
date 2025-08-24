@@ -38,9 +38,9 @@ public class Dataset implements IDataset {
     private Integer   ownerUid;
     private String    name;
     private Boolean   isPublic;
+    private Boolean   isDownloadable;
     private String    description;
     private Timestamp creationTime;
-    private Boolean   isDownloadable;
 
     public Dataset() {}
 
@@ -49,9 +49,9 @@ public class Dataset implements IDataset {
         this.ownerUid = value.getOwnerUid();
         this.name = value.getName();
         this.isPublic = value.getIsPublic();
+        this.isDownloadable = value.getIsDownloadable();
         this.description = value.getDescription();
         this.creationTime = value.getCreationTime();
-        this.isDownloadable = value.getIsDownloadable();
     }
 
     public Dataset(
@@ -59,17 +59,17 @@ public class Dataset implements IDataset {
         Integer   ownerUid,
         String    name,
         Boolean   isPublic,
+        Boolean   isDownloadable,
         String    description,
-        Timestamp creationTime,
-        Boolean   isDownloadable
+        Timestamp creationTime
     ) {
         this.did = did;
         this.ownerUid = ownerUid;
         this.name = name;
         this.isPublic = isPublic;
+        this.isDownloadable = isDownloadable;
         this.description = description;
         this.creationTime = creationTime;
-        this.isDownloadable = isDownloadable;
     }
 
     /**
@@ -137,6 +137,22 @@ public class Dataset implements IDataset {
     }
 
     /**
+     * Getter for <code>texera_db.dataset.is_downloadable</code>.
+     */
+    @Override
+    public Boolean getIsDownloadable() {
+        return this.isDownloadable;
+    }
+
+    /**
+     * Setter for <code>texera_db.dataset.is_downloadable</code>.
+     */
+    @Override
+    public void setIsDownloadable(Boolean isDownloadable) {
+        this.isDownloadable = isDownloadable;
+    }
+
+    /**
      * Getter for <code>texera_db.dataset.description</code>.
      */
     @Override
@@ -168,22 +184,6 @@ public class Dataset implements IDataset {
         this.creationTime = creationTime;
     }
 
-    /**
-     * Getter for <code>texera_db.dataset.is_downloadable</code>.
-     */
-    @Override
-    public Boolean getIsDownloadable() {
-        return this.isDownloadable;
-    }
-
-    /**
-     * Setter for <code>texera_db.dataset.is_downloadable</code>.
-     */
-    @Override
-    public void setIsDownloadable(Boolean isDownloadable) {
-        this.isDownloadable = isDownloadable;
-    }
-
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("Dataset (");
@@ -192,9 +192,9 @@ public class Dataset implements IDataset {
         sb.append(", ").append(ownerUid);
         sb.append(", ").append(name);
         sb.append(", ").append(isPublic);
+        sb.append(", ").append(isDownloadable);
         sb.append(", ").append(description);
         sb.append(", ").append(creationTime);
-        sb.append(", ").append(isDownloadable);
 
         sb.append(")");
         return sb.toString();
@@ -210,9 +210,9 @@ public class Dataset implements IDataset {
         setOwnerUid(from.getOwnerUid());
         setName(from.getName());
         setIsPublic(from.getIsPublic());
+        setIsDownloadable(from.getIsDownloadable());
         setDescription(from.getDescription());
         setCreationTime(from.getCreationTime());
-        setIsDownloadable(from.getIsDownloadable());
     }
 
     @Override

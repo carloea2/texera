@@ -34,7 +34,7 @@ describe("DownloadService", () => {
   let notificationServiceSpy: jasmine.SpyObj<NotificationService>;
 
   beforeEach(() => {
-    const datasetSpy = jasmine.createSpyObj("DatasetService", [
+    const datasetSpy = jasmine.createSpyObj("ModelService", [
       "retrieveDatasetVersionSingleFile",
       "retrieveDatasetVersionZip", // Add this method to the spy
     ]);

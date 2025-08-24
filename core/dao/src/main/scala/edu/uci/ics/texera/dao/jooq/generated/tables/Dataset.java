@@ -87,6 +87,11 @@ public class Dataset extends TableImpl<DatasetRecord> {
     public final TableField<DatasetRecord, Boolean> IS_PUBLIC = createField(DSL.name("is_public"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field("true", SQLDataType.BOOLEAN)), this, "");
 
     /**
+     * The column <code>texera_db.dataset.is_downloadable</code>.
+     */
+    public final TableField<DatasetRecord, Boolean> IS_DOWNLOADABLE = createField(DSL.name("is_downloadable"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field("true", SQLDataType.BOOLEAN)), this, "");
+
+    /**
      * The column <code>texera_db.dataset.description</code>.
      */
     public final TableField<DatasetRecord, String> DESCRIPTION = createField(DSL.name("description"), SQLDataType.VARCHAR(512).nullable(false), this, "");
@@ -95,11 +100,6 @@ public class Dataset extends TableImpl<DatasetRecord> {
      * The column <code>texera_db.dataset.creation_time</code>.
      */
     public final TableField<DatasetRecord, Timestamp> CREATION_TIME = createField(DSL.name("creation_time"), SQLDataType.TIMESTAMP(0).nullable(false).defaultValue(DSL.field("CURRENT_TIMESTAMP", SQLDataType.TIMESTAMP)), this, "");
-
-    /**
-     * The column <code>texera_db.dataset.is_downloadable</code>.
-     */
-    public final TableField<DatasetRecord, Boolean> IS_DOWNLOADABLE = createField(DSL.name("is_downloadable"), SQLDataType.BOOLEAN.nullable(false).defaultValue(DSL.field("true", SQLDataType.BOOLEAN)), this, "");
 
     private Dataset(Name alias, Table<DatasetRecord> aliased) {
         this(alias, aliased, null);
@@ -197,7 +197,7 @@ public class Dataset extends TableImpl<DatasetRecord> {
     // -------------------------------------------------------------------------
 
     @Override
-    public Row7<Integer, Integer, String, Boolean, String, Timestamp, Boolean> fieldsRow() {
+    public Row7<Integer, Integer, String, Boolean, Boolean, String, Timestamp> fieldsRow() {
         return (Row7) super.fieldsRow();
     }
 }

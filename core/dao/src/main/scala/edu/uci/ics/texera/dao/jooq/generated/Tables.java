@@ -27,6 +27,11 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserLikes;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetVersion;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetViewCount;
+import edu.uci.ics.texera.dao.jooq.generated.tables.Model;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelUserAccess;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelUserLikes;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelVersion;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelViewCount;
 import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorPortExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Project;
@@ -84,6 +89,31 @@ public class Tables {
      * The table <code>texera_db.dataset_view_count</code>.
      */
     public static final DatasetViewCount DATASET_VIEW_COUNT = DatasetViewCount.DATASET_VIEW_COUNT;
+
+    /**
+     * The table <code>texera_db.model</code>.
+     */
+    public static final Model MODEL = Model.MODEL;
+
+    /**
+     * The table <code>texera_db.model_user_access</code>.
+     */
+    public static final ModelUserAccess MODEL_USER_ACCESS = ModelUserAccess.MODEL_USER_ACCESS;
+
+    /**
+     * The table <code>texera_db.model_user_likes</code>.
+     */
+    public static final ModelUserLikes MODEL_USER_LIKES = ModelUserLikes.MODEL_USER_LIKES;
+
+    /**
+     * The table <code>texera_db.model_version</code>.
+     */
+    public static final ModelVersion MODEL_VERSION = ModelVersion.MODEL_VERSION;
+
+    /**
+     * The table <code>texera_db.model_view_count</code>.
+     */
+    public static final ModelViewCount MODEL_VIEW_COUNT = ModelViewCount.MODEL_VIEW_COUNT;
 
     /**
      * The table <code>texera_db.operator_executions</code>.

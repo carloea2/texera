@@ -27,6 +27,11 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserAccess;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetUserLikes;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetVersion;
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetViewCount;
+import edu.uci.ics.texera.dao.jooq.generated.tables.Model;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelUserAccess;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelUserLikes;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelVersion;
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelViewCount;
 import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.OperatorPortExecutions;
 import edu.uci.ics.texera.dao.jooq.generated.tables.Project;
@@ -98,6 +103,31 @@ public class TexeraDb extends SchemaImpl {
      * The table <code>texera_db.dataset_view_count</code>.
      */
     public final DatasetViewCount DATASET_VIEW_COUNT = DatasetViewCount.DATASET_VIEW_COUNT;
+
+    /**
+     * The table <code>texera_db.model</code>.
+     */
+    public final Model MODEL = Model.MODEL;
+
+    /**
+     * The table <code>texera_db.model_user_access</code>.
+     */
+    public final ModelUserAccess MODEL_USER_ACCESS = ModelUserAccess.MODEL_USER_ACCESS;
+
+    /**
+     * The table <code>texera_db.model_user_likes</code>.
+     */
+    public final ModelUserLikes MODEL_USER_LIKES = ModelUserLikes.MODEL_USER_LIKES;
+
+    /**
+     * The table <code>texera_db.model_version</code>.
+     */
+    public final ModelVersion MODEL_VERSION = ModelVersion.MODEL_VERSION;
+
+    /**
+     * The table <code>texera_db.model_view_count</code>.
+     */
+    public final ModelViewCount MODEL_VIEW_COUNT = ModelViewCount.MODEL_VIEW_COUNT;
 
     /**
      * The table <code>texera_db.operator_executions</code>.
@@ -221,6 +251,11 @@ public class TexeraDb extends SchemaImpl {
             DatasetUserLikes.DATASET_USER_LIKES,
             DatasetVersion.DATASET_VERSION,
             DatasetViewCount.DATASET_VIEW_COUNT,
+            Model.MODEL,
+            ModelUserAccess.MODEL_USER_ACCESS,
+            ModelUserLikes.MODEL_USER_LIKES,
+            ModelVersion.MODEL_VERSION,
+            ModelViewCount.MODEL_VIEW_COUNT,
             OperatorExecutions.OPERATOR_EXECUTIONS,
             OperatorPortExecutions.OPERATOR_PORT_EXECUTIONS,
             Project.PROJECT,

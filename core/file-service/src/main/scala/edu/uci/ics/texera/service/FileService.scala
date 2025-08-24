@@ -31,11 +31,7 @@ import edu.uci.ics.texera.auth.{JwtAuthFilter, SessionUser}
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.service.`type`.DatasetFileNode
 import edu.uci.ics.texera.service.`type`.serde.DatasetFileNodeSerializer
-import edu.uci.ics.texera.service.resource.{
-  DatasetAccessResource,
-  DatasetResource,
-  HealthCheckResource
-}
+import edu.uci.ics.texera.service.resource.{DatasetAccessResource, DatasetResource, HealthCheckResource, ModelAccessResource, ModelResource}
 import edu.uci.ics.texera.service.util.S3StorageClient
 import io.dropwizard.auth.AuthDynamicFeature
 import org.eclipse.jetty.server.session.SessionHandler
@@ -80,6 +76,8 @@ class FileService extends Application[FileServiceConfiguration] with LazyLogging
 
     environment.jersey.register(classOf[DatasetResource])
     environment.jersey.register(classOf[DatasetAccessResource])
+    environment.jersey.register(classOf[ModelResource])
+    environment.jersey.register(classOf[ModelAccessResource])
   }
 }
 

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { Dataset, DatasetVersion } from "../../common/type/dataset";
+import { Dataset, Model, DatasetVersion } from "../../common/type/dataset";
 import { DatasetFileNode } from "../../common/type/datasetVersionFileTree";
 
 export interface DashboardDataset {
@@ -27,3 +27,12 @@ export interface DashboardDataset {
   accessPrivilege: "READ" | "WRITE" | "NONE";
   size: number;
 }
+
+export interface DashboardModel{
+  isOwner: boolean;
+  ownerEmail: string;
+  model: Model;
+  accessPrivilege: "READ" | "WRITE" | "NONE";
+  size: number;
+}
+

@@ -185,8 +185,8 @@ object DatasetResource {
   case class DatasetDescriptionModification(did: Integer, description: String)
 
   case class DatasetVersionRootFileNodesResponse(
-      fileNodes: List[DatasetFileNode],
-      size: Long
+                                                  fileNodes: List[DatasetFileNode],
+                                                  size: Long
   )
 }
 
@@ -289,9 +289,9 @@ class DatasetResource {
           createdDataset.getOwnerUid,
           createdDataset.getName,
           createdDataset.getIsPublic,
+          createdDataset.getIsDownloadable,
           createdDataset.getDescription,
-          createdDataset.getCreationTime,
-          createdDataset.getIsDownloadable
+          createdDataset.getCreationTime
         ),
         user.getEmail,
         PrivilegeEnum.WRITE,

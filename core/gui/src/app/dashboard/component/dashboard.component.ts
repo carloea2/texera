@@ -38,7 +38,7 @@ import {
   DASHBOARD_USER_DISCUSSION,
   DASHBOARD_USER_PROJECT,
   DASHBOARD_USER_QUOTA,
-  DASHBOARD_USER_WORKFLOW,
+  DASHBOARD_USER_WORKFLOW, DASHBOARD_USER_MODEL,
 } from "../../app-routing.constant";
 import { Version } from "../../../environments/version";
 import { SidebarTabs } from "../../common/type/gui-config";
@@ -70,6 +70,7 @@ export class DashboardComponent implements OnInit {
     projects_enabled: false,
     workflows_enabled: false,
     datasets_enabled: false,
+    models_enabled: false,
     quota_enabled: false,
     forum_enabled: false,
     about_enabled: false,
@@ -78,6 +79,7 @@ export class DashboardComponent implements OnInit {
   protected readonly DASHBOARD_USER_PROJECT = DASHBOARD_USER_PROJECT;
   protected readonly DASHBOARD_USER_WORKFLOW = DASHBOARD_USER_WORKFLOW;
   protected readonly DASHBOARD_USER_DATASET = DASHBOARD_USER_DATASET;
+  protected readonly DASHBOARD_USER_MODEL = DASHBOARD_USER_MODEL;
   protected readonly DASHBOARD_USER_QUOTA = DASHBOARD_USER_QUOTA;
   protected readonly DASHBOARD_USER_DISCUSSION = DASHBOARD_USER_DISCUSSION;
   protected readonly DASHBOARD_ADMIN_USER = DASHBOARD_ADMIN_USER;

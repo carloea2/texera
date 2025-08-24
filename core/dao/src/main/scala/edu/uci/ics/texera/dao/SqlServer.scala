@@ -52,6 +52,8 @@ object SqlServer {
   private var instance: Option[SqlServer] = None
 
   def initConnection(url: String, user: String, password: String): Unit = {
+
+    println(s"Initializing SqlServer connection with URL: $url, User: $user, Password: $password")
     if (instance.isEmpty) {
       val server = new SqlServer(url, user, password)
       instance = Some(server)

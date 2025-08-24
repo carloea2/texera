@@ -50,6 +50,9 @@ DROP TABLE IF EXISTS workflow_executions CASCADE;
 DROP TABLE IF EXISTS dataset CASCADE;
 DROP TABLE IF EXISTS dataset_user_access CASCADE;
 DROP TABLE IF EXISTS dataset_version CASCADE;
+DROP TABLE IF EXISTS model CASCADE;
+DROP TABLE IF EXISTS model_user_access CASCADE;
+DROP TABLE IF EXISTS model_version CASCADE;
 DROP TABLE IF EXISTS public_project CASCADE;
 DROP TABLE IF EXISTS project_user_access CASCADE;
 DROP TABLE IF EXISTS workflow_user_likes CASCADE;
@@ -59,6 +62,8 @@ DROP TABLE IF EXISTS workflow_user_activity CASCADE;
 DROP TABLE IF EXISTS user_activity CASCADE;
 DROP TABLE IF EXISTS dataset_user_likes CASCADE;
 DROP TABLE IF EXISTS dataset_view_count CASCADE;
+DROP TABLE IF EXISTS model_user_likes CASCADE;
+DROP TABLE IF EXISTS model_view_count CASCADE;
 DROP TABLE IF EXISTS site_settings CASCADE;
 DROP TABLE IF EXISTS computing_unit_user_access CASCADE;
 
@@ -260,6 +265,43 @@ CREATE TABLE IF NOT EXISTS dataset_version
     FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE
     );
 
+-- model
+CREATE TABLE IF NOT EXISTS model
+(
+    mid            SERIAL PRIMARY KEY,
+    owner_uid      INT NOT NULL,
+    name           VARCHAR(128) NOT NULL,
+    is_public      BOOLEAN NOT NULL DEFAULT TRUE,
+    is_downloadable BOOLEAN NOT NULL DEFAULT TRUE,
+    description    VARCHAR(512) NOT NULL,
+    creation_time  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_uid) REFERENCES "user"(uid) ON DELETE CASCADE
+);
+
+-- model_user_access
+CREATE TABLE IF NOT EXISTS model_user_access
+(
+    mid       INT NOT NULL,
+    uid       INT NOT NULL,
+    privilege privilege_enum NOT NULL DEFAULT 'NONE',
+    PRIMARY KEY (mid, uid),
+    FOREIGN KEY (mid) REFERENCES model(mid) ON DELETE CASCADE,
+    FOREIGN KEY (uid) REFERENCES "user"(uid) ON DELETE CASCADE
+);
+
+-- model_version
+CREATE TABLE IF NOT EXISTS model_version
+(
+    mvid          SERIAL PRIMARY KEY,
+    mid           INT NOT NULL,
+    creator_uid   INT NOT NULL,
+    name          VARCHAR(128) NOT NULL,
+    version_hash  VARCHAR(64) NOT NULL,
+    creation_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mid) REFERENCES model(mid) ON DELETE CASCADE
+);
+
+
 -- operator_executions (modified to match MySQL: no separate primary key; added console_messages_uri)
 CREATE TABLE IF NOT EXISTS operator_executions
 (
@@ -340,6 +382,25 @@ CREATE TABLE IF NOT EXISTS dataset_view_count
     PRIMARY KEY (did),
     FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE
     );
+
+-- model_user_likes table
+CREATE TABLE IF NOT EXISTS model_user_likes
+(
+    uid INTEGER NOT NULL,
+    mid INTEGER NOT NULL,
+    PRIMARY KEY (uid, mid),
+    FOREIGN KEY (uid) REFERENCES "user"(uid) ON DELETE CASCADE,
+    FOREIGN KEY (mid) REFERENCES model(mid) ON DELETE CASCADE
+);
+
+-- model_view_count table
+CREATE TABLE IF NOT EXISTS model_view_count
+(
+    mid        INTEGER NOT NULL,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (mid),
+    FOREIGN KEY (mid) REFERENCES model(mid) ON DELETE CASCADE
+);
 
 -- site_settings table
 CREATE TABLE IF NOT EXISTS site_settings

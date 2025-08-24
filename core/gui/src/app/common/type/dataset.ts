@@ -39,3 +39,15 @@ export interface Dataset {
   description: string;
   creationTime: number | undefined;
 }
+
+export interface Model {
+  mid: number | undefined;
+  ownerUid: number | undefined;
+  name: string;
+  isPublic: boolean;
+  isDownloadable: boolean;
+  storagePath: string | undefined;
+  description: string;
+  creationTime: number | undefined;
+}
+

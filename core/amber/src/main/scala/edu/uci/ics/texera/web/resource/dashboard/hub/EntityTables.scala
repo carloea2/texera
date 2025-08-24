@@ -83,10 +83,19 @@ object EntityTables {
       override val idColumn: TableField[DatasetUserLikesRecord, Integer] = DATASET_USER_LIKES.DID
     }
 
+    case object ModelLikeTable extends LikeTable {
+      override type R = ModelUserLikesRecord
+      override val table: Table[ModelUserLikesRecord] = MODEL_USER_LIKES
+      override val uidColumn: TableField[ModelUserLikesRecord, Integer] =
+        MODEL_USER_LIKES.UID
+      override val idColumn: TableField[ModelUserLikesRecord, Integer] = MODEL_USER_LIKES.MID
+    }
+
     def apply(entityType: EntityType): LikeTable =
       entityType match {
         case EntityType.Workflow => WorkflowLikeTable
         case EntityType.Dataset  => DatasetLikeTable
+        case EntityType.Model  => ModelLikeTable
       }
   }
 
@@ -135,11 +144,19 @@ object EntityTables {
       override val viewCountColumn: TableField[DatasetViewCountRecord, Integer] =
         DATASET_VIEW_COUNT.VIEW_COUNT
     }
+    case object ModelViewCountTable extends ViewCountTable {
+      override type R = ModelViewCountRecord
+      override val table: Table[ModelViewCountRecord] = MODEL_VIEW_COUNT
+      override val idColumn: TableField[ModelViewCountRecord, Integer] = MODEL_VIEW_COUNT.MID
+      override val viewCountColumn: TableField[ModelViewCountRecord, Integer] =
+        MODEL_VIEW_COUNT.VIEW_COUNT
+    }
 
     def apply(entityType: EntityType): ViewCountTable =
       entityType match {
         case EntityType.Workflow => WorkflowViewCountTable
         case EntityType.Dataset  => DatasetViewCountTable
+        case EntityType.Model  => ModelViewCountTable
       }
   }
 }

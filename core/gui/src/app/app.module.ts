@@ -172,6 +172,13 @@ import { AdminSettingsComponent } from "./dashboard/component/admin/settings/adm
 import { catchError, of } from "rxjs";
 import { FormlyRepeatDndComponent } from "./common/formly/repeat-dnd/repeat-dnd.component";
 import { NzInputNumberModule } from "ng-zorro-antd/input-number";
+import { UserModelComponent } from "./dashboard/component/user/user-model/user-model.component";
+import {
+  UserModelVersionCreatorComponent
+} from "./dashboard/component/user/user-model/user-dataset-explorer/user-dataset-version-creator/user-model-version-creator.component";
+import {
+  ModelDetailComponent
+} from "./dashboard/component/user/user-model/user-dataset-explorer/model-detail.component";
 
 registerLocaleData(en);
 
@@ -233,6 +240,9 @@ registerLocaleData(en);
     UserDatasetListItemComponent,
     UserDatasetFileRendererComponent,
     UserDatasetStagedObjectsListComponent,
+    UserModelVersionCreatorComponent,
+    UserModelComponent,
+    ModelDetailComponent,
     NzModalCommentBoxComponent,
     LeftPanelComponent,
     LocalLoginComponent,

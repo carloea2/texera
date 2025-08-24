@@ -44,6 +44,7 @@ import { inject } from "@angular/core";
 import { GuiConfigService } from "./common/service/gui-config.service";
 import { Router, CanActivateFn } from "@angular/router";
 import { DASHBOARD_ABOUT } from "./app-routing.constant";
+import { UserModelComponent } from "./dashboard/component/user/user-model/user-model.component";
 
 const rootRedirectGuard: CanActivateFn = () => {
   const config = inject(GuiConfigService);
@@ -126,6 +127,10 @@ routes.push({
         {
           path: "dataset",
           component: UserDatasetComponent,
+        },
+        {
+          path: "model",
+          component: UserModelComponent,
         },
         {
           path: "dataset/:did",
