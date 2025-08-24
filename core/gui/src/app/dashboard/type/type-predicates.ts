@@ -20,7 +20,8 @@
 import { DashboardWorkflow } from "./dashboard-workflow.interface";
 import { DashboardProject } from "./dashboard-project.interface";
 import { DashboardFile } from "./dashboard-file.interface";
-import { DashboardDataset, DashboardModel } from "./dashboard-dataset.interface";
+import { DashboardDataset} from "./dashboard-dataset.interface";
+import { DashboardModel } from "./dashboard-model.interface";
 
 export function isDashboardWorkflow(value: any): value is DashboardWorkflow {
   return value && typeof value.workflow === "object";

@@ -17,28 +17,14 @@
  * under the License.
  */
 
-import { DatasetFileNode } from "./datasetVersionFileTree";
+import { Model } from "../../common/type/model";
 
-export interface DatasetVersion {
-  dvid: number | undefined;
-  did: number;
-  creatorUid: number;
-  name: string;
-  versionHash: string | undefined;
-  creationTime: number | undefined;
-  fileNodes: DatasetFileNode[] | undefined;
+
+export interface DashboardModel {
+  isOwner: boolean;
+  ownerEmail: string;
+  model: Model;
+  accessPrivilege: "READ" | "WRITE" | "NONE";
+  size: number;
 }
-
-export interface Dataset {
-  did: number | undefined;
-  ownerUid: number | undefined;
-  name: string;
-  isPublic: boolean;
-  isDownloadable: boolean;
-  storagePath: string | undefined;
-  description: string;
-  creationTime: number | undefined;
-}
-
-
 

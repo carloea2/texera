@@ -17,11 +17,10 @@
  * under the License.
  */
 
-import { Component, EventEmitter, inject, Input, OnInit, Output } from "@angular/core";
-import { FormBuilder, FormGroup, Validators } from "@angular/forms";
+import { Component, inject, OnInit } from "@angular/core";
+import { FormBuilder, FormGroup } from "@angular/forms";
 import { FormlyFieldConfig } from "@ngx-formly/core";
-import { DatasetService } from "../../../../../service/user/dataset/dataset.service";
-import { Dataset, Model } from "../../../../../../common/type/dataset";
+import { Model } from "../../../../../../common/type/model";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { NotificationService } from "../../../../../../common/service/notification/notification.service";
 import { HttpErrorResponse } from "@angular/common/http";
@@ -58,8 +57,9 @@ export class UserModelVersionCreatorComponent implements OnInit {
     private modalRef: NzModalRef,
     private modelService: ModelService,
     private notificationService: NotificationService,
-    private formBuilder: FormBuilder
-  ) {}
+    private formBuilder: FormBuilder,
+  ) {
+  }
 
   ngOnInit() {
     this.setFormFields();
@@ -69,37 +69,38 @@ export class UserModelVersionCreatorComponent implements OnInit {
   private setFormFields() {
     this.fields = this.isCreatingVersion
       ? [
-          // Fields when isCreatingVersion is true
-          {
-            key: "versionDescription",
-            type: "input",
-            defaultValue: "",
-            templateOptions: {
-              label: "Describe the new version",
-              required: false,
-            },
+        // Fields when isCreatingVersion is true
+        {
+          key: "versionDescription",
+          type: "input",
+          defaultValue: "",
+          templateOptions: {
+            label: "Describe the new version",
+            required: false,
           },
-        ]
+        },
+      ]
       : [
-          // Fields when isCreatingVersion is false
-          {
-            key: "name",
-            type: "input",
-            templateOptions: {
-              label: "Name",
-              required: true,
-            },
+        // Fields when isCreatingVersion is false
+        {
+          key: "name",
+          type: "input",
+          templateOptions: {
+            label: "Name",
+            required: true,
           },
-          {
-            key: "description",
-            type: "input",
-            defaultValue: "",
-            templateOptions: {
-              label: "Description",
-            },
+        },
+        {
+          key: "description",
+          type: "input",
+          defaultValue: "",
+          templateOptions: {
+            label: "Description",
           },
-        ];
+        },
+      ];
   }
+
   get formControlNames(): string[] {
     return Object.keys(this.form.controls);
   }
@@ -145,7 +146,7 @@ export class UserModelVersionCreatorComponent implements OnInit {
     if (this.isCreatingVersion && this.mid) {
       const versionName = this.form.get("versionDescription")?.value;
       this.modelService
-        .createDatasetVersion(this.mid, versionName)
+        .createModelVersion(this.mid, versionName)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: res => {
@@ -183,9 +184,10 @@ export class UserModelVersionCreatorComponent implements OnInit {
         .subscribe({
           next: res => {
             const msg = this.isDatasetNameSanitized
-              ? `Dataset '${originalName}' was sanitized to '${sanitizedName}' and created successfully.`
-              : `Dataset '${sanitizedName}' created successfully.`;
+              ? `Model '${originalName}' was sanitized to '${sanitizedName}' and created successfully.`
+              : `Model '${sanitizedName}' created successfully.`;
 
+              console.log("Created model:", res);
             this.notificationService.success(msg);
             this.isCreating = false;
             // if creation succeed, emit the created dashboard dataset
@@ -214,7 +216,6 @@ export class UserModelVersionCreatorComponent implements OnInit {
 
   protected readonly formatSpeed = formatSpeed;
   protected readonly formatTime = formatTime;
-
 
 
 }

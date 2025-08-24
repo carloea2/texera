@@ -44,9 +44,9 @@ import { formatSize } from "src/app/common/util/size-formatter.util";
 import { DatasetService, DEFAULT_DATASET_NAME } from "../../../service/user/dataset/dataset.service";
 import { NotificationService } from "../../../../common/service/notification/notification.service";
 import {
-  DASHBOARD_HUB_DATASET_RESULT_DETAIL,
+  DASHBOARD_HUB_DATASET_RESULT_DETAIL, DASHBOARD_HUB_MODEL_RESULT_DETAIL,
   DASHBOARD_HUB_WORKFLOW_RESULT_DETAIL,
-  DASHBOARD_USER_DATASET,
+  DASHBOARD_USER_DATASET, DASHBOARD_USER_MODEL,
   DASHBOARD_USER_PROJECT,
   DASHBOARD_USER_WORKSPACE,
 } from "../../../../app-routing.constant";
@@ -135,6 +135,18 @@ export class ListItemComponent implements OnChanges {
         this.iconType = "database";
         this.size = this.entry.size;
       }
+    } else if (this.entry.type === "model") {
+      if (typeof this.entry.id === "number") {
+        this.disableDelete = !this.entry.model.isOwner;
+        this.owners = this.entry.accessibleUserIds;
+        if (this.currentUid !== undefined && this.owners.includes(this.currentUid)) {
+          this.entryLink = [DASHBOARD_USER_MODEL, String(this.entry.id)];
+        } else {
+          this.entryLink = [DASHBOARD_HUB_MODEL_RESULT_DETAIL, String(this.entry.id)];
+        }
+        this.iconType = "database";
+        this.size = this.entry.size;
+      }
     } else if (this.entry.type === "file") {
       // not sure where to redirect
       this.iconType = "folder-open";
@@ -208,6 +220,8 @@ export class ListItemComponent implements OnChanges {
         .subscribe();
     } else if (this.entry.type === "dataset") {
       this.downloadService.downloadDataset(this.entry.id, this.entry.name).pipe(untilDestroyed(this)).subscribe();
+    } else if (this.entry.type === "model") {
+      this.downloadService.downloadModel(this.entry.id, this.entry.name).pipe(untilDestroyed(this)).subscribe();
     }
   };
 

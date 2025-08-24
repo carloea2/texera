@@ -179,6 +179,9 @@ import {
 import {
   ModelDetailComponent
 } from "./dashboard/component/user/user-model/user-dataset-explorer/model-detail.component";
+import {
+  UserModelStagedObjectsListComponent
+} from "./dashboard/component/user/user-model/user-dataset-explorer/user-model-staged-objects-list/user-model-staged-objects-list.component";
 
 registerLocaleData(en);
 
@@ -249,6 +252,7 @@ registerLocaleData(en);
     ContextMenuComponent,
     CoeditorUserIconComponent,
     InputAutoCompleteComponent,
+    UserModelStagedObjectsListComponent,
     FileSelectionComponent,
     CollabWrapperComponent,
     AboutComponent,

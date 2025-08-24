@@ -20,14 +20,14 @@
 import { Component, EventEmitter, OnInit, Output } from "@angular/core";
 import { ActivatedRoute } from "@angular/router";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
-import { DatasetService, MultipartUploadProgress } from "../../../../service/user/dataset/dataset.service";
+import { ModelService, MultipartUploadProgress } from "../../../../service/user/model/model.service";
 import { NzResizeEvent } from "ng-zorro-antd/resizable";
 import {
   DatasetFileNode,
   getFullPathFromDatasetFileNode,
   getRelativePathFromDatasetFileNode,
 } from "../../../../../common/type/datasetVersionFileTree";
-import { DatasetVersion } from "../../../../../common/type/dataset";
+import { ModelVersion } from "../../../../../common/type/model";
 import { switchMap, throttleTime } from "rxjs/operators";
 import { NotificationService } from "../../../../../common/service/notification/notification.service";
 import { DownloadService } from "../../../../service/user/download/download.service";
@@ -36,13 +36,12 @@ import { UserService } from "../../../../../common/service/user/user.service";
 import { isDefined } from "../../../../../common/util/predicate";
 import { ActionType, EntityType, HubService, LikedStatus } from "../../../../../hub/service/hub.service";
 import { FileUploadItem } from "../../../../type/dashboard-file.interface";
-import { DatasetStagedObject } from "../../../../../common/type/dataset-staged-object";
 import { NzModalService } from "ng-zorro-antd/modal";
-import { UserModelVersionCreatorComponent } from "./user-dataset-version-creator/user-model-version-creator.component";
 import { AdminSettingsService } from "../../../../service/admin/settings/admin-settings.service";
 import { HttpErrorResponse } from "@angular/common/http";
 import { Subscription } from "rxjs";
 import { formatSpeed, formatTime } from "src/app/common/util/format.util";
+import { ModelStagedObject } from "../../../../../common/type/model-staged-object";
 
 export const THROTTLE_TIME_MS = 1000;
 
@@ -52,27 +51,27 @@ export const THROTTLE_TIME_MS = 1000;
   styleUrls: ["./model-detail.component.scss"],
 })
 export class ModelDetailComponent implements OnInit {
-  public did: number | undefined;
-  public datasetName: string = "";
-  public datasetDescription: string = "";
-  public datasetCreationTime: string = "";
-  public datasetIsPublic: boolean = false;
-  public datasetIsDownloadable: boolean = true;
-  public userDatasetAccessLevel: "READ" | "WRITE" | "NONE" = "NONE";
+  public mid: number | undefined;
+  public modelName: string = "";
+  public modelDescription: string = "";
+  public modelCreationTime: string = "";
+  public modelIsPublic: boolean = false;
+  public modelIsDownloadable: boolean = true;
+  public userModelAccessLevel: "READ" | "WRITE" | "NONE" = "NONE";
   public isOwner: boolean = false;
 
   public currentDisplayedFileName: string = "";
   public currentFileSize: number | undefined;
-  public currentDatasetVersionSize: number | undefined;
+  public currentModelVersionSize: number | undefined;
 
   public isRightBarCollapsed = false;
   public isMaximized = false;
 
-  public versions: ReadonlyArray<DatasetVersion> = [];
-  public selectedVersion: DatasetVersion | undefined;
+  public versions: ReadonlyArray<ModelVersion> = [];
+  public selectedVersion: ModelVersion | undefined;
   public fileTreeNodeList: DatasetFileNode[] = [];
 
-  public versionCreatorBaseVersion: DatasetVersion | undefined;
+  public versionCreatorBaseVersion: ModelVersion | undefined;
   public isLogin: boolean = this.userService.isLogin();
 
   public isLiked: boolean = false;
@@ -103,8 +102,7 @@ export class ModelDetailComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
-    private modalService: NzModalService,
-    private datasetService: DatasetService,
+    private modelService: ModelService,
     private notificationService: NotificationService,
     private downloadService: DownloadService,
     private userService: UserService,
@@ -136,28 +134,28 @@ export class ModelDetailComponent implements OnInit {
     this.route.params
       .pipe(
         switchMap(params => {
-          this.did = params["did"];
-          this.retrieveDatasetInfo();
-          this.retrieveDatasetVersionList();
+          this.mid = params["mid"];
+          this.retrieveModelInfo();
+          this.retrievemodelVersionList();
           return this.route.data; // or some other observable
         }),
         untilDestroyed(this)
       )
       .subscribe();
 
-    if (!isDefined(this.did)) {
+    if (!isDefined(this.mid)) {
       return;
     }
 
     this.hubService
-      .getCounts([EntityType.Dataset], [this.did], [ActionType.Like])
+      .getCounts([EntityType.Model], [this.mid], [ActionType.Like])
       .pipe(untilDestroyed(this))
       .subscribe(counts => {
         this.likeCount = counts[0].counts.like ?? 0;
       });
 
     this.hubService
-      .postView(this.did, this.currentUid ? this.currentUid : 0, EntityType.Dataset)
+      .postView(this.mid, this.currentUid ? this.currentUid : 0, EntityType.Model)
       .pipe(throttleTime(THROTTLE_TIME_MS))
       .pipe(untilDestroyed(this))
       .subscribe(count => {
@@ -169,7 +167,7 @@ export class ModelDetailComponent implements OnInit {
     }
 
     this.hubService
-      .isLiked([this.did], [EntityType.Dataset])
+      .isLiked([this.mid], [EntityType.Model])
       .pipe(untilDestroyed(this))
       .subscribe((isLiked: LikedStatus[]) => {
         this.isLiked = isLiked.length > 0 ? isLiked[0].isLiked : false;
@@ -179,18 +177,18 @@ export class ModelDetailComponent implements OnInit {
   }
 
   public onClickOpenVersionCreator() {
-    if (this.did && !this.isCreatingVersion) {
+    if (this.mid && !this.isCreatingVersion) {
       this.isCreatingVersion = true;
 
-      this.datasetService
-        .createDatasetVersion(this.did, this.versionName?.trim() || "")
+      this.modelService
+        .createModelVersion(this.mid, this.versionName?.trim() || "")
         .pipe(untilDestroyed(this))
         .subscribe({
           next: res => {
             this.notificationService.success("Version Created");
             this.isCreatingVersion = false;
             this.versionName = "";
-            this.retrieveDatasetVersionList();
+            this.retrievemodelVersionList();
             this.userMakeChanges.emit();
           },
           error: (res: unknown) => {
@@ -203,82 +201,83 @@ export class ModelDetailComponent implements OnInit {
   }
 
   public onClickDownloadVersionAsZip() {
-    if (this.did && this.selectedVersion && this.selectedVersion.dvid) {
+    if (this.mid && this.selectedVersion && this.selectedVersion.mvid) {
       this.downloadService
-        .downloadDatasetVersion(this.did, this.selectedVersion.dvid, this.datasetName, this.selectedVersion.name)
+        .downloadModelVersion(this.mid, this.selectedVersion.mvid, this.modelName, this.selectedVersion.name)
         .pipe(untilDestroyed(this))
         .subscribe();
     }
   }
 
   onPublicStatusChange(checked: boolean): void {
-    // Handle the change in dataset public status
-    if (this.did) {
-      this.datasetService
-        .updateDatasetPublicity(this.did)
+    // Handle the change in model public status
+    if (this.mid) {
+      this.modelService
+        .updateModelPublicity(this.mid)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: (res: Response) => {
-            this.datasetIsPublic = checked;
+            this.modelIsPublic = checked;
             let state = "public";
-            if (!this.datasetIsPublic) {
+            if (!this.modelIsPublic) {
               state = "private";
             }
-            this.notificationService.success(`Dataset ${this.datasetName} is now ${state}`);
+            this.notificationService.success(`model ${this.modelName} is now ${state}`);
           },
           error: (err: unknown) => {
-            this.notificationService.error("Fail to change the dataset publicity");
+            this.notificationService.error("Fail to change the model publicity");
           },
         });
     }
   }
 
   onDownloadableStatusChange(checked: boolean): void {
-    // Handle the change in dataset downloadable status
-    if (this.did) {
-      this.datasetService
-        .updateDatasetDownloadable(this.did)
+    // Handle the change in model downloadable status
+    if (this.mid) {
+      this.modelService
+        .updateModelDownloadable(this.mid)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: (res: Response) => {
-            this.datasetIsDownloadable = checked;
+            this.modelIsDownloadable = checked;
             let state = "allowed";
-            if (!this.datasetIsDownloadable) {
+            if (!this.modelIsDownloadable) {
               state = "not allowed";
             }
-            this.notificationService.success(`Dataset downloads are now ${state}`);
+            this.notificationService.success(`model downloads are now ${state}`);
           },
           error: (err: unknown) => {
-            this.notificationService.error("Failed to change the dataset download permission");
+            this.notificationService.error("Failed to change the model download permission");
           },
         });
     }
   }
 
-  retrieveDatasetInfo() {
-    if (this.did) {
-      this.datasetService
-        .getDataset(this.did, this.isLogin)
+  retrieveModelInfo() {
+    if (this.mid) {
+      this.modelService
+        .getModel(this.mid, this.isLogin)
         .pipe(untilDestroyed(this))
-        .subscribe(dashboardDataset => {
-          const dataset = dashboardDataset.dataset;
-          this.datasetName = dataset.name;
-          this.datasetDescription = dataset.description;
-          this.userDatasetAccessLevel = dashboardDataset.accessPrivilege;
-          this.datasetIsPublic = dataset.isPublic;
-          this.datasetIsDownloadable = dataset.isDownloadable;
-          this.isOwner = dashboardDataset.isOwner;
-          if (typeof dataset.creationTime === "number") {
-            this.datasetCreationTime = new Date(dataset.creationTime).toString();
+        .subscribe(dashboardModel => {
+          console.log("dashboardModel", dashboardModel);
+          const model = dashboardModel.model;
+          this.modelName = model.name;
+          this.modelDescription = model.description;
+          this.userModelAccessLevel = dashboardModel.accessPrivilege;
+          this.modelIsPublic = model.isPublic;
+          this.modelIsDownloadable = model.isDownloadable;
+          this.isOwner = dashboardModel.isOwner;
+          if (typeof model.creationTime === "number") {
+            this.modelCreationTime = new Date(model.creationTime).toString();
           }
         });
     }
   }
 
-  retrieveDatasetVersionList() {
-    if (this.did) {
-      this.datasetService
-        .retrieveDatasetVersionList(this.did, this.isLogin)
+  retrievemodelVersionList() {
+    if (this.mid) {
+      this.modelService
+        .retrieveModelVersionList(this.mid, this.isLogin)
         .pipe(untilDestroyed(this))
         .subscribe(versionNames => {
           this.versions = versionNames;
@@ -298,9 +297,9 @@ export class ModelDetailComponent implements OnInit {
   }
 
   onClickDownloadCurrentFile = (): void => {
-    if (!this.did || !this.selectedVersion?.dvid) return;
-    // For public datasets accessed by non-owners, use public endpoint
-    const shouldUsePublicEndpoint = this.datasetIsPublic && !this.isOwner;
+    if (!this.mid || !this.selectedVersion?.mvid) return;
+    // For public models accessed by non-owners, use public endpoint
+    const shouldUsePublicEndpoint = this.modelIsPublic && !this.isOwner;
     this.downloadService
       .downloadSingleFile(this.currentDisplayedFileName, !shouldUsePublicEndpoint)
       .pipe(untilDestroyed(this))
@@ -315,19 +314,19 @@ export class ModelDetailComponent implements OnInit {
     this.isRightBarCollapsed = !this.isRightBarCollapsed;
   }
 
-  onStagedObjectsUpdated(stagedObjects: DatasetStagedObject[]) {
+  onStagedObjectsUpdated(stagedObjects: ModelStagedObject[]) {
     this.userHasPendingChanges = stagedObjects.length > 0;
   }
 
-  onVersionSelected(version: DatasetVersion): void {
+  onVersionSelected(version: ModelVersion): void {
     this.selectedVersion = version;
-    if (this.did && this.selectedVersion.dvid)
-      this.datasetService
-        .retrieveDatasetVersionFileTree(this.did, this.selectedVersion.dvid, this.isLogin)
+    if (this.mid && this.selectedVersion.mvid)
+      this.modelService
+        .retrieveModelVersionFileTree(this.mid, this.selectedVersion.mvid, this.isLogin)
         .pipe(untilDestroyed(this))
         .subscribe(data => {
           this.fileTreeNodeList = data.fileNodes;
-          this.currentDatasetVersionSize = data.size;
+          this.currentModelVersionSize = data.size;
           let currentNode = this.fileTreeNodeList[0];
           while (currentNode.type === "directory" && currentNode.children) {
             currentNode = currentNode.children[0];
@@ -341,7 +340,8 @@ export class ModelDetailComponent implements OnInit {
   }
 
   userHasWriteAccess(): boolean {
-    return this.userDatasetAccessLevel == "WRITE";
+    // console.log(this.userModelAccessLevel);
+    return this.userModelAccessLevel == "WRITE";
   }
 
   isDownloadAllowed(): boolean {
@@ -349,10 +349,10 @@ export class ModelDetailComponent implements OnInit {
     if (this.isOwner) {
       return true;
     }
-    // Non-owners can download if dataset is downloadable and they have access
-    // For public datasets, users have access even if userDatasetAccessLevel is 'NONE'
-    // For private datasets, users need explicit access (userDatasetAccessLevel !== 'NONE')
-    return this.datasetIsDownloadable && (this.datasetIsPublic || this.userDatasetAccessLevel !== "NONE");
+    // Non-owners can download if model is downloadable and they have access
+    // For public models, users have access even if userModelAccessLevel is 'NONE'
+    // For private models, users need explicit access (userModelAccessLevel !== 'NONE')
+    return this.modelIsDownloadable && (this.modelIsPublic || this.userModelAccessLevel !== "NONE");
   }
 
   // Track multiple file by unique key
@@ -372,7 +372,7 @@ export class ModelDetailComponent implements OnInit {
   }
 
   onNewUploadFilesChanged(files: FileUploadItem[]) {
-    if (this.did) {
+    if (this.mid) {
       files.forEach((file, idx) => {
         // Cancel any existing upload for the same file to prevent progress confusion
         this.uploadSubscriptions.get(file.name)?.unsubscribe();
@@ -388,9 +388,9 @@ export class ModelDetailComponent implements OnInit {
           physicalAddress: "",
         });
         // Start multipart upload
-        const subscription = this.datasetService
+        const subscription = this.modelService
           .multipartUpload(
-            this.datasetName,
+            this.modelName,
             file.name,
             file.file,
             this.chunkSizeMB * 1024 * 1024,
@@ -466,9 +466,9 @@ export class ModelDetailComponent implements OnInit {
       subscription.unsubscribe();
       this.uploadSubscriptions.delete(task.filePath);
     }
-    this.datasetService
+    this.modelService
       .finalizeMultipartUpload(
-        this.datasetName,
+        this.modelName,
         task.filePath,
         task.uploadId,
         [],
@@ -492,9 +492,9 @@ export class ModelDetailComponent implements OnInit {
   }
 
   onPreviouslyUploadedFileDeleted(node: DatasetFileNode) {
-    if (this.did) {
-      this.datasetService
-        .deleteDatasetFile(this.did, getRelativePathFromDatasetFileNode(node))
+    if (this.mid) {
+      this.modelService
+        .deleteModelFile(this.mid, getRelativePathFromDatasetFileNode(node))
         .pipe(untilDestroyed(this))
         .subscribe({
           next: (res: Response) => {
@@ -524,19 +524,19 @@ export class ModelDetailComponent implements OnInit {
 
   toggleLike(): void {
     const userId = this.currentUid;
-    if (!isDefined(userId) || !isDefined(this.did)) {
+    if (!isDefined(userId) || !isDefined(this.mid)) {
       return;
     }
 
     if (this.isLiked) {
       this.hubService
-        .postUnlike(this.did, EntityType.Dataset)
+        .postUnlike(this.mid, EntityType.Model)
         .pipe(untilDestroyed(this))
         .subscribe((success: boolean) => {
           if (success) {
             this.isLiked = false;
             this.hubService
-              .getCounts([EntityType.Dataset], [this.did!], [ActionType.Like])
+              .getCounts([EntityType.Model], [this.mid!], [ActionType.Like])
               .pipe(untilDestroyed(this))
               .subscribe(counts => {
                 this.likeCount = counts[0].counts.like ?? 0;
@@ -545,13 +545,13 @@ export class ModelDetailComponent implements OnInit {
         });
     } else {
       this.hubService
-        .postLike(this.did, EntityType.Dataset)
+        .postLike(this.mid, EntityType.Model)
         .pipe(untilDestroyed(this))
         .subscribe((success: boolean) => {
           if (success) {
             this.isLiked = true;
             this.hubService
-              .getCounts([EntityType.Dataset], [this.did!], [ActionType.Like])
+              .getCounts([EntityType.Model], [this.mid!], [ActionType.Like])
               .pipe(untilDestroyed(this))
               .subscribe(counts => {
                 this.likeCount = counts[0].counts.like ?? 0;

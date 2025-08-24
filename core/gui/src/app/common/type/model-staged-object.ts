@@ -17,28 +17,10 @@
  * under the License.
  */
 
-import { DatasetFileNode } from "./datasetVersionFileTree";
-
-export interface DatasetVersion {
-  dvid: number | undefined;
-  did: number;
-  creatorUid: number;
-  name: string;
-  versionHash: string | undefined;
-  creationTime: number | undefined;
-  fileNodes: DatasetFileNode[] | undefined;
+// Represents a staged dataset object change, corresponding to backend Diff
+export interface ModelStagedObject {
+  path: string;
+  pathType: "file" | "directory";
+  diffType: "added" | "removed" | "changed";
+  sizeBytes?: number; // Optional, only present for files
 }
-
-export interface Dataset {
-  did: number | undefined;
-  ownerUid: number | undefined;
-  name: string;
-  isPublic: boolean;
-  isDownloadable: boolean;
-  storagePath: string | undefined;
-  description: string;
-  creationTime: number | undefined;
-}
-
-
-

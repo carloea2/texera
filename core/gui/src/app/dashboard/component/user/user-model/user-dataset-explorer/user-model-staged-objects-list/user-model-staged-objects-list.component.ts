@@ -23,15 +23,17 @@ import { DatasetService } from "../../../../../service/user/dataset/dataset.serv
 import { NotificationService } from "../../../../../../common/service/notification/notification.service";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { formatTime } from "src/app/common/util/format.util";
+import { ModelStagedObject } from "../../../../../../common/type/model-staged-object";
+import { ModelService } from "../../../../../service/user/model/model.service";
 
 @UntilDestroy()
 @Component({
-  selector: "texera-dataset-staged-objects-list",
-  templateUrl: "./user-dataset-staged-objects-list.component.html",
-  styleUrls: ["./user-dataset-staged-objects-list.component.scss"],
+  selector: "texera-model-staged-objects-list",
+  templateUrl: "./user-model-staged-objects-list.component.html",
+  styleUrls: ["./user-model-staged-objects-list.component.scss"],
 })
-export class UserDatasetStagedObjectsListComponent implements OnInit {
-  @Input() did?: number; // Dataset ID
+export class UserModelStagedObjectsListComponent implements OnInit {
+  @Input() mid?: number; // Model ID
   @Input() set userMakeChangesEvent(event: EventEmitter<void>) {
     if (event) {
       event.pipe(untilDestroyed(this)).subscribe(() => {
@@ -43,11 +45,11 @@ export class UserDatasetStagedObjectsListComponent implements OnInit {
 
   @Output() stagedObjectsChanged = new EventEmitter<DatasetStagedObject[]>(); // Emits staged objects list
 
-  datasetStagedObjects: DatasetStagedObject[] = [];
+  modelStagedObjects: ModelStagedObject[] = [];
   formatTime = formatTime;
 
   constructor(
-    private datasetService: DatasetService,
+    private modelService: ModelService,
     private notificationService: NotificationService
   ) {}
 
@@ -56,22 +58,22 @@ export class UserDatasetStagedObjectsListComponent implements OnInit {
   }
 
   private fetchDatasetStagedObjects(): void {
-    if (this.did != undefined) {
-      this.datasetService
-        .getDatasetDiff(this.did)
+    if (this.mid != undefined) {
+      this.modelService
+        .getModelDiff(this.mid)
         .pipe(untilDestroyed(this))
         .subscribe(diffs => {
-          this.datasetStagedObjects = diffs;
+          this.modelStagedObjects = diffs;
           // Emit the updated staged objects list
-          this.stagedObjectsChanged.emit(this.datasetStagedObjects);
+          this.stagedObjectsChanged.emit(this.modelStagedObjects);
         });
     }
   }
 
   onObjectReverted(objDiff: DatasetStagedObject) {
-    if (this.did) {
-      this.datasetService
-        .resetDatasetFileDiff(this.did, objDiff.path)
+    if (this.mid) {
+      this.modelService
+        .resetModelFileDiff(this.mid, objDiff.path)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: (res: Response) => {

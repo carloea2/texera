@@ -103,7 +103,6 @@ export class DatasetDetailComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
-    private modalService: NzModalService,
     private datasetService: DatasetService,
     private notificationService: NotificationService,
     private downloadService: DownloadService,

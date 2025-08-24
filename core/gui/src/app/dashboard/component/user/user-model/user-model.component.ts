@@ -37,7 +37,7 @@ import { NzModalService } from "ng-zorro-antd/modal";
 import { FileSelectionComponent } from "../../../../workspace/component/file-selection/file-selection.component";
 import { DatasetFileNode, getFullPathFromDatasetFileNode } from "../../../../common/type/datasetVersionFileTree";
 import { UserModelVersionCreatorComponent } from "./user-dataset-explorer/user-dataset-version-creator/user-model-version-creator.component";
-import { DashboardModel } from "../../../type/dashboard-dataset.interface";
+import { DashboardModel } from "../../../type/dashboard-model.interface";
 import { NzMessageService } from "ng-zorro-antd/message";
 import { map, tap } from "rxjs/operators";
 

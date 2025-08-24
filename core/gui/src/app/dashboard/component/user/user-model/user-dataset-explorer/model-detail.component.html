@@ -19,25 +19,25 @@
 
 <div *ngIf="!isMaximized">
   <nz-card>
-    <h2 class="dataset-title">Dataset: {{datasetName}}</h2>
+    <h2 class="dataset-title">Model: {{modelName}}</h2>
     <nz-card-meta
       style="padding-top: 10px"
-      nzDescription="Created at: {{datasetCreationTime}}"></nz-card-meta>
+      nzDescription="Created at: {{modelCreationTime}}"></nz-card-meta>
     <nz-card-meta
       style="padding-top: 20px"
-      nzDescription="{{datasetDescription}}"></nz-card-meta>
+      nzDescription="{{modelDescription}}"></nz-card-meta>
     <div
       class="workflow-panel"
       style="padding-top: 30px">
       <div
-        *ngIf="!(userDatasetAccessLevel === 'NONE')"
+        *ngIf="!(userModelAccessLevel === 'NONE')"
         class="dataset-controls">
         <div class="control-row">
           <label>Visibility:</label>
           <nz-switch
-            [ngModel]="datasetIsPublic"
+            [ngModel]="modelIsPublic"
             (ngModelChange)="onPublicStatusChange($event)"
-            [nzDisabled]="userDatasetAccessLevel !== 'WRITE'"
+            [nzDisabled]="userModelAccessLevel !== 'WRITE'"
             nzCheckedChildren="public"
             nzUnCheckedChildren="private"></nz-switch>
         </div>
@@ -46,7 +46,7 @@
           *ngIf="isOwner">
           <label>Download:</label>
           <nz-switch
-            [ngModel]="datasetIsDownloadable"
+            [ngModel]="modelIsDownloadable"
             (ngModelChange)="onDownloadableStatusChange($event)"
             nzCheckedChildren="allowed"
             nzUnCheckedChildren="blocked"></nz-switch>
@@ -171,8 +171,8 @@
     <texera-user-dataset-file-renderer
       *ngIf="selectedVersion"
       [isMaximized]="isMaximized"
-      [did]="did"
-      [dvid]="selectedVersion?.dvid"
+      [did]="mid"
+      [dvid]="selectedVersion?.mvid"
       [filePath]="currentDisplayedFileName"
       [fileSize]="currentFileSize"
       [isLogin]="isLogin"
@@ -237,7 +237,7 @@
                 nzType="database"
                 nzTheme="outline"
                 class="icon-database"></i>
-              Version Size: {{ formatSize(currentDatasetVersionSize) }}
+              Version Size: {{ formatSize(currentModelVersionSize) }}
             </div>
           </div>
           <texera-user-dataset-version-filetree
@@ -251,7 +251,7 @@
 
       <nz-divider></nz-divider>
       <nz-collapse
-        *ngIf="userDatasetAccessLevel === 'WRITE'"
+        *ngIf="userHasWriteAccess()"
         nzGhost>
         <nz-collapse-panel
           nzActive="true"
@@ -300,11 +300,11 @@
             </div>
           </div>
 
-          <texera-dataset-staged-objects-list
+          <texera-model-staged-objects-list
             [uploadTimeMap]="uploadTimeMap"
-            [did]="did"
+            [mid]="mid"
             [userMakeChangesEvent]="userMakeChanges"
-            (stagedObjectsChanged)="onStagedObjectsUpdated($event)"></texera-dataset-staged-objects-list>
+            (stagedObjectsChanged)="onStagedObjectsUpdated($event)"></texera-model-staged-objects-list>
           <div
             *ngIf="userHasWriteAccess() && userHasPendingChanges"
             class="version-creator">

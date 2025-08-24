@@ -30,6 +30,7 @@ import { AppSettings } from "../../../../common/app-setting";
 import { HttpClient, HttpResponse } from "@angular/common/http";
 import { WORKFLOW_EXECUTIONS_API_BASE_URL } from "../workflow-executions/workflow-executions.service";
 import { DashboardWorkflowComputingUnit } from "../../../../workspace/types/workflow-computing-unit";
+import { ModelService } from "../model/model.service";
 var contentDisposition = require("content-disposition");
 
 export const EXPORT_BASE_URL = "result/export";
@@ -52,6 +53,7 @@ export class DownloadService {
     private fileSaverService: FileSaverService,
     private notificationService: NotificationService,
     private datasetService: DatasetService,
+    private modelService: ModelService,
     private workflowPersistService: WorkflowPersistService,
     private http: HttpClient
   ) {}
@@ -78,6 +80,16 @@ export class DownloadService {
     );
   }
 
+  downloadModel(id: number, name: string): Observable<Blob> {
+    return this.downloadWithNotification(
+      () => this.modelService.retrieveModelVersionZip(id),
+      `${name}.zip`,
+      "Starting to download the latest version of the model as ZIP",
+      "The latest version of the model has been downloaded as ZIP",
+      "Error downloading the latest version of the model as ZIP"
+    );
+  }
+
   downloadDatasetVersion(
     datasetId: number,
     datasetVersionId: number,
@@ -86,6 +98,21 @@ export class DownloadService {
   ): Observable<Blob> {
     return this.downloadWithNotification(
       () => this.datasetService.retrieveDatasetVersionZip(datasetId, datasetVersionId),
+      `${datasetName}-${versionName}.zip`,
+      `Starting to download version ${versionName} as ZIP`,
+      `Version ${versionName} has been downloaded as ZIP`,
+      `Error downloading version '${versionName}' as ZIP`
+    );
+  }
+
+  downloadModelVersion(
+    modelId: number,
+    modelVersionId: number,
+    datasetName: string,
+    versionName: string
+  ): Observable<Blob> {
+    return this.downloadWithNotification(
+      () => this.datasetService.retrieveDatasetVersionZip(modelId, modelVersionId),
       `${datasetName}-${versionName}.zip`,
       `Starting to download version ${versionName} as ZIP`,
       `Version ${versionName} has been downloaded as ZIP`,

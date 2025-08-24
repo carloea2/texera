@@ -19,9 +19,9 @@
 
 import { DatasetFileNode } from "./datasetVersionFileTree";
 
-export interface DatasetVersion {
-  dvid: number | undefined;
-  did: number;
+export interface ModelVersion {
+  mvid: number | undefined;
+  mid: number;
   creatorUid: number;
   name: string;
   versionHash: string | undefined;
@@ -29,8 +29,8 @@ export interface DatasetVersion {
   fileNodes: DatasetFileNode[] | undefined;
 }
 
-export interface Dataset {
-  did: number | undefined;
+export interface Model {
+  mid: number | undefined;
   ownerUid: number | undefined;
   name: string;
   isPublic: boolean;
@@ -39,6 +39,5 @@ export interface Dataset {
   description: string;
   creationTime: number | undefined;
 }
-
 
 

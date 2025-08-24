@@ -20,7 +20,8 @@
 import { DashboardFile } from "./dashboard-file.interface";
 import { DashboardWorkflow } from "./dashboard-workflow.interface";
 import { DashboardProject } from "./dashboard-project.interface";
-import { DashboardDataset, DashboardModel } from "./dashboard-dataset.interface";
+import { DashboardDataset} from "./dashboard-dataset.interface";
+import {  DashboardModel } from "./dashboard-model.interface";
 import { DashboardEntry } from "./dashboard-entry";
 
 export interface SearchResultItem {
