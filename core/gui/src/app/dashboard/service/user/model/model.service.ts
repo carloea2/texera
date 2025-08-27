@@ -486,8 +486,8 @@ export class ModelService {
     return this.http.get<{ fileNodes: DatasetFileNode[]; size: number }>(apiUrl);
   }
 
-  public deleteModels(did: number): Observable<Response> {
-    return this.http.delete<Response>(`${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}`);
+  public deleteModels(mid: number): Observable<Response> {
+    return this.http.delete<Response>(`${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${mid}`);
   }
 
   public updateModelName(did: number, name: string): Observable<Response> {

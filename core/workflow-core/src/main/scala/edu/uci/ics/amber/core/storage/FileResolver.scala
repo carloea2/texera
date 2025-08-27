@@ -22,9 +22,11 @@ package edu.uci.ics.amber.core.storage
 import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.SqlServer.withTransaction
 import edu.uci.ics.texera.dao.jooq.generated.tables.Dataset.DATASET
+import edu.uci.ics.texera.dao.jooq.generated.tables.Model.MODEL
 import edu.uci.ics.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
+import edu.uci.ics.texera.dao.jooq.generated.tables.ModelVersion.MODEL_VERSION
 import edu.uci.ics.texera.dao.jooq.generated.tables.User.USER
-import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetVersion}
+import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetVersion, Model}
 import org.apache.commons.vfs2.FileNotFoundException
 
 import java.net.{URI, URLEncoder}
@@ -51,7 +53,7 @@ object FileResolver {
     if (isFileResolved(fileName)) {
       return new URI(fileName)
     }
-    val resolvers: Seq[String => URI] = Seq(localResolveFunc, datasetResolveFunc)
+    val resolvers: Seq[String => URI] = Seq(localResolveFunc, datasetResolveFunc, modelResolveFunc)
 
     // Try each resolver function in sequence
     resolvers
@@ -140,6 +142,73 @@ object FileResolver {
     val allPathSegments = Array(
       datasetName,
       datasetVersion.getVersionHash
+    ) ++ encodedFileRelativePath
+
+    // Build the format /{datasetName}/{versionHash}/{fileRelativePath}, both Linux and Windows use forward slash as the splitter
+    val uriSplitter = "/"
+    val encodedPath = uriSplitter + allPathSegments.mkString(uriSplitter)
+
+    try {
+      new URI(DATASET_FILE_URI_SCHEME, "", encodedPath, null)
+    } catch {
+      case e: Exception =>
+        throw new FileNotFoundException(s"Dataset file $fileName not found.")
+    }
+  }
+
+  private def modelResolveFunc(fileName: String): URI = {
+    val filePath = Paths.get(fileName)
+    val pathSegments = (0 until filePath.getNameCount).map(filePath.getName(_).toString).toArray
+
+    // extract info from the user-given fileName
+    val ownerEmail = pathSegments(0)
+    val modelName = pathSegments(1)
+    val versionName = pathSegments(2)
+    val fileRelativePath = Paths.get(pathSegments.drop(3).head, pathSegments.drop(3).tail: _*)
+
+    // fetch the dataset and version from DB to get dataset ID and version hash
+    val (model, modelVersion) =
+      withTransaction(
+        SqlServer
+          .getInstance()
+          .createDSLContext()
+      ) { ctx =>
+        // fetch the dataset from DB
+        val model = ctx
+          .select(MODEL.fields: _*)
+          .from(MODEL)
+          .leftJoin(USER)
+          .on(USER.UID.eq(MODEL.OWNER_UID))
+          .where(USER.EMAIL.eq(ownerEmail))
+          .and(MODEL.NAME.eq(modelName))
+          .fetchOneInto(classOf[Model])
+
+        // fetch the dataset version from DB
+        val modelVersion = ctx
+          .selectFrom(MODEL_VERSION)
+          .where(MODEL_VERSION.MID.eq(model.getMid))
+          .and(MODEL_VERSION.NAME.eq(versionName))
+          .fetchOneInto(classOf[DatasetVersion])
+
+        if (model == null || modelVersion == null) {
+          throw new FileNotFoundException(s"Model file $fileName not found.")
+        }
+        (model, modelVersion)
+      }
+
+    // Convert each segment of fileRelativePath to an encoded String
+    val encodedFileRelativePath = fileRelativePath
+      .iterator()
+      .asScala
+      .map { segment =>
+        URLEncoder.encode(segment.toString, StandardCharsets.UTF_8)
+      }
+      .toArray
+
+    // Prepend dataset name and versionHash to the encoded path segments
+    val allPathSegments = Array(
+      modelName,
+      modelVersion.getVersionHash
     ) ++ encodedFileRelativePath
 
     // Build the format /{datasetName}/{versionHash}/{fileRelativePath}, both Linux and Windows use forward slash as the splitter

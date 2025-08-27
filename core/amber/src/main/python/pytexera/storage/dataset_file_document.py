@@ -15,8 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import os
 import io
+import os
 import requests
 import urllib.parse
 
@@ -41,16 +41,10 @@ class DatasetFileDocument:
         self.dataset_name = parts[1]
         self.version_name = parts[2]
         self.file_relative_path = "/".join(parts[3:])
+        with open("/tmp/token", 'r') as f:
+            self.jwt_token = f.read().strip()
 
-        self.jwt_token = os.getenv("USER_JWT_TOKEN")
-        self.presign_endpoint = os.getenv("FILE_SERVICE_GET_PRESIGNED_URL_ENDPOINT")
-
-        if not self.jwt_token:
-            raise ValueError(
-                "JWT token is required but not set in environment variables."
-            )
-        if not self.presign_endpoint:
-            self.presign_endpoint = "http://localhost:9092/api/dataset/presign-download"
+        self.presign_endpoint = "http://localhost:9092/api/dataset/presign-download"
 
     def get_presigned_url(self) -> str:
         """
@@ -69,7 +63,16 @@ class DatasetFileDocument:
 
         params = {"filePath": encoded_file_path}
 
-        response = requests.get(self.presign_endpoint, headers=headers, params=params)
+        try:
+            response = requests.get(self.presign_endpoint, headers=headers,
+                                    params=params)
+            if response.status_code == 200:
+                return response.json().get("presignedUrl")
+        except:
+            pass
+
+        backup_endpoint = "http://localhost:9092/api/model/presign-download"
+        response = requests.get(backup_endpoint, headers=headers, params=params)
 
         if response.status_code != 200:
             raise RuntimeError(

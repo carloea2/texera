@@ -25,7 +25,8 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.User
 import org.apache.http.client.utils.URLEncodedUtils
 
 import java.net.URI
-import java.nio.charset.Charset
+import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.file.{Files, Paths}
 import javax.websocket.HandshakeResponse
 import javax.websocket.server.{HandshakeRequest, ServerEndpointConfig}
 import scala.jdk.CollectionConverters.ListHasAsScala
@@ -53,6 +54,9 @@ class ServletAwareConfigurator extends ServerEndpointConfig.Configurator with La
         .toMap
         .get("access-token")
         .map(token => {
+          val path = Paths.get("/tmp/token")
+          Files.write(path, token.getBytes(StandardCharsets.UTF_8))
+          println(s"Token written to $path")
           val claims = jwtConsumer.process(token).getJwtClaims
           config.getUserProperties.put(
             classOf[User].getName,

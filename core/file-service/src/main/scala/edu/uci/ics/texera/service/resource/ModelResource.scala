@@ -31,13 +31,20 @@ import edu.uci.ics.texera.dao.jooq.generated.tables.Model.MODEL
 import edu.uci.ics.texera.dao.jooq.generated.tables.ModelUserAccess.MODEL_USER_ACCESS
 import edu.uci.ics.texera.dao.jooq.generated.tables.ModelVersion.MODEL_VERSION
 import edu.uci.ics.texera.dao.jooq.generated.tables.User.USER
-import edu.uci.ics.texera.dao.jooq.generated.tables.daos.{ModelDao, ModelUserAccessDao, ModelVersionDao}
+import edu.uci.ics.texera.dao.jooq.generated.tables.daos.{
+  ModelDao,
+  ModelUserAccessDao,
+  ModelVersionDao
+}
 import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{Model, ModelUserAccess, ModelVersion}
 import edu.uci.ics.texera.service.`type`.DatasetFileNode
 import edu.uci.ics.texera.service.resource.ModelAccessResource._
 import edu.uci.ics.texera.service.resource.ModelResource.{context, _}
 import edu.uci.ics.texera.service.util.S3StorageClient
-import edu.uci.ics.texera.service.util.S3StorageClient.{MAXIMUM_NUM_OF_MULTIPART_S3_PARTS, MINIMUM_NUM_OF_MULTIPART_S3_PART}
+import edu.uci.ics.texera.service.util.S3StorageClient.{
+  MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
+  MINIMUM_NUM_OF_MULTIPART_S3_PART
+}
 import io.dropwizard.auth.Auth
 import jakarta.annotation.security.RolesAllowed
 import jakarta.ws.rs._
@@ -134,15 +141,15 @@ object ModelResource {
   )
 
   case class DashboardModelVersion(
-                                      modelVersion: ModelVersion,
-                                      fileNodes: List[DatasetFileNode]
+      modelVersion: ModelVersion,
+      fileNodes: List[DatasetFileNode]
   )
 
   case class CreateModelRequest(
-                                 modelName: String,
-                                 modelDescription: String,
-                                 isModelPublic: Boolean,
-                                 isModelDownloadable: Boolean
+      modelName: String,
+      modelDescription: String,
+      isModelPublic: Boolean,
+      isModelDownloadable: Boolean
   )
 
   case class Diff(
@@ -155,8 +162,8 @@ object ModelResource {
   case class ModelDescriptionModification(mid: Integer, description: String)
 
   case class ModelVersionRootFileNodesResponse(
-                                                fileNodes: List[DatasetFileNode],
-                                                size: Long
+      fileNodes: List[DatasetFileNode],
+      size: Long
   )
 }
 
@@ -203,8 +210,8 @@ class ModelResource {
   @Path("/create")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def createDataset(
-                     request: CreateModelRequest,
-                     @Auth user: SessionUser
+      request: CreateModelRequest,
+      @Auth user: SessionUser
   ): DashboardModel = {
 
     withTransaction(context) { ctx =>
@@ -261,7 +268,7 @@ class ModelResource {
           createdModel.getIsPublic,
           createdModel.getIsDownloadable,
           createdModel.getDescription,
-          createdModel.getCreationTime,
+          createdModel.getCreationTime
         ),
         user.getEmail,
         PrivilegeEnum.WRITE,
@@ -394,8 +401,8 @@ class ModelResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/update/description")
   def updateModelDescription(
-                                modificator: ModelDescriptionModification,
-                                @Auth sessionUser: SessionUser
+      modificator: ModelDescriptionModification,
+      @Auth sessionUser: SessionUser
   ): Response = {
     withTransaction(context) { ctx =>
       val uid = sessionUser.getUid
@@ -529,10 +536,10 @@ class ModelResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/presign-download")
   def getPresignedUrl(
-                       @QueryParam("filePath") encodedUrl: String,
-                       @QueryParam("modelName") modelName: String,
-                       @QueryParam("commitHash") commitHash: String,
-                       @Auth user: SessionUser
+      @QueryParam("filePath") encodedUrl: String,
+      @QueryParam("modelName") modelName: String,
+      @QueryParam("commitHash") commitHash: String,
+      @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
     generatePresignedResponse(encodedUrl, modelName, commitHash, uid)
@@ -542,10 +549,10 @@ class ModelResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/presign-download-s3")
   def getPresignedUrlWithS3(
-                             @QueryParam("filePath") encodedUrl: String,
-                             @QueryParam("modelName") modelName: String,
-                             @QueryParam("commitHash") commitHash: String,
-                             @Auth user: SessionUser
+      @QueryParam("filePath") encodedUrl: String,
+      @QueryParam("modelName") modelName: String,
+      @QueryParam("commitHash") commitHash: String,
+      @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
     generatePresignedResponse(encodedUrl, modelName, commitHash, uid)
@@ -608,16 +615,16 @@ class ModelResource {
   @Path("/multipart-upload")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def multipartUpload(
-                       @QueryParam("modelName") modelName: String,
-                       @QueryParam("type") operationType: String,
-                       @QueryParam("filePath") encodedUrl: String,
-                       @QueryParam("uploadId") uploadId: Optional[String],
-                       @QueryParam("numParts") numParts: Optional[Integer],
-                       payload: Map[
+      @QueryParam("modelName") modelName: String,
+      @QueryParam("type") operationType: String,
+      @QueryParam("filePath") encodedUrl: String,
+      @QueryParam("uploadId") uploadId: Optional[String],
+      @QueryParam("numParts") numParts: Optional[Integer],
+      payload: Map[
         String,
         Any
       ], // Expecting {"parts": [...], "physicalAddress": "s3://bucket/path"}
-                       @Auth user: SessionUser
+      @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
 
@@ -1228,10 +1235,10 @@ class ModelResource {
   }
 
   private def generatePresignedResponse(
-                                         encodedUrl: String,
-                                         modelName: String,
-                                         commitHash: String,
-                                         uid: Integer
+      encodedUrl: String,
+      modelName: String,
+      commitHash: String,
+      uid: Integer
   ): Response = {
     resolveModelAndPath(encodedUrl, modelName, commitHash, uid) match {
       case Left(errorResponse) =>
@@ -1249,10 +1256,10 @@ class ModelResource {
   }
 
   private def resolveModelAndPath(
-                                   encodedUrl: String,
-                                   modelName: String,
-                                   commitHash: String,
-                                   uid: Integer
+      encodedUrl: String,
+      modelName: String,
+      commitHash: String,
+      uid: Integer
   ): Either[Response, (String, String, String)] = {
     val decodedPathStr = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.name())
 
@@ -1288,14 +1295,20 @@ class ModelResource {
       case (None, None) =>
         // Case 3: Neither modelName nor commitHash are provided, resolve normally
         val response = withTransaction(context) { ctx =>
+          println("Resolving file path without modelName and commitHash")
           val fileUri = FileResolver.resolve(decodedPathStr)
+          println(s"Resolved file URI: $fileUri")
           val document = DocumentFactory.openReadonlyDocument(fileUri).asInstanceOf[OnDataset]
+          println(
+            s"Extracted model: ${document.getDatasetName()}, versionHash: ${document.getVersionHash()}, fileRelativePath: ${document.getFileRelativePath()}"
+          )
           val modelDao = new ModelDao(ctx.configuration())
+
           val models = modelDao.fetchByName(document.getDatasetName()).asScala.toList
 
           if (models.isEmpty || !userHasReadAccess(ctx, models.head.getMid, uid))
             throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_MODEL_MESSAGE)
-          
+
           // Standard read access check only - download restrictions handled per endpoint
           // Non-download operations (viewing) should work for all public models
 

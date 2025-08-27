@@ -48,7 +48,7 @@ export class FilesUploaderComponent {
   // four types: "success", "info", "warning" and "error"
   fileUploadBannerType: "error" | "success" | "info" | "warning" = "success";
   fileUploadBannerMessage: string = "";
-  singleFileUploadMaxSizeMB: number = 20;
+  singleFileUploadMaxSizeMB: number = 2000;
 
   constructor(
     private notificationService: NotificationService,

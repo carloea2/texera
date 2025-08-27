@@ -22,24 +22,20 @@ import { AfterViewInit, Component, ViewChild } from "@angular/core";
 import { UserService } from "../../../../common/service/user/user.service";
 import { Router } from "@angular/router";
 import { SearchService } from "../../../service/user/search.service";
-import { DatasetService } from "../../../service/user/dataset/dataset.service";
 import { SortMethod } from "../../../type/sort-method";
-import { DashboardEntry, UserInfo } from "../../../type/dashboard-entry";
+import { DashboardEntry } from "../../../type/dashboard-entry";
 import { SearchResultsComponent } from "../search-results/search-results.component";
 import { FiltersComponent } from "../filters/filters.component";
 import { firstValueFrom } from "rxjs";
-import {
-  DASHBOARD_USER_DATASET,
-  DASHBOARD_USER_DATASET_CREATE,
-  DASHBOARD_USER_MODEL,
-} from "../../../../app-routing.constant";
+import { DASHBOARD_USER_MODEL } from "../../../../app-routing.constant";
 import { NzModalService } from "ng-zorro-antd/modal";
-import { FileSelectionComponent } from "../../../../workspace/component/file-selection/file-selection.component";
-import { DatasetFileNode, getFullPathFromDatasetFileNode } from "../../../../common/type/datasetVersionFileTree";
-import { UserModelVersionCreatorComponent } from "./user-dataset-explorer/user-dataset-version-creator/user-model-version-creator.component";
+import {
+  UserModelVersionCreatorComponent,
+} from "./user-dataset-explorer/user-dataset-version-creator/user-model-version-creator.component";
 import { DashboardModel } from "../../../type/dashboard-model.interface";
 import { NzMessageService } from "ng-zorro-antd/message";
 import { map, tap } from "rxjs/operators";
+import { ModelService } from "../../../service/user/model/model.service";
 
 @UntilDestroy()
 @Component({
@@ -80,13 +76,14 @@ export class UserModelComponent implements AfterViewInit {
   }
 
   private masterFilterList: ReadonlyArray<string> | null = null;
+
   constructor(
     private modalService: NzModalService,
     private userService: UserService,
     private router: Router,
     private searchService: SearchService,
-    private datasetService: DatasetService,
-    private message: NzMessageService
+    private modelService: ModelService,
+    private message: NzMessageService,
   ) {
     this.userService
       .userChanged()
@@ -145,7 +142,7 @@ export class UserModelComponent implements AfterViewInit {
             "model",
             this.sortMethod,
             isLogin,
-            includePublic
+            includePublic,
           )
           .pipe(
             tap(({ hasMismatch }) => {
@@ -153,12 +150,12 @@ export class UserModelComponent implements AfterViewInit {
               if (this.hasMismatch) {
                 this.message.warning(
                   "There is a mismatch between some models in the database and LakeFS. Only matched models are displayed.",
-                  { nzDuration: 4000 }
+                  { nzDuration: 4000 },
                 );
               }
             }),
-            map(({ entries, more }) => ({ entries, more }))
-          )
+            map(({ entries, more }) => ({ entries, more })),
+          ),
       );
     });
     await this.searchResultsComponent.loadMore();
@@ -195,12 +192,13 @@ export class UserModelComponent implements AfterViewInit {
     if (entry.model.model.mid == undefined) {
       return;
     }
-    this.datasetService
-      .deleteDatasets(entry.model.model.mid)
+
+    this.modelService
+      .deleteModels(entry.model.model.mid)
       .pipe(untilDestroyed(this))
       .subscribe(_ => {
         this.searchResultsComponent.entries = this.searchResultsComponent.entries.filter(
-          modelEntry => modelEntry.model.model.mid !== entry.model.model.mid
+          modelEntry => modelEntry.model.model.mid !== entry.model.model.mid,
         );
       });
   }
