@@ -51,6 +51,7 @@ import {
   DASHBOARD_USER_WORKSPACE,
 } from "../../../../app-routing.constant";
 import { isDefined } from "../../../../common/util/predicate";
+import { ModelService } from "../../../service/user/model/model.service";
 
 @UntilDestroy()
 @Component({
@@ -100,6 +101,7 @@ export class ListItemComponent implements OnChanges {
     private modalService: NzModalService,
     private workflowPersistService: WorkflowPersistService,
     private datasetService: DatasetService,
+    private modelService: ModelService,
     private modal: NzModalService,
     private hubService: HubService,
     private downloadService: DownloadService,
@@ -144,7 +146,7 @@ export class ListItemComponent implements OnChanges {
         } else {
           this.entryLink = [DASHBOARD_HUB_MODEL_RESULT_DETAIL, String(this.entry.id)];
         }
-        this.iconType = "database";
+        this.iconType = "code-sandbox";
         this.size = this.entry.size;
       }
     } else if (this.entry.type === "file") {
@@ -199,6 +201,20 @@ export class ListItemComponent implements OnChanges {
         },
         nzFooter: null,
         nzTitle: "Share this dataset with others",
+        nzCentered: true,
+        nzWidth: "700px",
+      });
+    }else if (this.entry.type === "model") {
+      modal = this.modalService.create({
+        nzContent: ShareAccessComponent,
+        nzData: {
+          writeAccess: this.entry.accessLevel === "WRITE",
+          type: "model",
+          id: this.entry.id,
+          allOwners: await firstValueFrom(this.modelService.retrieveOwners()),
+        },
+        nzFooter: null,
+        nzTitle: "Share this model with others",
         nzCentered: true,
         nzWidth: "700px",
       });

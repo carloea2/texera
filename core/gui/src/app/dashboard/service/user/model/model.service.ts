@@ -30,22 +30,22 @@ import { GuiConfigService } from "../../../../common/service/gui-config.service"
 
 export const MODEL_BASE_URL = "model";
 export const MODEL_CREATE_URL = MODEL_BASE_URL + "/create";
-export const DATASET_UPDATE_BASE_URL = MODEL_BASE_URL + "/update";
-export const DATASET_UPDATE_NAME_URL = DATASET_UPDATE_BASE_URL + "/name";
-export const DATASET_UPDATE_DESCRIPTION_URL = DATASET_UPDATE_BASE_URL + "/description";
-export const DATASET_UPDATE_PUBLICITY_URL = "update/publicity";
-export const DATASET_UPDATE_DOWNLOADABLE_URL = "update/downloadable";
-export const DATASET_LIST_URL = MODEL_BASE_URL + "/list";
-export const DATASET_SEARCH_URL = MODEL_BASE_URL + "/search";
-export const DATASET_DELETE_URL = MODEL_BASE_URL + "/delete";
+export const MODEL_UPDATE_BASE_URL = MODEL_BASE_URL + "/update";
+export const MODEL_UPDATE_NAME_URL = MODEL_UPDATE_BASE_URL + "/name";
+export const MODEL_UPDATE_DESCRIPTION_URL = MODEL_UPDATE_BASE_URL + "/description";
+export const MODEL_UPDATE_PUBLICITY_URL = "update/publicity";
+export const MODEL_UPDATE_DOWNLOADABLE_URL = "update/downloadable";
+export const MODEL_LIST_URL = MODEL_BASE_URL + "/list";
+export const MODEL_SEARCH_URL = MODEL_BASE_URL + "/search";
+export const MODEL_DELETE_URL = MODEL_BASE_URL + "/delete";
 
-export const DATASET_VERSION_BASE_URL = "version";
-export const DATASET_VERSION_RETRIEVE_LIST_URL = DATASET_VERSION_BASE_URL + "/list";
-export const DATASET_VERSION_LATEST_URL = DATASET_VERSION_BASE_URL + "/latest";
-export const DEFAULT_DATASET_NAME = "Untitled model";
-export const DATASET_PUBLIC_VERSION_BASE_URL = "publicVersion";
-export const DATASET_PUBLIC_VERSION_RETRIEVE_LIST_URL = DATASET_PUBLIC_VERSION_BASE_URL + "/list";
-export const DATASET_GET_OWNERS_URL = MODEL_BASE_URL + "/user-model-owners";
+export const MODEL_VERSION_BASE_URL = "version";
+export const MODEL_VERSION_RETRIEVE_LIST_URL = MODEL_VERSION_BASE_URL + "/list";
+export const MODEL_VERSION_LATEST_URL = MODEL_VERSION_BASE_URL + "/latest";
+export const DEFAULT_MODEL_NAME = "Untitled model";
+export const MODEL_PUBLIC_VERSION_BASE_URL = "publicVersion";
+export const MODEL_PUBLIC_VERSION_RETRIEVE_LIST_URL = MODEL_PUBLIC_VERSION_BASE_URL + "/list";
+export const MODEL_GET_OWNERS_URL = MODEL_BASE_URL + "/user-model-owners";
 
 export interface MultipartUploadProgress {
   filePath: string;
@@ -120,7 +120,7 @@ export class ModelService {
   }
 
   public retrieveAccessibleModels(): Observable<DashboardModel[]> {
-    return this.http.get<DashboardModel[]>(`${AppSettings.getApiEndpoint()}/${DATASET_LIST_URL}`);
+    return this.http.get<DashboardModel[]>(`${AppSettings.getApiEndpoint()}/${MODEL_LIST_URL}`);
   }
   public createModelVersion(did: number, newVersion: string): Observable<ModelVersion> {
     return this.http
@@ -446,8 +446,8 @@ export class ModelService {
    */
   public retrieveModelVersionList(did: number, isLogin: boolean = true): Observable<ModelVersion[]> {
     const apiEndPont = isLogin
-      ? `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_VERSION_RETRIEVE_LIST_URL}`
-      : `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_PUBLIC_VERSION_RETRIEVE_LIST_URL}`;
+      ? `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_VERSION_RETRIEVE_LIST_URL}`
+      : `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_PUBLIC_VERSION_RETRIEVE_LIST_URL}`;
     return this.http.get<ModelVersion[]>(apiEndPont);
   }
 
@@ -460,7 +460,7 @@ export class ModelService {
       .get<{
         modelVersion: ModelVersion;
         fileNodes: DatasetFileNode[];
-      }>(`${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_VERSION_LATEST_URL}`)
+      }>(`${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_VERSION_LATEST_URL}`)
       .pipe(
         map(response => {
           response.modelVersion.fileNodes = response.fileNodes;
@@ -481,8 +481,8 @@ export class ModelService {
     isLogin: boolean = true
   ): Observable<{ fileNodes: DatasetFileNode[]; size: number }> {
     const apiUrl = isLogin
-      ? `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_VERSION_BASE_URL}/${dvid}/rootFileNodes`
-      : `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_PUBLIC_VERSION_BASE_URL}/${dvid}/rootFileNodes`;
+      ? `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_VERSION_BASE_URL}/${dvid}/rootFileNodes`
+      : `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_PUBLIC_VERSION_BASE_URL}/${dvid}/rootFileNodes`;
     return this.http.get<{ fileNodes: DatasetFileNode[]; size: number }>(apiUrl);
   }
 
@@ -491,14 +491,14 @@ export class ModelService {
   }
 
   public updateModelName(did: number, name: string): Observable<Response> {
-    return this.http.post<Response>(`${AppSettings.getApiEndpoint()}/${DATASET_UPDATE_NAME_URL}`, {
+    return this.http.post<Response>(`${AppSettings.getApiEndpoint()}/${MODEL_UPDATE_NAME_URL}`, {
       did: did,
       name: name,
     });
   }
 
   public updateModelDescription(did: number, description: string): Observable<Response> {
-    return this.http.post<Response>(`${AppSettings.getApiEndpoint()}/${DATASET_UPDATE_DESCRIPTION_URL}`, {
+    return this.http.post<Response>(`${AppSettings.getApiEndpoint()}/${MODEL_UPDATE_DESCRIPTION_URL}`, {
       did: did,
       description: description,
     });
@@ -506,19 +506,19 @@ export class ModelService {
 
   public updateModelPublicity(did: number): Observable<Response> {
     return this.http.post<Response>(
-      `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_UPDATE_PUBLICITY_URL}`,
+      `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_UPDATE_PUBLICITY_URL}`,
       {}
     );
   }
 
   public updateModelDownloadable(did: number): Observable<Response> {
     return this.http.post<Response>(
-      `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${DATASET_UPDATE_DOWNLOADABLE_URL}`,
+      `${AppSettings.getApiEndpoint()}/${MODEL_BASE_URL}/${did}/${MODEL_UPDATE_DOWNLOADABLE_URL}`,
       {}
     );
   }
 
   public retrieveOwners(): Observable<string[]> {
-    return this.http.get<string[]>(`${AppSettings.getApiEndpoint()}/${DATASET_GET_OWNERS_URL}`);
+    return this.http.get<string[]>(`${AppSettings.getApiEndpoint()}/${MODEL_GET_OWNERS_URL}`);
   }
 }

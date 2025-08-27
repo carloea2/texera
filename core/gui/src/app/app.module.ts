@@ -186,6 +186,9 @@ import {
   InputAutoCompleteModelComponent
 } from "./workspace/component/input-autocomplete-model/input-auto-complete-model.component";
 import { ModelSelectionComponent } from "./workspace/component/model-selection/model-selection.component";
+import {
+  UserModelListItemComponent
+} from "./dashboard/component/user/user-model/user-dataset-list-item/user-model-list-item.component";
 
 registerLocaleData(en);
 
@@ -213,6 +216,7 @@ registerLocaleData(en);
     UserAvatarComponent,
     LocalLoginComponent,
     UserWorkflowComponent,
+    UserModelListItemComponent,
     UserQuotaComponent,
     RowModalComponent,
     OperatorLabelComponent,

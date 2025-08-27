@@ -19,47 +19,47 @@
 
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { Component, EventEmitter, Input, Output } from "@angular/core";
-import { Dataset } from "../../../../../common/type/dataset";
-import { DatasetService } from "../../../../service/user/dataset/dataset.service";
 import { ShareAccessComponent } from "../../share-access/share-access.component";
 import { NotificationService } from "../../../../../common/service/notification/notification.service";
 import { NzModalService } from "ng-zorro-antd/modal";
-import { DashboardDataset } from "../../../../type/dashboard-dataset.interface";
 import { DASHBOARD_USER_DATASET } from "../../../../../app-routing.constant";
+import { DashboardModel } from "../../../../type/dashboard-model.interface";
+import { Model } from "../../../../../common/type/model";
+import { ModelService } from "../../../../service/user/model/model.service";
 
 @UntilDestroy()
 @Component({
-  selector: "texera-user-dataset-list-item",
-  templateUrl: "./user-dataset-list-item.component.html",
-  styleUrls: ["./user-dataset-list-item.component.scss"],
+  selector: "texera-user-model-list-item",
+  templateUrl: "./user-model-list-item.component.html",
+  styleUrls: ["./user-model-list-item.component.scss"],
 })
-export class UserDatasetListItemComponent {
+export class UserModelListItemComponent {
   protected readonly DASHBOARD_USER_DATASET = DASHBOARD_USER_DATASET;
 
-  private _entry?: DashboardDataset;
+  private _entry?: DashboardModel;
 
   @Output()
   refresh = new EventEmitter<void>();
 
   @Input()
-  get entry(): DashboardDataset {
+  get entry(): DashboardModel {
     if (!this._entry) {
       throw new Error("entry property must be provided to UserDatasetListItemComponent.");
     }
     return this._entry;
   }
 
-  set entry(value: DashboardDataset) {
+  set entry(value: DashboardModel) {
     this._entry = value;
   }
 
-  get dataset(): Dataset {
-    if (!this.entry.dataset) {
+  get model(): Model {
+    if (!this.entry.model) {
       throw new Error(
-        "Incorrect type of DashboardEntry provided to UserDatasetListItemComponent. Entry must be dataset."
+        "Incorrect type of DashboardEntry provided to UserModelListItemComponent. Entry must be model.",
       );
     }
-    return this.entry.dataset;
+    return this.entry.model;
   }
 
   @Input() editable = false;
@@ -71,47 +71,48 @@ export class UserDatasetListItemComponent {
 
   constructor(
     private modalService: NzModalService,
-    private datasetService: DatasetService,
-    private notificationService: NotificationService
-  ) {}
+    private modelService: ModelService,
+    private notificationService: NotificationService,
+  ) {
+  }
 
   public confirmUpdateDatasetCustomName(name: string) {
-    if (this.entry.dataset.name === name) {
+    if (this.entry.model.name === name) {
       return;
     }
 
-    if (this.entry.dataset.did)
-      this.datasetService
-        .updateDatasetName(this.entry.dataset.did, name)
+    if (this.entry.model.mid)
+      this.modelService
+        .updateModelName(this.entry.model.mid, name)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: () => {
-            this.entry.dataset.name = name;
+            this.entry.model.name = name;
             this.editingName = false;
           },
           error: () => {
-            this.notificationService.error("Update dataset name failed");
+            this.notificationService.error("Update model name failed");
             this.editingName = false;
           },
         });
   }
 
   public confirmUpdateDatasetCustomDescription(description: string) {
-    if (this.entry.dataset.description === description) {
+    if (this.entry.model.description === description) {
       return;
     }
 
-    if (this.entry.dataset.did)
-      this.datasetService
-        .updateDatasetDescription(this.entry.dataset.did, description)
+    if (this.entry.model.mid)
+      this.modelService
+        .updateModelDescription(this.entry.model.mid, description)
         .pipe(untilDestroyed(this))
         .subscribe({
           next: () => {
-            this.entry.dataset.description = description;
+            this.entry.model.description = description;
             this.editingDescription = false;
           },
           error: () => {
-            this.notificationService.error("Update dataset description failed");
+            this.notificationService.error("Update model description failed");
             this.editingDescription = false;
           },
         });
@@ -122,11 +123,11 @@ export class UserDatasetListItemComponent {
       nzContent: ShareAccessComponent,
       nzData: {
         writeAccess: this.entry.accessPrivilege === "WRITE",
-        type: "dataset",
-        id: this.dataset.did,
+        type: "model",
+        id: this.model.mid,
       },
       nzFooter: null,
-      nzTitle: "Share this dataset with others",
+      nzTitle: "Share this model with others",
       nzCentered: true,
     });
   }
