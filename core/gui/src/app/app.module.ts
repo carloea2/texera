@@ -182,6 +182,10 @@ import {
 import {
   UserModelStagedObjectsListComponent
 } from "./dashboard/component/user/user-model/user-dataset-explorer/user-model-staged-objects-list/user-model-staged-objects-list.component";
+import {
+  InputAutoCompleteModelComponent
+} from "./workspace/component/input-autocomplete-model/input-auto-complete-model.component";
+import { ModelSelectionComponent } from "./workspace/component/model-selection/model-selection.component";
 
 registerLocaleData(en);
 
@@ -261,6 +265,8 @@ registerLocaleData(en);
     SortButtonComponent,
     FiltersComponent,
     FiltersInstructionsComponent,
+    InputAutoCompleteModelComponent,
+    ModelSelectionComponent,
     SearchComponent,
     SearchResultsComponent,
     PortPropertyEditFrameComponent,

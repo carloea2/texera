@@ -24,11 +24,7 @@ import com.fasterxml.jackson.annotation._
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.tuple.Schema
-import edu.uci.ics.amber.core.virtualidentity.{
-  ExecutionIdentity,
-  OperatorIdentity,
-  WorkflowIdentity
-}
+import edu.uci.ics.amber.core.virtualidentity.{ExecutionIdentity, OperatorIdentity, WorkflowIdentity}
 import edu.uci.ics.amber.core.workflow.WorkflowContext.{DEFAULT_EXECUTION_ID, DEFAULT_WORKFLOW_ID}
 import edu.uci.ics.amber.core.workflow.{PhysicalOp, PhysicalPlan, PortIdentity}
 import edu.uci.ics.amber.operator.aggregate.AggregateOpDesc
@@ -39,22 +35,15 @@ import edu.uci.ics.amber.operator.distinct.DistinctOpDesc
 import edu.uci.ics.amber.operator.dummy.DummyOpDesc
 import edu.uci.ics.amber.operator.filter.SpecializedFilterOpDesc
 import edu.uci.ics.amber.operator.hashJoin.HashJoinOpDesc
-import edu.uci.ics.amber.operator.huggingFace.{
-  HuggingFaceIrisLogisticRegressionOpDesc,
-  HuggingFaceSentimentAnalysisOpDesc,
-  HuggingFaceSpamSMSDetectionOpDesc,
-  HuggingFaceTextSummarizationOpDesc
-}
+import edu.uci.ics.amber.operator.huggingFace.{HuggingFaceIrisLogisticRegressionOpDesc, HuggingFaceSentimentAnalysisOpDesc, HuggingFaceSpamSMSDetectionOpDesc, HuggingFaceTextSummarizationOpDesc}
 import edu.uci.ics.amber.operator.ifStatement.IfOpDesc
 import edu.uci.ics.amber.operator.intersect.IntersectOpDesc
 import edu.uci.ics.amber.operator.intervalJoin.IntervalJoinOpDesc
 import edu.uci.ics.amber.operator.keywordSearch.KeywordSearchOpDesc
 import edu.uci.ics.amber.operator.limit.LimitOpDesc
+import edu.uci.ics.amber.operator.loadModel.LoadModelOpDesc
 import edu.uci.ics.amber.operator.machineLearning.Scorer.MachineLearningScorerOpDesc
-import edu.uci.ics.amber.operator.machineLearning.sklearnAdvanced.KNNTrainer.{
-  SklearnAdvancedKNNClassifierTrainerOpDesc,
-  SklearnAdvancedKNNRegressorTrainerOpDesc
-}
+import edu.uci.ics.amber.operator.machineLearning.sklearnAdvanced.KNNTrainer.{SklearnAdvancedKNNClassifierTrainerOpDesc, SklearnAdvancedKNNRegressorTrainerOpDesc}
 import edu.uci.ics.amber.operator.machineLearning.sklearnAdvanced.SVCTrainer.SklearnAdvancedSVCTrainerOpDesc
 import edu.uci.ics.amber.operator.machineLearning.sklearnAdvanced.SVRTrainer.SklearnAdvancedSVRTrainerOpDesc
 import edu.uci.ics.amber.operator.metadata.{OPVersion, OperatorInfo, PropertyNameConstants}
@@ -64,38 +53,11 @@ import edu.uci.ics.amber.operator.regex.RegexOpDesc
 import edu.uci.ics.amber.operator.reservoirsampling.ReservoirSamplingOpDesc
 import edu.uci.ics.amber.operator.sklearn._
 import edu.uci.ics.amber.operator.sleep.SleepOpDesc
-import edu.uci.ics.amber.operator.sklearn.training.{
-  SklearnTrainingAdaptiveBoostingOpDesc,
-  SklearnTrainingBaggingOpDesc,
-  SklearnTrainingBernoulliNaiveBayesOpDesc,
-  SklearnTrainingComplementNaiveBayesOpDesc,
-  SklearnTrainingDecisionTreeOpDesc,
-  SklearnTrainingDummyClassifierOpDesc,
-  SklearnTrainingExtraTreeOpDesc,
-  SklearnTrainingExtraTreesOpDesc,
-  SklearnTrainingGaussianNaiveBayesOpDesc,
-  SklearnTrainingGradientBoostingOpDesc,
-  SklearnTrainingKNNOpDesc,
-  SklearnTrainingLinearSVMOpDesc,
-  SklearnTrainingMultiLayerPerceptronOpDesc,
-  SklearnTrainingMultinomialNaiveBayesOpDesc,
-  SklearnTrainingNearestCentroidOpDesc,
-  SklearnTrainingPassiveAggressiveOpDesc,
-  SklearnTrainingPerceptronOpDesc,
-  SklearnTrainingProbabilityCalibrationOpDesc,
-  SklearnTrainingRandomForestOpDesc,
-  SklearnTrainingRidgeCVOpDesc,
-  SklearnTrainingRidgeOpDesc,
-  SklearnTrainingSDGOpDesc,
-  SklearnTrainingSVMOpDesc
-}
+import edu.uci.ics.amber.operator.sklearn.training.{SklearnTrainingAdaptiveBoostingOpDesc, SklearnTrainingBaggingOpDesc, SklearnTrainingBernoulliNaiveBayesOpDesc, SklearnTrainingComplementNaiveBayesOpDesc, SklearnTrainingDecisionTreeOpDesc, SklearnTrainingDummyClassifierOpDesc, SklearnTrainingExtraTreeOpDesc, SklearnTrainingExtraTreesOpDesc, SklearnTrainingGaussianNaiveBayesOpDesc, SklearnTrainingGradientBoostingOpDesc, SklearnTrainingKNNOpDesc, SklearnTrainingLinearSVMOpDesc, SklearnTrainingMultiLayerPerceptronOpDesc, SklearnTrainingMultinomialNaiveBayesOpDesc, SklearnTrainingNearestCentroidOpDesc, SklearnTrainingPassiveAggressiveOpDesc, SklearnTrainingPerceptronOpDesc, SklearnTrainingProbabilityCalibrationOpDesc, SklearnTrainingRandomForestOpDesc, SklearnTrainingRidgeCVOpDesc, SklearnTrainingRidgeOpDesc, SklearnTrainingSDGOpDesc, SklearnTrainingSVMOpDesc}
 import edu.uci.ics.amber.operator.sort.SortOpDesc
 import edu.uci.ics.amber.operator.sortPartitions.SortPartitionsOpDesc
 import edu.uci.ics.amber.operator.source.apis.reddit.RedditSearchSourceOpDesc
-import edu.uci.ics.amber.operator.source.apis.twitter.v2.{
-  TwitterFullArchiveSearchSourceOpDesc,
-  TwitterSearchSourceOpDesc
-}
+import edu.uci.ics.amber.operator.source.apis.twitter.v2.{TwitterFullArchiveSearchSourceOpDesc, TwitterSearchSourceOpDesc}
 import edu.uci.ics.amber.operator.source.fetcher.URLFetcherOpDesc
 import edu.uci.ics.amber.operator.source.scan.FileScanSourceOpDesc
 import edu.uci.ics.amber.operator.source.scan.arrow.ArrowSourceOpDesc
@@ -266,6 +228,7 @@ trait StateTransferFunc
     new Type(value = classOf[ArrowSourceOpDesc], name = "ArrowSource"),
     new Type(value = classOf[MachineLearningScorerOpDesc], name = "Scorer"),
     new Type(value = classOf[SortOpDesc], name = "Sort"),
+    new Type(value = classOf[LoadModelOpDesc], name = "LoadModel"),
     new Type(value = classOf[SklearnLogisticRegressionOpDesc], name = "SklearnLogisticRegression"),
     new Type(
       value = classOf[SklearnLogisticRegressionCVOpDesc],

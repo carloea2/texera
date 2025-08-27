@@ -27,6 +27,9 @@ import { PresetWrapperComponent } from "./preset-wrapper/preset-wrapper.componen
 import { InputAutoCompleteComponent } from "../../workspace/component/input-autocomplete/input-autocomplete.component";
 import { CollabWrapperComponent } from "./collab-wrapper/collab-wrapper/collab-wrapper.component";
 import { FormlyRepeatDndComponent } from "./repeat-dnd/repeat-dnd.component";
+import {
+  InputAutoCompleteModelComponent
+} from "../../workspace/component/input-autocomplete-model/input-auto-complete-model.component";
 
 /**
  * Configuration for using Json Schema with Formly.
@@ -77,6 +80,7 @@ export const TEXERA_FORMLY_CONFIG = {
     { name: "multischema", component: MultiSchemaTypeComponent },
     { name: "codearea", component: CodeareaCustomTemplateComponent },
     { name: "inputautocomplete", component: InputAutoCompleteComponent, wrappers: ["form-field"] },
+    { name: "inputautocompleteModel", component: InputAutoCompleteModelComponent, wrappers: ["form-field"] },
     { name: "repeat-section-dnd", component: FormlyRepeatDndComponent },
   ],
   wrappers: [
