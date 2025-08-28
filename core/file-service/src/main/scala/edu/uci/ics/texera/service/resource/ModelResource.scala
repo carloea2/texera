@@ -884,12 +884,12 @@ class ModelResource {
           .fetch()
           .map(record => {
             val model = record.into(MODEL).into(classOf[Model])
-            val datasetAccess = record.into(MODEL_USER_ACCESS).into(classOf[ModelUserAccess])
+            val modelAccess = record.into(MODEL_USER_ACCESS).into(classOf[ModelUserAccess])
             val ownerEmail = record.into(USER).getEmail
             DashboardModel(
               isOwner = model.getOwnerUid == uid,
               model = model,
-              accessPrivilege = datasetAccess.getPrivilege,
+              accessPrivilege = modelAccess.getPrivilege,
               ownerEmail = ownerEmail,
               size = 0
             )
@@ -976,7 +976,7 @@ class ModelResource {
       if (!userHasReadAccess(ctx, mid, uid)) {
         throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_MODEL_MESSAGE)
       }
-      val dataset = getModelByID(ctx, mid)
+      val model = getModelByID(ctx, mid)
       val latestVersion = getLatestModelVersion(ctx, mid).getOrElse(
         throw new NotFoundException(ERR_MODEL_VERSION_NOT_FOUND_MESSAGE)
       )
@@ -984,9 +984,9 @@ class ModelResource {
       val ownerNode = DatasetFileNode
         .fromLakeFSRepositoryCommittedObjects(
           Map(
-            (user.getEmail, dataset.getName, latestVersion.getName) ->
+            (user.getEmail, model.getName, latestVersion.getName) ->
               LakeFSStorageClient
-                .retrieveObjectsOfVersion(dataset.getName, latestVersion.getVersionHash)
+                .retrieveObjectsOfVersion(model.getName, latestVersion.getVersionHash)
           )
         )
         .head
@@ -994,7 +994,7 @@ class ModelResource {
       DashboardModelVersion(
         latestVersion,
         ownerNode.children.get
-          .find(_.getName == dataset.getName)
+          .find(_.getName == model.getName)
           .head
           .children
           .get
@@ -1028,14 +1028,14 @@ class ModelResource {
       }
 
       // Retrieve model and check download permission
-      val dataset = getModelByID(ctx, mid)
+      val model = getModelByID(ctx, mid)
       // Non-owners can download if model is downloadable and they have read access
-      if (!userOwnDataset(ctx, mid, uid) && !dataset.getIsDownloadable) {
+      if (!userOwnDataset(ctx, mid, uid) && !model.getIsDownloadable) {
         throw new ForbiddenException("model download is not allowed")
       }
 
       // Determine which version to retrieve
-      val datasetVersion = if (dvid != null) {
+      val modelVersion = if (dvid != null) {
         getModelVersionByID(ctx, dvid)
       } else if (java.lang.Boolean.TRUE.equals(latest)) {
         getLatestModelVersion(ctx, mid).getOrElse(
@@ -1046,14 +1046,14 @@ class ModelResource {
       }
 
       // Retrieve model and version details
-      val datasetName = dataset.getName
-      val versionHash = datasetVersion.getVersionHash
-      val objects = LakeFSStorageClient.retrieveObjectsOfVersion(datasetName, versionHash)
+      val modelName = model.getName
+      val versionHash = modelVersion.getVersionHash
+      val objects = LakeFSStorageClient.retrieveObjectsOfVersion(modelName, versionHash)
 
       if (objects.isEmpty) {
         return Response
           .status(Response.Status.NOT_FOUND)
-          .entity(s"No objects found in version $versionHash of repository $datasetName")
+          .entity(s"No objects found in version $versionHash of repository $modelName")
           .build()
       }
 
@@ -1064,7 +1064,7 @@ class ModelResource {
           try {
             objects.foreach { obj =>
               val filePath = obj.getPath
-              val file = LakeFSStorageClient.getFileFromRepo(datasetName, versionHash, filePath)
+              val file = LakeFSStorageClient.getFileFromRepo(modelName, versionHash, filePath)
 
               zipOut.putNextEntry(new ZipEntry(filePath))
               Files.copy(Paths.get(file.toURI), zipOut)
@@ -1076,7 +1076,7 @@ class ModelResource {
         }
       }
 
-      val zipFilename = s"""attachment; filename="$datasetName-${datasetVersion.getName}.zip""""
+      val zipFilename = s"""attachment; filename="$modelName-${modelVersion.getName}.zip""""
 
       Response
         .ok(streamingOutput, "application/zip")
