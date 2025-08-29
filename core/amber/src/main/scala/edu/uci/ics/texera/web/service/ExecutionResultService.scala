@@ -425,7 +425,7 @@ class ExecutionResultService(
   def handleResultPagination(request: ResultPaginationRequest): TexeraWebSocketEvent = {
     // calculate from index (pageIndex starts from 1 instead of 0)
     val from = request.pageSize * (request.pageIndex - 1)
-    val latestExecutionId = getLatestExecutionId(workflowIdentity, computingUnitId).getOrElse(
+    val latestExecutionId = getLatestExecutionId(0, 0).getOrElse(
       throw new IllegalStateException("No execution is recorded")
     )
 
