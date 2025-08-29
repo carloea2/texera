@@ -24,8 +24,8 @@ import edu.uci.ics.texera.dao.SqlServer
 import edu.uci.ics.texera.dao.SqlServer.withTransaction
 import edu.uci.ics.texera.dao.jooq.generated.Tables.{MODEL_USER_ACCESS, USER}
 import edu.uci.ics.texera.dao.jooq.generated.enums.PrivilegeEnum
-import edu.uci.ics.texera.dao.jooq.generated.tables.daos.{ DatasetUserAccessDao, ModelDao, UserDao}
-import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{DatasetUserAccess, User}
+import edu.uci.ics.texera.dao.jooq.generated.tables.daos.{DatasetUserAccessDao, ModelDao, ModelUserAccessDao, UserDao}
+import edu.uci.ics.texera.dao.jooq.generated.tables.pojos.{DatasetUserAccess, ModelUserAccess, User}
 import edu.uci.ics.texera.service.resource.ModelAccessResource.{AccessEntry, context, getOwner, userHasWriteAccess}
 import io.dropwizard.auth.Auth
 import jakarta.annotation.security.RolesAllowed
@@ -43,7 +43,7 @@ object ModelAccessResource {
   def isDatasetPublic(ctx: DSLContext, mid: Integer): Boolean = {
     val modelDao = new ModelDao(ctx.configuration())
     Option(modelDao.fetchOneByMid(mid))
-      .flatMap(dataset => Option(dataset.getIsPublic))
+      .flatMap(model => Option(model.getIsPublic))
       .contains(true)
   }
 
@@ -88,7 +88,7 @@ object ModelAccessResource {
     val userDao = new UserDao(ctx.configuration())
 
     Option(modelDao.fetchOneByMid(mid))
-      .flatMap(dataset => Option(dataset.getOwnerUid))
+      .flatMap(model => Option(model.getOwnerUid))
       .map(ownerUid => userDao.fetchOneByUid(ownerUid))
       .orNull
   }
@@ -103,14 +103,14 @@ object ModelAccessResource {
 class ModelAccessResource {
 
   /**
-    * This method returns the owner of a dataset
+    * This method returns the owner of a model
     *
-    * @param mid ,  dataset id
+    * @param mid ,  model id
     * @return ownerEmail,  the owner's email
     */
   @GET
   @Path("/owner/{mid}")
-  def getOwnerEmailOfDataset(@PathParam("mid") mid: Integer): String = {
+  def getOwnerEmailOfModel(@PathParam("mid") mid: Integer): String = {
     var email = ""
     withTransaction(context) { ctx =>
       val owner = getOwner(ctx, mid)
@@ -122,7 +122,7 @@ class ModelAccessResource {
   }
 
   /**
-    * Returns information about all current shared access of the given dataset
+    * Returns information about all current shared access of the given model
     *
     * @param mid model id
     * @return a List of email/name/permission
@@ -153,9 +153,9 @@ class ModelAccessResource {
   }
 
   /**
-    * This method shares a dataset to a user with a specific access type
+    * This method shares a model to a user with a specific access type
     *
-    * @param mid       the given dataset
+    * @param mid       the given model
     * @param email     the email which the access is given to
     * @param privilege the type of Access given to the target user
     * @return rejection if user not permitted to share the workflow or Success Message
@@ -170,12 +170,12 @@ class ModelAccessResource {
   ): Response = {
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, mid, user.getUid)) {
-        throw new ForbiddenException(s"You do not have permission to modify dataset $mid")
+        throw new ForbiddenException(s"You do not have permission to modify model $mid")
       }
-      val datasetUserAccessDao = new DatasetUserAccessDao(ctx.configuration())
+      val modelUserAccessDao = new ModelUserAccessDao(ctx.configuration())
       val userDao = new UserDao(ctx.configuration())
-      datasetUserAccessDao.merge(
-        new DatasetUserAccess(
+      modelUserAccessDao.merge(
+        new ModelUserAccess(
           mid,
           userDao.fetchOneByEmail(email).getUid,
           PrivilegeEnum.valueOf(privilege)
@@ -186,9 +186,9 @@ class ModelAccessResource {
   }
 
   /**
-    * This method revoke the user's access of the given dataset
+    * This method revoke the user's access of the given model
     *
-    * @param mid   the given dataset
+    * @param mid   the given model
     * @param email the email of the use whose access is about to be removed
     * @return message indicating a success message
     */
@@ -201,7 +201,7 @@ class ModelAccessResource {
   ): Response = {
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, mid, user.getUid)) {
-        throw new ForbiddenException(s"You do not have permission to modify dataset $mid")
+        throw new ForbiddenException(s"You do not have permission to modify model $mid")
       }
 
       val userDao = new UserDao(ctx.configuration())

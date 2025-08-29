@@ -31,6 +31,7 @@ import { NzMessageService } from "ng-zorro-antd/message";
 import { DatasetService } from "../../../service/user/dataset/dataset.service";
 import { WorkflowPersistService } from "src/app/common/service/workflow-persist/workflow-persist.service";
 import { WorkflowActionService } from "src/app/workspace/service/workflow-graph/model/workflow-action.service";
+import { ModelService } from "../../../service/user/model/model.service";
 
 @UntilDestroy()
 @Component({
@@ -66,6 +67,7 @@ export class ShareAccessComponent implements OnInit, OnDestroy {
     private modalService: NzModalService,
     private workflowPersistService: WorkflowPersistService,
     private datasetService: DatasetService,
+    private modelService: ModelService,
     private workflowActionService: WorkflowActionService,
     private modalRef: NzModalRef
   ) {
@@ -100,6 +102,13 @@ export class ShareAccessComponent implements OnInit, OnDestroy {
         .pipe(untilDestroyed(this))
         .subscribe(dashboardDataset => {
           this.isPublic = dashboardDataset.dataset.isPublic;
+        });
+    } else if (this.type === "model") {
+      this.modelService
+        .getModel(this.id)
+        .pipe(untilDestroyed(this))
+        .subscribe(dashboardModel => {
+          this.isPublic = dashboardModel.model.isPublic;
         });
     }
   }
