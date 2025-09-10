@@ -59,7 +59,7 @@ case class RegionExecution(region: Region) {
       physicalOpId: PhysicalOpIdentity,
       inheritOperatorExecution: Option[OperatorExecution] = None
   ): OperatorExecution = {
-    assert(!operatorExecutions.contains(physicalOpId), "OperatorExecution already exists.")
+    //assert(!operatorExecutions.contains(physicalOpId), "OperatorExecution already exists.")
 
     operatorExecutions.getOrElseUpdate(
       physicalOpId,

@@ -19,6 +19,7 @@
 
 package edu.uci.ics.amber.engine.architecture.controller
 
+import edu.uci.ics.amber.core.executor.OpExecWithClassName
 import edu.uci.ics.amber.core.virtualidentity.ActorVirtualIdentity
 import edu.uci.ics.amber.core.workflow.{PhysicalPlan, WorkflowContext}
 import edu.uci.ics.amber.engine.architecture.scheduling.{
@@ -33,6 +34,7 @@ class WorkflowScheduler(
 ) extends java.io.Serializable {
   var physicalPlan: PhysicalPlan = _
   private var schedule: Schedule = _
+  var lastRegion: Set[Region] = _
 
   /**
     * Update the schedule to be executed, based on the given physicalPlan.
@@ -50,6 +52,12 @@ class WorkflowScheduler(
     this.physicalPlan = updatedPhysicalPlan
   }
 
-  def getNextRegions: Set[Region] = if (!schedule.hasNext) Set() else schedule.next()
+  def getNextRegions: Set[Region] = {
+    val region: Set[Region] = if (!schedule.hasNext) Set() else schedule.next()
+    val isAgg = region.head.physicalOps.exists { op =>op.opExecInitInfo.asInstanceOf[OpExecWithClassName].className.contains("Aggregate")}
+    if (isAgg) lastRegion = region
+    println("ergergerg", lastRegion)
+    if (lastRegion != null) lastRegion else region
+  }
 
 }

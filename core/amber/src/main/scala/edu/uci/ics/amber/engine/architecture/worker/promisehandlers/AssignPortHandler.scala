@@ -28,7 +28,7 @@ import edu.uci.ics.amber.engine.architecture.rpc.controlcommands.{
 }
 import edu.uci.ics.amber.engine.architecture.rpc.controlreturns.EmptyReturn
 import edu.uci.ics.amber.engine.architecture.worker.DataProcessorRPCHandlerInitializer
-import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{PAUSED, READY, RUNNING}
+import edu.uci.ics.amber.engine.architecture.worker.statistics.WorkerState.{PAUSED, READY, RUNNING, COMPLETED}
 import edu.uci.ics.amber.util.VirtualIdentityUtils.getFromActorIdForInputPortStorage
 
 import java.net.URI
@@ -51,7 +51,7 @@ trait AssignPortHandler {
         // Same as AddInputChannelHandler
         dp.inputGateway.getChannel(channelId).setPortId(msg.portId)
         dp.inputManager.getPort(msg.portId).channels.add(channelId)
-        dp.stateManager.assertState(READY, RUNNING, PAUSED)
+        dp.stateManager.assertState(READY, RUNNING, PAUSED, COMPLETED)
       }
     } else {
       val storageURIOption: Option[URI] = msg.storageUris.head match {

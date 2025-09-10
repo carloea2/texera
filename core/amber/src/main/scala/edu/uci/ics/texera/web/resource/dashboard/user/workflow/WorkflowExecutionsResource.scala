@@ -116,6 +116,11 @@ object WorkflowExecutionsResource {
           OPERATOR_PORT_EXECUTIONS.RESULT_URI
         )
         .values(eid.id.toInt, globalPortId.serializeAsString, uri.toString)
+        .onConflict(
+          OPERATOR_PORT_EXECUTIONS.WORKFLOW_EXECUTION_ID,
+          OPERATOR_PORT_EXECUTIONS.GLOBAL_PORT_ID
+        )
+        .doNothing()
         .execute()
     } else {
       ExecutionResourcesMapping.addResourceUri(eid, uri)
