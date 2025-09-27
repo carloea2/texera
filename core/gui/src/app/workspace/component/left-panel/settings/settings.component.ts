@@ -25,7 +25,6 @@ import { WorkflowPersistService } from "src/app/common/service/workflow-persist/
 import { UserService } from "../../../../common/service/user/user.service";
 import { NotificationService } from "src/app/common/service/notification/notification.service";
 import { GuiConfigService } from "../../../../common/service/gui-config.service";
-import {debounceTime, distinctUntilChanged, filter, map} from "rxjs/operators";
 
 @UntilDestroy()
 @Component({
@@ -55,16 +54,6 @@ export class SettingsComponent implements OnInit {
     this.settingsForm = this.fb.group({
       dataTransferBatchSize: [this.currentDataTransferBatchSize, [Validators.required, Validators.min(1)]],
     });
-
-    this.settingsForm.get('dataTransferBatchSize')!.valueChanges
-      .pipe(
-        map(v => Number(v)),
-        filter(v => Number.isFinite(v) && v > 0),
-        distinctUntilChanged(),
-        debounceTime(300),
-        untilDestroyed(this)
-      )
-      .subscribe(v => this.confirmUpdateDataTransferBatchSize(v));
 
     this.workflowActionService
       .workflowChanged()
