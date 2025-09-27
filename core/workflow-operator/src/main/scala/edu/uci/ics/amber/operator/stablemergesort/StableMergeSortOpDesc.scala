@@ -90,14 +90,15 @@ object StableMergeSortOpDesc {
     @JsonProperty("order")
     @JsonSchemaTitle("Order")
     @JsonPropertyDescription("Sort order: asc for ascending or desc for descending.")
-    @JsonSchemaInject(json = """{\"enum\": [\"asc\", \"desc\"]}""")
+    @JsonSchemaInject(json = """{"enum": ["asc", "desc"]}""")
     var order: String = "asc"
 
     @JsonProperty("nulls")
     @JsonSchemaTitle("Nulls")
     @JsonPropertyDescription("Placement of null values: first or last.")
-    @JsonSchemaInject(json = """{\"enum\": [\"first\", \"last\"]}""")
+    @JsonSchemaInject(json = """{"enum": ["first", "last"]}""")
     var nulls: String = "last"
+
 
     @JsonProperty("caseInsensitive")
     @JsonSchemaTitle("Case Insensitive")
