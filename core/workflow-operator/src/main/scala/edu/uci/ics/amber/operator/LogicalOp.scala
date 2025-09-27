@@ -91,6 +91,7 @@ import edu.uci.ics.amber.operator.sklearn.training.{
 }
 import edu.uci.ics.amber.operator.sort.SortOpDesc
 import edu.uci.ics.amber.operator.sortPartitions.SortPartitionsOpDesc
+import edu.uci.ics.amber.operator.stablemergesort.StableMergeSortOpDesc
 import edu.uci.ics.amber.operator.source.apis.reddit.RedditSearchSourceOpDesc
 import edu.uci.ics.amber.operator.source.apis.twitter.v2.{
   TwitterFullArchiveSearchSourceOpDesc,
@@ -230,6 +231,7 @@ trait StateTransferFunc
     new Type(value = classOf[UnnestStringOpDesc], name = "UnnestString"),
     new Type(value = classOf[DictionaryMatcherOpDesc], name = "DictionaryMatcher"),
     new Type(value = classOf[SortPartitionsOpDesc], name = "SortPartitions"),
+    new Type(value = classOf[StableMergeSortOpDesc], name = "StableMergeSort"),
     new Type(value = classOf[CSVOldScanSourceOpDesc], name = "CSVOldFileScan"),
     new Type(value = classOf[RedditSearchSourceOpDesc], name = "RedditSearch"),
     new Type(value = classOf[PythonLambdaFunctionOpDesc], name = "PythonLambdaFunction"),
