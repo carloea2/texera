@@ -39,7 +39,7 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
                                 )
 
   private var resolved: Array[ResolvedKey] = _
-  // Incremental run stack: each entry is a sorted run
+
   private var runs: ArrayBuffer[ArrayBuffer[Tuple]] = _
 
   override def open(): Unit = {
@@ -71,7 +71,6 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
       i += 1
     }
 
-    // reflect the final state (useful for diagnostics)
     runs.clear()
     runs.append(acc)
 
@@ -125,9 +124,9 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
       // Null policy: ALWAYS last, regardless of ASC/DESC
       if (va == null || vb == null) {
         if (va == null && vb == null) {
-          k += 1 // equal on this key; try next key
+          k += 1
         } else {
-          return if (va == null) 1 else -1 // null after non-null
+          return if (va == null) 1 else -1 
         }
       } else {
         val base = compareNonNull(va, vb, r.attributeType)
@@ -138,7 +137,6 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     0
   }
 
-  // Only compare when both values are non-null
   private def compareNonNull(va: Any, vb: Any, tpe: AttributeType): Int = {
     tpe match {
       case AttributeType.INTEGER =>
