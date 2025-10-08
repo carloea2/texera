@@ -92,9 +92,8 @@ import edu.uci.ics.amber.operator.sklearn.training.{
   SklearnTrainingSDGOpDesc,
   SklearnTrainingSVMOpDesc
 }
-import edu.uci.ics.amber.operator.sort.SortOpDesc
+import edu.uci.ics.amber.operator.sort.{SortOpDesc, StableMergeSortOpDesc}
 import edu.uci.ics.amber.operator.sortPartitions.SortPartitionsOpDesc
-import edu.uci.ics.amber.operator.stablemergesort.StableMergeSortOpDesc
 import edu.uci.ics.amber.operator.source.apis.reddit.RedditSearchSourceOpDesc
 import edu.uci.ics.amber.operator.source.apis.twitter.v2.{
   TwitterFullArchiveSearchSourceOpDesc,

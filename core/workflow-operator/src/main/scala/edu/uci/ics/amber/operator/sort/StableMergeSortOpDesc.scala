@@ -18,7 +18,7 @@
  */
 
 
-package edu.uci.ics.amber.operator.stablemergesort
+package edu.uci.ics.amber.operator.sort
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
@@ -29,33 +29,33 @@ import edu.uci.ics.amber.operator.LogicalOp
 import edu.uci.ics.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-import java.util
-import edu.uci.ics.amber.operator.sort.SortCriteriaUnit
+import scala.collection.mutable.ListBuffer
 
 class StableMergeSortOpDesc extends LogicalOp {
 
   @JsonProperty(value = "keys", required = true)
   @JsonSchemaTitle("Sort Keys")
   @JsonPropertyDescription("List of attributes to sort by with ordering preferences")
-  var keys: util.List[SortCriteriaUnit] = new util.ArrayList[SortCriteriaUnit]()
+  var keys: ListBuffer[SortCriteriaUnit] = _
 
   override def getPhysicalOp(
                               workflowId: WorkflowIdentity,
                               executionId: ExecutionIdentity
                             ): PhysicalOp = {
     PhysicalOp
-      .oneToOnePhysicalOp(
+      .manyToOnePhysicalOp(
         workflowId,
         executionId,
         operatorIdentifier,
         OpExecWithClassName(
-          "edu.uci.ics.amber.operator.stablemergesort.StableMergeSortOpExec",
+          "edu.uci.ics.amber.operator.sort.StableMergeSortOpExec",
           objectMapper.writeValueAsString(this)
         )
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
   }
+
 
   override def operatorInfo: OperatorInfo =
     OperatorInfo(

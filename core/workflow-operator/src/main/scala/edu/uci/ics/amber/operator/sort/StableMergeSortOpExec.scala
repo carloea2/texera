@@ -17,17 +17,13 @@
  * under the License.
  */
 
-package edu.uci.ics.amber.operator.stablemergesort
+package edu.uci.ics.amber.operator.sort
 
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema, Tuple, TupleLike}
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
-import java.sql.Timestamp
 import scala.collection.mutable.ArrayBuffer
-import scala.jdk.CollectionConverters._
-
-import edu.uci.ics.amber.operator.sort.{SortCriteriaUnit, SortPreference}
 
 class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
@@ -66,17 +62,24 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
   override def onFinish(port: Int): Iterator[TupleLike] = {
     if (runs.isEmpty) return Iterator.empty
+
+    // Collapse all remaining runs left-to-right, preserving stability
     var acc = runs(0)
-    var i = 1
+    var i   = 1
     while (i < runs.length) {
       acc = mergeRuns(acc, runs(i))
       i += 1
     }
+
+    // reflect the final state (useful for diagnostics)
+    runs.clear()
+    runs.append(acc)
+
     acc.iterator
   }
 
   private def resolveKeys(schema: Schema): Array[ResolvedKey] = {
-    desc.keys.asScala.map { k: SortCriteriaUnit =>
+    desc.keys.map { k: SortCriteriaUnit =>
       val name = k.attributeName
       val idx  = schema.getIndex(name)
       val tpe  = schema.getAttribute(name).getType
@@ -89,8 +92,8 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     runs.append(initial)
     // merge top two runs if they have equal sizes; preserve left-before-right for stability
     while (runs.length >= 2 && runs(runs.length - 1).size == runs(runs.length - 2).size) {
-      val right = runs.remove(runs.length - 1) // newer
-      val left  = runs.remove(runs.length - 1) // older
+      val right  = runs.remove(runs.length - 1) // newer
+      val left   = runs.remove(runs.length - 1) // older
       val merged = mergeRuns(left, right)
       runs.append(merged)
     }
@@ -111,6 +114,7 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     while (j < right.size) { out += right(j); j += 1 }
     out
   }
+
   private def compareTuples(a: Tuple, b: Tuple): Int = {
     var k = 0
     while (k < resolved.length) {
