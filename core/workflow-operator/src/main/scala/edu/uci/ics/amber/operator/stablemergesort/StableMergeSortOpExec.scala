@@ -1,53 +1,30 @@
-
-/*
-* Licensed to the Apache Software Foundation (ASF) under one
-* or more contributor license agreements.  See the NOTICE file
-  * distributed with this work for additional information
-  * regarding copyright ownership.  The ASF licenses this file
-  * to you under the Apache License, Version 2.0 (the
-  * "License"); you may not use this file except in compliance
-* with the License.  You may obtain a copy of the License at
-*
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing,
-* software distributed under the License is distributed on an
-  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-  * KIND, either express or implied.  See the License for the
-* specific language governing permissions and limitations
-* under the License.
-*/
-
 package edu.uci.ics.amber.operator.stablemergesort
 
 import edu.uci.ics.amber.core.executor.OperatorExecutor
 import edu.uci.ics.amber.core.tuple.{AttributeType, Schema, Tuple, TupleLike}
-import edu.uci.ics.amber.operator.stablemergesort.StableMergeSortOpDesc.StableSortKey
 import edu.uci.ics.amber.util.JSONUtils.objectMapper
 
 import java.sql.Timestamp
-import java.util.Locale
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
+
+import edu.uci.ics.amber.operator.sort.{SortCriteriaUnit, SortPreference}
 
 class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
   private val desc: StableMergeSortOpDesc =
     objectMapper.readValue(descString, classOf[StableMergeSortOpDesc])
 
-  private val configuredKeys: List[StableSortKey] = desc.keys.asScala.toList
+  private var inputSchema: Schema = _
 
   private case class ResolvedKey(
                                   index: Int,
                                   attributeType: AttributeType,
-                                  descending: Boolean,
-                                  nullsFirst: Boolean
+                                  descending: Boolean
                                 )
 
-  private var inputSchema: Schema = _
   private var resolved: Array[ResolvedKey] = _
-
-  // Incremental run stack: runs(level) holds a sorted run of size 2^level, or null if empty
+  // Incremental run stack: each entry is a sorted run
   private var runs: ArrayBuffer[ArrayBuffer[Tuple]] = _
 
   override def open(): Unit = {
@@ -63,15 +40,13 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
       inputSchema = tuple.getSchema
       resolved = resolveKeys(inputSchema)
     }
-    // each incoming tuple is a size-1 sorted run
-    val run = ArrayBuffer[Tuple](tuple)
+    val run = ArrayBuffer[Tuple](tuple) // size-1 sorted run
     pushRun(run)
     Iterator.empty
   }
 
   override def onFinish(port: Int): Iterator[TupleLike] = {
     if (runs.isEmpty) return Iterator.empty
-    // fold-merge from left (earliest chunks) to right (latest), preserving chronology
     var acc = runs(0)
     var i = 1
     while (i < runs.length) {
@@ -82,29 +57,22 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
   }
 
   private def resolveKeys(schema: Schema): Array[ResolvedKey] = {
-    configuredKeys.map { k =>
-      val idx = schema.getIndex(k.attribute)
-      val at  = schema.getAttribute(k.attribute).getType
-      val ord = Option(k.order).map(_.toLowerCase(Locale.ROOT)).getOrElse("asc")
-      val nul = Option(k.nulls).map(_.toLowerCase(Locale.ROOT)).getOrElse("last")
-      ResolvedKey(
-        index = idx,
-        attributeType = at,
-        descending = (ord == "desc"),
-        nullsFirst = (nul == "first")
-      )
+    desc.keys.asScala.map { k: SortCriteriaUnit =>
+      val name = k.attributeName
+      val idx  = schema.getIndex(name)
+      val tpe  = schema.getAttribute(name).getType
+      val descOrder = k.sortPreference == SortPreference.DESC
+      ResolvedKey(idx, tpe, descOrder)
     }.toArray
   }
 
-
   private def pushRun(initial: ArrayBuffer[Tuple]): Unit = {
-    // treat 'runs' as a chronological stack: append new run to end
     runs.append(initial)
-    // while the top two runs have equal size, merge them into one (older run first)
+    // merge top two runs if they have equal sizes; preserve left-before-right for stability
     while (runs.length >= 2 && runs(runs.length - 1).size == runs(runs.length - 2).size) {
-      val right = runs.remove(runs.length - 1) // newest
+      val right = runs.remove(runs.length - 1) // newer
       val left  = runs.remove(runs.length - 1) // older
-      val merged = mergeRuns(left, right)      // stable: left items come before right when equal
+      val merged = mergeRuns(left, right)
       runs.append(merged)
     }
   }
@@ -124,33 +92,60 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     while (j < right.size) { out += right(j); j += 1 }
     out
   }
-
   private def compareTuples(a: Tuple, b: Tuple): Int = {
     var k = 0
     while (k < resolved.length) {
-      val r = resolved(k)
-      val c = compareField(a.getField[Any](r.index), b.getField[Any](r.index), r)
-      if (c != 0) return if (r.descending) -c else c
-      k += 1
+      val r  = resolved(k)
+      val va = a.getField[Any](r.index)
+      val vb = b.getField[Any](r.index)
+
+      // Null policy: ALWAYS last, regardless of ASC/DESC
+      if (va == null || vb == null) {
+        if (va == null && vb == null) {
+          k += 1 // equal on this key; try next key
+        } else {
+          return if (va == null) 1 else -1 // null after non-null
+        }
+      } else {
+        val base = compareNonNull(va, vb, r.attributeType)
+        if (base != 0) return if (r.descending) -base else base
+        k += 1
+      }
     }
     0
   }
 
-  private def compareField(va: Any, vb: Any, key: ResolvedKey): Int = {
-    if (va == null && vb == null) return 0
-    if (va == null) return if (key.nullsFirst) -1 else 1
-    if (vb == null) return if (key.nullsFirst) 1 else -1
-
-    key.attributeType match {
-      case AttributeType.INTEGER   => Integer.compare(va.asInstanceOf[Int], vb.asInstanceOf[Int])
-      case AttributeType.LONG      => java.lang.Long.compare(va.asInstanceOf[Long], vb.asInstanceOf[Long])
-      case AttributeType.DOUBLE    => java.lang.Double.compare(va.asInstanceOf[Double], vb.asInstanceOf[Double])
-      case AttributeType.BOOLEAN   => java.lang.Boolean.compare(va.asInstanceOf[Boolean], vb.asInstanceOf[Boolean])
-      case AttributeType.TIMESTAMP => va.asInstanceOf[Timestamp].compareTo(vb.asInstanceOf[Timestamp])
-      case AttributeType.STRING    => va.asInstanceOf[String].compareTo(vb.asInstanceOf[String])
-      case other                   =>
-        // Should be validated during compilation; unreachable at runtime.
-        throw new IllegalStateException(s"Unsupported attribute type $other in StableMergeSort.")
+  // Only compare when both values are non-null
+  private def compareNonNull(va: Any, vb: Any, tpe: AttributeType): Int = {
+    tpe match {
+      case AttributeType.INTEGER =>
+        java.lang.Integer.compare(
+          va.asInstanceOf[Number].intValue(),
+          vb.asInstanceOf[Number].intValue()
+        )
+      case AttributeType.LONG =>
+        java.lang.Long.compare(
+          va.asInstanceOf[Number].longValue(),
+          vb.asInstanceOf[Number].longValue()
+        )
+      case AttributeType.DOUBLE =>
+        java.lang.Double.compare(
+          va.asInstanceOf[Number].doubleValue(),
+          vb.asInstanceOf[Number].doubleValue()
+        )
+      case AttributeType.BOOLEAN =>
+        java.lang.Boolean.compare(
+          va.asInstanceOf[Boolean],
+          vb.asInstanceOf[Boolean]
+        )
+      case AttributeType.TIMESTAMP =>
+        va.asInstanceOf[java.sql.Timestamp].compareTo(
+          vb.asInstanceOf[java.sql.Timestamp]
+        )
+      case AttributeType.STRING =>
+        va.asInstanceOf[String].compareTo(vb.asInstanceOf[String])
+      case other =>
+        throw new IllegalStateException(s"Unsupported attribute type $other in StableMergeSort")
     }
   }
 }
