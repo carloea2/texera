@@ -33,10 +33,10 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
   private var inputSchema: Schema = _
 
   private case class ResolvedKey(
-                                  index: Int,
-                                  attributeType: AttributeType,
-                                  descending: Boolean
-                                )
+      index: Int,
+      attributeType: AttributeType,
+      descending: Boolean
+  )
 
   private var resolved: Array[ResolvedKey] = _
 
@@ -65,7 +65,7 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
     // Collapse all remaining runs left-to-right, preserving stability
     var acc = runs(0)
-    var i   = 1
+    var i = 1
     while (i < runs.length) {
       acc = mergeRuns(acc, runs(i))
       i += 1
@@ -80,8 +80,8 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
   private def resolveKeys(schema: Schema): Array[ResolvedKey] = {
     desc.keys.map { k: SortCriteriaUnit =>
       val name = k.attributeName
-      val idx  = schema.getIndex(name)
-      val tpe  = schema.getAttribute(name).getType
+      val idx = schema.getIndex(name)
+      val tpe = schema.getAttribute(name).getType
       val descOrder = k.sortPreference == SortPreference.DESC
       ResolvedKey(idx, tpe, descOrder)
     }.toArray
@@ -91,8 +91,8 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     runs.append(initial)
     // merge top two runs if they have equal sizes; preserve left-before-right for stability
     while (runs.length >= 2 && runs(runs.length - 1).size == runs(runs.length - 2).size) {
-      val right  = runs.remove(runs.length - 1) // newer
-      val left   = runs.remove(runs.length - 1) // older
+      val right = runs.remove(runs.length - 1) // newer
+      val left = runs.remove(runs.length - 1) // older
       val merged = mergeRuns(left, right)
       runs.append(merged)
     }
@@ -117,7 +117,7 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
   private def compareTuples(a: Tuple, b: Tuple): Int = {
     var k = 0
     while (k < resolved.length) {
-      val r  = resolved(k)
+      val r = resolved(k)
       val va = a.getField[Any](r.index)
       val vb = b.getField[Any](r.index)
 
@@ -126,7 +126,7 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
         if (va == null && vb == null) {
           k += 1
         } else {
-          return if (va == null) 1 else -1 
+          return if (va == null) 1 else -1
         }
       } else {
         val base = compareNonNull(va, vb, r.attributeType)
@@ -160,9 +160,10 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
           vb.asInstanceOf[Boolean]
         )
       case AttributeType.TIMESTAMP =>
-        va.asInstanceOf[java.sql.Timestamp].compareTo(
-          vb.asInstanceOf[java.sql.Timestamp]
-        )
+        va.asInstanceOf[java.sql.Timestamp]
+          .compareTo(
+            vb.asInstanceOf[java.sql.Timestamp]
+          )
       case AttributeType.STRING =>
         va.asInstanceOf[String].compareTo(vb.asInstanceOf[String])
       case other =>

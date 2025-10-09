@@ -17,7 +17,6 @@
  * under the License.
  */
 
-
 package edu.uci.ics.amber.operator.sort
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
@@ -39,9 +38,9 @@ class StableMergeSortOpDesc extends LogicalOp {
   var keys: ListBuffer[SortCriteriaUnit] = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     PhysicalOp
       .manyToOnePhysicalOp(
         workflowId,
@@ -55,7 +54,6 @@ class StableMergeSortOpDesc extends LogicalOp {
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
   }
-
 
   override def operatorInfo: OperatorInfo =
     OperatorInfo(
