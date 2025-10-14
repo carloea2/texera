@@ -17,10 +17,10 @@
  * under the License.
  */
 
-package edu.uci.ics.amber.operator.sort
+package org.apache.amber.operator.sort
 
-import edu.uci.ics.amber.core.tuple.{Attribute, AttributeType, Schema, Tuple}
-import edu.uci.ics.amber.util.JSONUtils.objectMapper
+import org.apache.amber.core.tuple.{Attribute, AttributeType, Schema, Tuple}
+import org.apache.amber.util.JSONUtils.objectMapper
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.sql.Timestamp
