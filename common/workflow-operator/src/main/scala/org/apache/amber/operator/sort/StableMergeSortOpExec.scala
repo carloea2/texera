@@ -25,6 +25,18 @@ import org.apache.amber.util.JSONUtils.objectMapper
 
 import scala.collection.mutable.ArrayBuffer
 
+/**
+ * Stable in-memory merge sort for a single input partition.
+ *
+ * Strategy:
+ *  - Buffer incoming tuples as size-1 sorted buckets.
+ *  - Maintain a stack of buckets where adjacent buckets never share the same length.
+ *  - On each push, perform "binary-carry" merges while the top two buckets have equal sizes.
+ *  - At finish, collapse the stack left-to-right. Merging is stable (left wins on ties).
+ *
+ * Null policy:
+ *  - Nulls are always ordered last, regardless of ascending/descending per key.
+ */
 class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
   private val desc: StableMergeSortOpDesc =
@@ -32,142 +44,204 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
 
   private var inputSchema: Schema = _
 
-  private case class ResolvedKey(
-      index: Int,
-      attributeType: AttributeType,
-      descending: Boolean
-  )
+  /** Sort key resolved against the schema (index, data type, and direction). */
+  private case class CompiledSortKey(
+                                      index: Int,
+                                      attributeType: AttributeType,
+                                      descending: Boolean
+                                    )
 
-  private var resolved: Array[ResolvedKey] = _
+  /** Lexicographic sort keys compiled once on first tuple. */
+  private var compiledSortKeys: Array[CompiledSortKey] = _
 
-  private var runs: ArrayBuffer[ArrayBuffer[Tuple]] = _
+  /** Stack of sorted buckets. Invariant: no two adjacent buckets have equal lengths. */
+  private var sortedBuckets: ArrayBuffer[ArrayBuffer[Tuple]] = _
 
+  /** Exposed for testing: current bucket sizes from bottom to top of the stack. */
+  private[sort] def debugBucketSizes: List[Int] =
+    if (sortedBuckets == null) Nil else sortedBuckets.filter(_ != null).map(_.size).toList
+
+  /** Initialize internal state. */
   override def open(): Unit = {
-    runs = ArrayBuffer.empty[ArrayBuffer[Tuple]]
+    sortedBuckets = ArrayBuffer.empty[ArrayBuffer[Tuple]]
   }
 
+  /** Release internal buffers. */
   override def close(): Unit = {
-    if (runs != null) runs.clear()
+    if (sortedBuckets != null) sortedBuckets.clear()
   }
 
+  /**
+   * Ingest a tuple. Defers emission until onFinish.
+   *
+   * Schema compilation happens on the first tuple.
+   * Each tuple forms a size-1 sorted bucket that is pushed and possibly merged.
+   */
   override def processTuple(tuple: Tuple, port: Int): Iterator[TupleLike] = {
     if (inputSchema == null) {
       inputSchema = tuple.getSchema
-      resolved = resolveKeys(inputSchema)
+      compiledSortKeys = compileSortKeys(inputSchema)
     }
-    val run = ArrayBuffer[Tuple](tuple) // size-1 sorted run
-    pushRun(run)
+    val sizeOneBucket = ArrayBuffer[Tuple](tuple)
+    pushBucketAndCombine(sizeOneBucket)
     Iterator.empty
   }
 
+  /**
+   * Emit all sorted tuples by collapsing the bucket stack left-to-right.
+   * Stability is preserved because merge prefers the left bucket on equality.
+   */
   override def onFinish(port: Int): Iterator[TupleLike] = {
-    if (runs.isEmpty) return Iterator.empty
+    if (sortedBuckets.isEmpty) return Iterator.empty
 
-    // Collapse all remaining runs left-to-right, preserving stability
-    var acc = runs(0)
-    var i = 1
-    while (i < runs.length) {
-      acc = mergeRuns(acc, runs(i))
-      i += 1
+    var accumulator = sortedBuckets(0)
+    var idx = 1
+    while (idx < sortedBuckets.length) {
+      accumulator = mergeSortedBuckets(accumulator, sortedBuckets(idx))
+      idx += 1
     }
 
-    runs.clear()
-    runs.append(acc)
-
-    acc.iterator
+    sortedBuckets.clear()
+    sortedBuckets.append(accumulator)
+    accumulator.iterator
   }
 
-  private def resolveKeys(schema: Schema): Array[ResolvedKey] = {
+  /**
+   * Resolve logical sort keys to schema indices and attribute types.
+   * Outputs an array of compiled sort keys used by [[compareBySortKeys]].
+   */
+  private def compileSortKeys(schema: Schema): Array[CompiledSortKey] = {
     desc.keys.map { k: SortCriteriaUnit =>
       val name = k.attributeName
-      val idx = schema.getIndex(name)
-      val tpe = schema.getAttribute(name).getType
-      val descOrder = k.sortPreference == SortPreference.DESC
-      ResolvedKey(idx, tpe, descOrder)
+      val index = schema.getIndex(name)
+      val dataType = schema.getAttribute(name).getType
+      val isDescending = k.sortPreference == SortPreference.DESC
+      CompiledSortKey(index, dataType, isDescending)
     }.toArray
   }
 
-  private def pushRun(initial: ArrayBuffer[Tuple]): Unit = {
-    runs.append(initial)
-    // merge top two runs if they have equal sizes; preserve left-before-right for stability
-    while (runs.length >= 2 && runs(runs.length - 1).size == runs(runs.length - 2).size) {
-      val right = runs.remove(runs.length - 1) // newer
-      val left = runs.remove(runs.length - 1) // older
-      val merged = mergeRuns(left, right)
-      runs.append(merged)
+  /**
+   * Push an already-sorted bucket and perform "binary-carry" merges while the
+   * top two buckets have equal sizes.
+   *
+   * Scope:
+   *  - Internal helper. Called by [[processTuple]] for size-1 buckets;
+   *
+   * Expected output:
+   *  - Updates the internal stack so that no two adjacent buckets have equal sizes.
+   *
+   * Limitations / possible issues:
+   *  - The given bucket must already be sorted by [[compareBySortKeys]].
+   *  - Stability relies on left-before-right merge order; do not reorder parameters.
+   *
+   * Complexity:
+   *  - Amortized O(1) per push; total O(n log n) over n tuples.
+   */
+  private[sort] def pushBucketAndCombine(newBucket: ArrayBuffer[Tuple]): Unit = {
+    sortedBuckets.append(newBucket)
+    // Merge while top two buckets are equal-sized; left-before-right preserves stability.
+    while (sortedBuckets.length >= 2 &&
+      sortedBuckets(sortedBuckets.length - 1).size == sortedBuckets(sortedBuckets.length - 2).size) {
+      val right = sortedBuckets.remove(sortedBuckets.length - 1) // newer
+      val left  = sortedBuckets.remove(sortedBuckets.length - 1) // older
+      val merged = mergeSortedBuckets(left, right)
+      sortedBuckets.append(merged)
     }
   }
 
-  private def mergeRuns(left: ArrayBuffer[Tuple], right: ArrayBuffer[Tuple]): ArrayBuffer[Tuple] = {
-    val out = new ArrayBuffer[Tuple](left.size + right.size)
-    var i = 0
-    var j = 0
-    while (i < left.size && j < right.size) {
-      if (compareTuples(left(i), right(j)) <= 0) {
-        out += left(i); i += 1
+
+  /**
+   * Stable two-way merge of two buckets already sorted by [[compareBySortKeys]].
+   *
+   * Scope:
+   *  - Internal helper used during incremental carries and final collapse.
+   *
+   * Expected output:
+   *  - A new bucket with all elements of both inputs, globally sorted.
+   *
+   * Limitations / possible issues:
+   *  - Both inputs must be sorted with the same key config; behavior is undefined otherwise.
+   *  - Stability guarantee: if keys are equal, the element from the left bucket is emitted first.
+   *
+   * Complexity:
+   *  - O(left.size + right.size)
+   */
+  private[sort] def mergeSortedBuckets(
+                                        leftBucket: ArrayBuffer[Tuple],
+                                        rightBucket: ArrayBuffer[Tuple]
+                                      ): ArrayBuffer[Tuple] = {
+    val out = new ArrayBuffer[Tuple](leftBucket.size + rightBucket.size)
+    var leftIndex = 0
+    var rightIndex = 0
+    while (leftIndex < leftBucket.size && rightIndex < rightBucket.size) {
+      if (compareBySortKeys(leftBucket(leftIndex), rightBucket(rightIndex)) <= 0) {
+        out += leftBucket(leftIndex); leftIndex += 1
       } else {
-        out += right(j); j += 1
+        out += rightBucket(rightIndex); rightIndex += 1
       }
     }
-    while (i < left.size) { out += left(i); i += 1 }
-    while (j < right.size) { out += right(j); j += 1 }
+    while (leftIndex < leftBucket.size)  { out += leftBucket(leftIndex);  leftIndex  += 1 }
+    while (rightIndex < rightBucket.size){ out += rightBucket(rightIndex); rightIndex += 1 }
     out
   }
 
-  private def compareTuples(a: Tuple, b: Tuple): Int = {
-    var k = 0
-    while (k < resolved.length) {
-      val r = resolved(k)
-      val va = a.getField[Any](r.index)
-      val vb = b.getField[Any](r.index)
+  /**
+   * Lexicographic comparison of two tuples using the compiled sort keys.
+   *
+   * Semantics:
+   *  - Nulls are always ordered last, regardless of sort direction.
+   *  - For non-null values, comparison is type-aware (see [[compareTypedNonNullValues]]).
+   *  - If a key compares equal, evaluation proceeds to the next key.
+   *  - Descending reverses the sign of the base comparison.
+   *
+   * Limitations / possible issues:
+   *  - Requires [[compiledSortKeys]] to be initialized; called after the first tuple.
+   *  - For unsupported types, [[compareTypedNonNullValues]] throws IllegalStateException.
+   */
+  private def compareBySortKeys(left: Tuple, right: Tuple): Int = {
+    var keyIndex = 0
+    while (keyIndex < compiledSortKeys.length) {
+      val currentKey = compiledSortKeys(keyIndex)
+      val leftValue  = left.getField[Any](currentKey.index)
+      val rightValue = right.getField[Any](currentKey.index)
 
       // Null policy: ALWAYS last, regardless of ASC/DESC
-      if (va == null || vb == null) {
-        if (va == null && vb == null) {
-          k += 1
+      if (leftValue == null || rightValue == null) {
+        if (leftValue == null && rightValue == null) {
+          keyIndex += 1
         } else {
-          return if (va == null) 1 else -1
+          return if (leftValue == null) 1 else -1
         }
       } else {
-        val base = compareNonNull(va, vb, r.attributeType)
-        if (base != 0) return if (r.descending) -base else base
-        k += 1
+        val base = compareTypedNonNullValues(leftValue, rightValue, currentKey.attributeType)
+        if (base != 0) return if (currentKey.descending) -base else base
+        keyIndex += 1
       }
     }
     0
   }
 
-  private def compareNonNull(va: Any, vb: Any, tpe: AttributeType): Int = {
-    tpe match {
-      case AttributeType.INTEGER =>
-        java.lang.Integer.compare(
-          va.asInstanceOf[Number].intValue(),
-          vb.asInstanceOf[Number].intValue()
-        )
-      case AttributeType.LONG =>
-        java.lang.Long.compare(
-          va.asInstanceOf[Number].longValue(),
-          vb.asInstanceOf[Number].longValue()
-        )
-      case AttributeType.DOUBLE =>
-        java.lang.Double.compare(
-          va.asInstanceOf[Number].doubleValue(),
-          vb.asInstanceOf[Number].doubleValue()
-        )
-      case AttributeType.BOOLEAN =>
-        java.lang.Boolean.compare(
-          va.asInstanceOf[Boolean],
-          vb.asInstanceOf[Boolean]
-        )
-      case AttributeType.TIMESTAMP =>
-        va.asInstanceOf[java.sql.Timestamp]
-          .compareTo(
-            vb.asInstanceOf[java.sql.Timestamp]
-          )
-      case AttributeType.STRING =>
-        va.asInstanceOf[String].compareTo(vb.asInstanceOf[String])
-      case other =>
-        throw new IllegalStateException(s"Unsupported attribute type $other in StableMergeSort")
-    }
+  /**
+   * Compare two non-null values using their attribute type.
+   *
+   * For DOUBLE:
+   *  - Uses java.lang.Double.compare (orders -Inf < ... < +Inf < NaN).
+   *  - Callers if desired should define how NaN interacts with ASC/DESC and null policy.
+   */
+  private def compareTypedNonNullValues(a: Any, b: Any, t: AttributeType): Int = t match {
+    case AttributeType.INTEGER   =>
+      java.lang.Integer.compare(a.asInstanceOf[Number].intValue(),  b.asInstanceOf[Number].intValue())
+    case AttributeType.LONG      =>
+      java.lang.Long.compare(   a.asInstanceOf[Number].longValue(), b.asInstanceOf[Number].longValue())
+    case AttributeType.DOUBLE    =>
+      java.lang.Double.compare( a.asInstanceOf[Number].doubleValue(), b.asInstanceOf[Number].doubleValue())
+    case AttributeType.BOOLEAN   =>
+      java.lang.Boolean.compare(a.asInstanceOf[Boolean], b.asInstanceOf[Boolean])
+    case AttributeType.TIMESTAMP =>
+      a.asInstanceOf[java.sql.Timestamp].compareTo(b.asInstanceOf[java.sql.Timestamp])
+    case AttributeType.STRING    =>
+      a.asInstanceOf[String].compareTo(b.asInstanceOf[String])
+    case other =>
+      throw new IllegalStateException(s"Unsupported attribute type $other in StableMergeSort")
   }
 }
