@@ -88,6 +88,8 @@ export class MenuComponent implements OnInit, OnDestroy {
   public isWorkflowModifiable: boolean = false;
   public workflowId?: number;
   public isExportDeactivate: boolean = false;
+  public showGrid: boolean = false;
+  public showNumWorkers: boolean = false;
   protected readonly DASHBOARD_USER_WORKFLOW = DASHBOARD_USER_WORKFLOW;
 
   @Input() public writeAccess: boolean = false;
@@ -250,6 +252,12 @@ export class MenuComponent implements OnInit, OnDestroy {
     const width = Math.min(tempSpan.offsetWidth + 20, 800); // +20 for padding
     input.style.width = `${width}px`;
     document.body.removeChild(tempSpan);
+  }
+
+  toggleNumWorkers() {
+    this.workflowActionService
+      .getJointGraphWrapper()
+      .mainPaper.el.classList.toggle("hide-worker-count", !this.showNumWorkers);
   }
 
   public async onClickOpenShareAccess(): Promise<void> {
@@ -457,12 +465,8 @@ export class MenuComponent implements OnInit, OnDestroy {
       });
   }
 
-  /**
-   * This method will flip the current status of whether to draw grids in jointPaper.
-   * This option is only for the current session and will be cleared on refresh.
-   */
-  public onClickToggleGrids(): void {
-    this.workflowActionService.getJointGraphWrapper().toggleGrids();
+  public toggleGrid(): void {
+    this.workflowActionService.getJointGraphWrapper().mainPaper.setGridSize(this.showGrid ? 2 : 1);
   }
 
   /**
