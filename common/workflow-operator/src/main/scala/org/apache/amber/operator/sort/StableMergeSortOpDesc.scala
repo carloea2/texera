@@ -31,10 +31,10 @@ import org.apache.amber.util.JSONUtils.objectMapper
 import scala.collection.mutable.ListBuffer
 
 /**
- * This operator performs a stable, per-partition sort using an incremental
- * stack of sorted buckets and pairwise stable merges. The sort keys define
- * the lexicographic order and per-key direction (ASC/DESC).
- */
+  * This operator performs a stable, per-partition sort using an incremental
+  * stack of sorted buckets and pairwise stable merges. The sort keys define
+  * the lexicographic order and per-key direction (ASC/DESC).
+  */
 //TODO(#3922): disallowing sorting on binary type
 class StableMergeSortOpDesc extends LogicalOp {
 
@@ -44,9 +44,9 @@ class StableMergeSortOpDesc extends LogicalOp {
   var keys: ListBuffer[SortCriteriaUnit] = _
 
   override def getPhysicalOp(
-                              workflowId: WorkflowIdentity,
-                              executionId: ExecutionIdentity
-                            ): PhysicalOp = {
+      workflowId: WorkflowIdentity,
+      executionId: ExecutionIdentity
+  ): PhysicalOp = {
     PhysicalOp
       .manyToOnePhysicalOp(
         workflowId,

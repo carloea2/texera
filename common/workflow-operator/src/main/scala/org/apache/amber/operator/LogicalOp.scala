@@ -61,10 +61,7 @@ import org.apache.amber.operator.reservoirsampling.ReservoirSamplingOpDesc
 import org.apache.amber.operator.sklearn._
 import org.apache.amber.operator.sklearn.training._
 import org.apache.amber.operator.sleep.SleepOpDesc
-import org.apache.amber.operator.sort.{
-  SortOpDesc,
-  StableMergeSortOpDesc
-}
+import org.apache.amber.operator.sort.{SortOpDesc, StableMergeSortOpDesc}
 import org.apache.amber.operator.sortPartitions.SortPartitionsOpDesc
 import org.apache.amber.operator.source.apis.reddit.RedditSearchSourceOpDesc
 import org.apache.amber.operator.source.apis.twitter.v2.{
