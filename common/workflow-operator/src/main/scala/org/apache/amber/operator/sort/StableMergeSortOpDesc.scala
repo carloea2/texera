@@ -35,6 +35,7 @@ import scala.collection.mutable.ListBuffer
  * stack of sorted buckets and pairwise stable merges. The sort keys define
  * the lexicographic order and per-key direction (ASC/DESC).
  */
+//TODO(#3922): disallowing sorting on binary type
 class StableMergeSortOpDesc extends LogicalOp {
 
   @JsonProperty(value = "keys", required = true)
