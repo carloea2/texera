@@ -53,7 +53,7 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
 
   /** Build a Schema with (name, type) pairs, in-order. */
   private def schemaOf(attributes: (String, AttributeType)*): Schema = {
-    attributes.foldLeft(Schema()) { case (acc, (name, tpe)) => acc.add(new Attribute(name, tpe)) }
+    attributes.foldLeft(Schema()) { case (acc, (name, attrType)) => acc.add(new Attribute(name, attrType)) }
   }
 
   /**
@@ -73,15 +73,15 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
 
   /** Convenience builder for a single sort key with direction (ASC by default). */
   private def sortKey(attribute: String, pref: SortPreference = SortPreference.ASC): SortCriteriaUnit = {
-    val k = new SortCriteriaUnit()
-    k.attributeName  = attribute
-    k.sortPreference = pref
-    k
+    val criteria = new SortCriteriaUnit()
+    criteria.attributeName  = attribute
+    criteria.sortPreference = pref
+    criteria
   }
 
   /** Convert varargs keys into the operator config buffer. */
-  private def sortKeysBuffer(ks: SortCriteriaUnit*): ListBuffer[SortCriteriaUnit] =
-    ListBuffer(ks: _*)
+  private def sortKeysBuffer(keys: SortCriteriaUnit*): ListBuffer[SortCriteriaUnit] =
+    ListBuffer(keys: _*)
 
   /**
    * Run the operator on an in-memory sequence of tuples and capture all output.
@@ -104,17 +104,20 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   /** Internal test hook to read the current bucket sizes on the stack. */
   private def getBucketSizes(exec: StableMergeSortOpExec): List[Int] = exec.debugBucketSizes
 
-  /** Decompose an integer into its set bit powers-of-two (sorted); used to check the binary-carry invariant. */
-  private def binaryDecomposition(n: Int): List[Int] = {
-    var k = n
-    val out = scala.collection.mutable.ListBuffer[Int]()
-    while (k > 0) {
-      val p = Integer.lowestOneBit(k)
-      out += p
-      k -= p
+  /** Decompose an integer into its set-bit powers of two (ascending).
+   * Used to check the binary-carry invariant.
+   */
+  private def binaryDecomposition(number: Int): List[Int] = {
+    var remaining = number
+    val powers = scala.collection.mutable.ListBuffer[Int]()
+    while (remaining > 0) {
+      val lowestSetBit = Integer.lowestOneBit(remaining)
+      powers += lowestSetBit
+      remaining -= lowestSetBit
     }
-    out.toList.sorted
+    powers.toList
   }
+
 
   // ===========================================================================
   // A. Single-key semantics
@@ -166,10 +169,10 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "order ASCII strings by Java compareTo (punctuation < digits < uppercase < lowercase)" in {
-    val schema = schemaOf("s" -> AttributeType.STRING)
-    val tuples = List("a", "A", "0", "~", "!").map(s => tupleOf(schema, "s" -> s))
-    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("s")) }
-    assert(result.map(_.getField[String]("s")) == List("!", "0", "A", "a", "~"))
+    val schema = schemaOf("str" -> AttributeType.STRING)
+    val tuples = List("a", "A", "0", "~", "!").map(s => tupleOf(schema, "str" -> s))
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("str")) }
+    assert(result.map(_.getField[String]("str")) == List("!", "0", "A", "a", "~"))
   }
 
   it should "sort negatives and zeros correctly" in {
@@ -187,49 +190,49 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "sort TIMESTAMP ascending" in {
-    val schema = schemaOf("t" -> AttributeType.TIMESTAMP)
+    val schema = schemaOf("timestamp" -> AttributeType.TIMESTAMP)
     val base = Timestamp.valueOf("2022-01-01 00:00:00")
     val tuples = List(
       new Timestamp(base.getTime + 4000),
       new Timestamp(base.getTime + 1000),
       new Timestamp(base.getTime + 3000),
       new Timestamp(base.getTime + 2000)
-    ).map(ts => tupleOf(schema, "t" -> ts))
-    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("t", SortPreference.ASC)) }
-    val times = result.map(_.getField[Timestamp]("t").getTime)
+    ).map(ts => tupleOf(schema, "timestamp" -> ts))
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("timestamp", SortPreference.ASC)) }
+    val times = result.map(_.getField[Timestamp]("timestamp").getTime)
     assert(times == times.sorted)
   }
 
   it should "sort TIMESTAMP descending" in {
-    val schema = schemaOf("t" -> AttributeType.TIMESTAMP)
+    val schema = schemaOf("timestamp" -> AttributeType.TIMESTAMP)
     val base = Timestamp.valueOf("2023-01-01 00:00:00")
     val tuples = List(
       new Timestamp(base.getTime + 3000),
       base,
       new Timestamp(base.getTime + 1000),
       new Timestamp(base.getTime + 2000)
-    ).map(ts => tupleOf(schema, "t" -> ts))
+    ).map(ts => tupleOf(schema, "timestamp" -> ts))
     val result = runStableMergeSort(schema, tuples) {
-      _.keys = sortKeysBuffer(sortKey("t", SortPreference.DESC))
+      _.keys = sortKeysBuffer(sortKey("timestamp", SortPreference.DESC))
     }
-    val times = result.map(_.getField[Timestamp]("t").getTime)
+    val times = result.map(_.getField[Timestamp]("timestamp").getTime)
     assert(times == times.sorted(Ordering.Long.reverse))
   }
 
   it should "treat numeric strings as strings (lexicographic ordering)" in {
-    val schema = schemaOf("s" -> AttributeType.STRING)
-    val tuples = List("2", "10", "1", "11", "20").map(s => tupleOf(schema, "s" -> s))
-    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("s")) }
-    assert(result.map(_.getField[String]("s")) == List("1", "10", "11", "2", "20"))
+    val schema = schemaOf("str" -> AttributeType.STRING)
+    val tuples = List("2", "10", "1", "11", "20").map(s => tupleOf(schema, "str" -> s))
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("str")) }
+    assert(result.map(_.getField[String]("str")) == List("1", "10", "11", "2", "20"))
   }
 
   it should "sort BOOLEAN ascending (false < true) and descending" in {
-    val schema = schemaOf("b" -> AttributeType.BOOLEAN)
-    val tuples = List(true, false, true, false).map(v => tupleOf(schema, "b" -> v))
-    val asc = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("b", SortPreference.ASC)) }
-    assert(asc.map(_.getField[Boolean]("b")) == List(false, false, true, true))
-    val desc = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("b", SortPreference.DESC)) }
-    assert(desc.map(_.getField[Boolean]("b")) == List(true, true, false, false))
+    val schema = schemaOf("bool" -> AttributeType.BOOLEAN)
+    val tuples = List(true, false, true, false).map(v => tupleOf(schema, "bool" -> v))
+    val asc = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("bool", SortPreference.ASC)) }
+    assert(asc.map(_.getField[Boolean]("bool")) == List(false, false, true, true))
+    val desc = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("bool", SortPreference.DESC)) }
+    assert(desc.map(_.getField[Boolean]("bool")) == List(true, true, false, false))
   }
 
   // ===========================================================================
@@ -244,14 +247,14 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
     val result = runStableMergeSort(schema, tuples) {
       _.keys = sortKeysBuffer(sortKey("x"))
     }
-    val xs = result.map(_.getField[Double]("x"))
-    assert(xs.head == Double.NegativeInfinity)
-    assert(xs(1) == -3.2)
-    assert(java.lang.Double.compare(xs(2), -0.0) == 0)
-    assert(java.lang.Double.compare(xs(3), 0.0) == 0)
-    assert(xs(4) == 1.5)
-    assert(xs(5) == Double.PositiveInfinity)
-    assert(java.lang.Double.isNaN(xs(6)))
+    val values = result.map(_.getField[Double]("x"))
+    assert(values.head == Double.NegativeInfinity)
+    assert(values(1) == -3.2)
+    assert(java.lang.Double.compare(values(2), -0.0) == 0)
+    assert(java.lang.Double.compare(values(3), 0.0) == 0)
+    assert(values(4) == 1.5)
+    assert(values(5) == Double.PositiveInfinity)
+    assert(java.lang.Double.isNaN(values(6)))
   }
 
   it should "place NaN before null when sorting DOUBLE ascending (nulls last policy)" in {
@@ -265,13 +268,13 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
       tupleOf(schema, "x" -> null)
     )
     val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("x")) }
-    val xs = result.map(_.getField[java.lang.Double]("x"))
-    assert(xs.take(4).forall(_ != null)) // first 4 are non-null
-    assert(xs(0).isInfinite && xs(0) == Double.NegativeInfinity)
-    assert(xs(1) == 1.0)
-    assert(xs(2).isInfinite && xs(2) == Double.PositiveInfinity)
-    assert(java.lang.Double.isNaN(xs(3)))
-    assert(xs.drop(4).forall(_ == null))
+    val values = result.map(_.getField[java.lang.Double]("x"))
+    assert(values.take(4).forall(_ != null)) // first 4 are non-null
+    assert(values(0).isInfinite && values(0) == Double.NegativeInfinity)
+    assert(values(1) == 1.0)
+    assert(values(2).isInfinite && values(2) == Double.PositiveInfinity)
+    assert(java.lang.Double.isNaN(values(3)))
+    assert(values.drop(4).forall(_ == null))
   }
 
   it should "place nulls last regardless of ascending or descending" in {
@@ -295,22 +298,22 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
 
   it should "order NaN highest on secondary DESC but still place nulls last" in {
     val schema = schemaOf(
-      "g"     -> AttributeType.STRING,
+      "group" -> AttributeType.STRING,
       "score" -> AttributeType.DOUBLE,
       "label" -> AttributeType.STRING
     )
     val tuples = List(
-      tupleOf(schema, "g" -> "A", "score" -> java.lang.Double.NaN,        "label" -> "nan"),
-      tupleOf(schema, "g" -> "A", "score" -> Double.PositiveInfinity,     "label" -> "pinf"),
-      tupleOf(schema, "g" -> "A", "score" -> 1.0,                         "label" -> "one"),
-      tupleOf(schema, "g" -> "A", "score" -> 0.0,                         "label" -> "zero"),
-      tupleOf(schema, "g" -> "A", "score" -> -1.0,                        "label" -> "neg"),
-      tupleOf(schema, "g" -> "A", "score" -> Double.NegativeInfinity,     "label" -> "ninf"),
-      tupleOf(schema, "g" -> "A", "score" -> null,                        "label" -> "null-1"),
-      tupleOf(schema, "g" -> "A", "score" -> null,                        "label" -> "null-2")
+      tupleOf(schema, "group" -> "A", "score" -> java.lang.Double.NaN,        "label" -> "nan"),
+      tupleOf(schema, "group" -> "A", "score" -> Double.PositiveInfinity,     "label" -> "pinf"),
+      tupleOf(schema, "group" -> "A", "score" -> 1.0,                         "label" -> "one"),
+      tupleOf(schema, "group" -> "A", "score" -> 0.0,                         "label" -> "zero"),
+      tupleOf(schema, "group" -> "A", "score" -> -1.0,                        "label" -> "neg"),
+      tupleOf(schema, "group" -> "A", "score" -> Double.NegativeInfinity,     "label" -> "ninf"),
+      tupleOf(schema, "group" -> "A", "score" -> null,                        "label" -> "null-1"),
+      tupleOf(schema, "group" -> "A", "score" -> null,                        "label" -> "null-2")
     )
     val result = runStableMergeSort(schema, tuples) { desc =>
-      desc.keys = sortKeysBuffer(sortKey("g", SortPreference.ASC), sortKey("score", SortPreference.DESC))
+      desc.keys = sortKeysBuffer(sortKey("group", SortPreference.ASC), sortKey("score", SortPreference.DESC))
     }
     assert(
       result.map(_.getField[String]("label")) ==
@@ -373,19 +376,19 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "use the third key as a tiebreaker (ASC, ASC, then DESC)" in {
-    val schema = schemaOf("a" -> AttributeType.INTEGER, "b" -> AttributeType.INTEGER, "c" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
+    val schema = schemaOf("keyA" -> AttributeType.INTEGER, "keyB" -> AttributeType.INTEGER, "keyC" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
     val tuples = List(
       (1, 1, 1, "x1"),
       (1, 1, 3, "x3"),
       (1, 1, 2, "x2"),
       (1, 0, 9, "y9")
-    ).map { case (a,b,c,id) => tupleOf(schema, "a" -> a, "b" -> b, "c" -> c, "id" -> id) }
-    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("a"), sortKey("b"), sortKey("c", SortPreference.DESC)) }
+    ).map { case (a,b,c,id) => tupleOf(schema, "keyA" -> a, "keyB" -> b, "keyC" -> c, "id" -> id) }
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("keyA"), sortKey("keyB"), sortKey("keyC", SortPreference.DESC)) }
     assert(result.map(_.getField[String]("id")) == List("y9", "x3", "x2", "x1"))
   }
 
   it should "place nulls last across multiple keys (primary ASC, secondary DESC)" in {
-    val schema = schemaOf("a" -> AttributeType.STRING, "b" -> AttributeType.INTEGER)
+    val schema = schemaOf("keyA" -> AttributeType.STRING, "keyB" -> AttributeType.INTEGER)
     val tuples = List(
       ("x", 2),
       (null, 1),
@@ -393,23 +396,23 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
       (null, 5),
       ("a", 9),
       ("a", 2)
-    ).map { case (s, i) => tupleOf(schema, "a" -> s, "b" -> i) }
+    ).map { case (s, i) => tupleOf(schema, "keyA" -> s, "keyB" -> i) }
     val result = runStableMergeSort(schema, tuples) { desc =>
-      desc.keys = sortKeysBuffer(sortKey("a", SortPreference.ASC), sortKey("b", SortPreference.DESC))
+      desc.keys = sortKeysBuffer(sortKey("keyA", SortPreference.ASC), sortKey("keyB", SortPreference.DESC))
     }
-    val out = result.map(t => (t.getField[String]("a"), t.getField[Int]("b")))
+    val out = result.map(t => (t.getField[String]("keyA"), t.getField[Int]("keyB")))
     assert(out == List(("a", 9), ("a", 2), ("x", 2), ("x", 1), (null, 5), (null, 1)))
   }
 
   it should "when primary keys are both null, fall back to secondary ASC (nulls still after non-nulls)" in {
-    val schema = schemaOf("a" -> AttributeType.STRING, "b" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
+    val schema = schemaOf("keyA" -> AttributeType.STRING, "keyB" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
     val tuples = List(
-      tupleOf(schema, "a" -> "A",   "b" -> 2, "id" -> "non-null-a"),
-      tupleOf(schema, "a" -> null,  "b" -> 5, "id" -> "null-a-5"),
-      tupleOf(schema, "a" -> null,  "b" -> 1, "id" -> "null-a-1"),
-      tupleOf(schema, "a" -> "B",   "b" -> 9, "id" -> "non-null-b")
+      tupleOf(schema, "keyA" -> "A",   "keyB" -> 2, "id" -> "non-null-a"),
+      tupleOf(schema, "keyA" -> null,  "keyB" -> 5, "id" -> "null-a-5"),
+      tupleOf(schema, "keyA" -> null,  "keyB" -> 1, "id" -> "null-a-1"),
+      tupleOf(schema, "keyA" -> "B",   "keyB" -> 9, "id" -> "non-null-b")
     )
-    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("a"), sortKey("b")) }
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("keyA"), sortKey("keyB")) }
     assert(result.map(_.getField[String]("id")) == List("non-null-a", "non-null-b", "null-a-1", "null-a-5"))
   }
 
@@ -429,9 +432,9 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "act as a stable pass-through when keys are empty" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER, "label" -> AttributeType.STRING)
+    val schema = schemaOf("value" -> AttributeType.INTEGER, "label" -> AttributeType.STRING)
     val tuples = List(3, 1, 4, 1, 5, 9).zipWithIndex
-      .map { case (v, i) => tupleOf(schema, "v" -> v, "label" -> s"row-$i") }
+      .map { case (v, i) => tupleOf(schema, "value" -> v, "label" -> s"row-$i") }
     val result = runStableMergeSort(schema, tuples) { desc =>
       desc.keys = ListBuffer.empty[SortCriteriaUnit]
     }
@@ -480,31 +483,31 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   // ===========================================================================
 
   it should "merge incrementally: bucket sizes match binary decomposition after each push" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc))
     exec.open()
 
-    val N = 64
-    for (i <- (N - 1) to 0 by -1) {
-      exec.processTuple(tupleOf(schema, "v" -> i), 0)
+    val totalCount = 64
+    for (index <- (totalCount - 1) to 0 by -1) {
+      exec.processTuple(tupleOf(schema, "value" -> index), 0)
       val sizes = getBucketSizes(exec).sorted
-      assert(sizes == binaryDecomposition(N - i))
+      assert(sizes == binaryDecomposition(totalCount - index))
     }
 
     exec.close()
   }
 
   it should "maintain bucket-stack invariant (no adjacent equal sizes) after each insertion" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc))
     exec.open()
 
-    val N = 200
-    val stream = (0 until N by 2) ++ (1 until N by 2)
-    stream.foreach { i =>
-      exec.processTuple(tupleOf(schema, "v" -> (N - 1 - i)), 0)
+    val totalCount = 200
+    val stream = (0 until totalCount by 2) ++ (1 until totalCount by 2)
+    stream.foreach { index =>
+      exec.processTuple(tupleOf(schema, "value" -> (totalCount - 1 - index)), 0)
       val sizes = getBucketSizes(exec)
       sizes.sliding(2).foreach { pair =>
         if (pair.length == 2) assert(pair.head != pair.last)
@@ -515,15 +518,15 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "form expected bucket sizes at milestones (1,2,3,4,7,8,15,16)" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc))
     exec.open()
 
-    val seq = (100 to 1 by -1).map(i => tupleOf(schema, "v" -> i))
+    val inputSequence = (100 to 1 by -1).map(i => tupleOf(schema, "value" -> i))
     val milestones = Set(1, 2, 3, 4, 7, 8, 15, 16)
     var pushed = 0
-    seq.foreach { t =>
+    inputSequence.foreach { t =>
       exec.processTuple(t, 0); pushed += 1
       if (milestones.contains(pushed)) {
         val sizes = getBucketSizes(exec).sorted
@@ -539,17 +542,17 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   // ===========================================================================
 
   "mergeSortedBuckets" should "be stable: left bucket wins on equal keys" in {
-    val schema = schemaOf("k" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("k"))
+    val schema = schemaOf("key" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("key"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
 
     // Seed to resolve schema/keys once.
-    exec.processTuple(tupleOf(schema, "k" -> 0, "id" -> "seed"), 0)
+    exec.processTuple(tupleOf(schema, "key" -> 0, "id" -> "seed"), 0)
 
-    val left  = ArrayBuffer(tupleOf(schema, "k" -> 1, "id" -> "L1"),
-      tupleOf(schema, "k" -> 2, "id" -> "L2"))
-    val right = ArrayBuffer(tupleOf(schema, "k" -> 1, "id" -> "R1"),
-      tupleOf(schema, "k" -> 3, "id" -> "R3"))
+    val left  = ArrayBuffer(tupleOf(schema, "key" -> 1, "id" -> "L1"),
+      tupleOf(schema, "key" -> 2, "id" -> "L2"))
+    val right = ArrayBuffer(tupleOf(schema, "key" -> 1, "id" -> "R1"),
+      tupleOf(schema, "key" -> 3, "id" -> "R3"))
 
     val merged = exec.mergeSortedBuckets(left, right)
     val ids = merged.map(_.getField[String]("id")).toList
@@ -558,27 +561,27 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   "mergeSortedBuckets" should "handle empty left bucket" in {
-    val schema = schemaOf("k" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("k"))
+    val schema = schemaOf("key" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("key"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
-    exec.processTuple(tupleOf(schema, "k" -> 0, "id" -> "seed"), 0) // seed keys
+    exec.processTuple(tupleOf(schema, "key" -> 0, "id" -> "seed"), 0) // seed keys
 
     val left  = ArrayBuffer.empty[Tuple]
-    val right = ArrayBuffer(tupleOf(schema, "k" -> 1, "id" -> "r1"),
-      tupleOf(schema, "k" -> 2, "id" -> "r2"))
+    val right = ArrayBuffer(tupleOf(schema, "key" -> 1, "id" -> "r1"),
+      tupleOf(schema, "key" -> 2, "id" -> "r2"))
     val merged = exec.mergeSortedBuckets(left, right)
     assert(merged.map(_.getField[String]("id")).toList == List("r1", "r2"))
     exec.close()
   }
 
   "mergeSortedBuckets" should "handle empty right bucket" in {
-    val schema = schemaOf("k" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("k"))
+    val schema = schemaOf("key" -> AttributeType.INTEGER, "id" -> AttributeType.STRING)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("key"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
-    exec.processTuple(tupleOf(schema, "k" -> 0, "id" -> "seed"), 0)
+    exec.processTuple(tupleOf(schema, "key" -> 0, "id" -> "seed"), 0)
 
-    val left  = ArrayBuffer(tupleOf(schema, "k" -> 1, "id" -> "l1"),
-      tupleOf(schema, "k" -> 2, "id" -> "l2"))
+    val left  = ArrayBuffer(tupleOf(schema, "key" -> 1, "id" -> "l1"),
+      tupleOf(schema, "key" -> 2, "id" -> "l2"))
     val right = ArrayBuffer.empty[Tuple]
     val merged = exec.mergeSortedBuckets(left, right)
     assert(merged.map(_.getField[String]("id")).toList == List("l1", "l2"))
@@ -590,19 +593,19 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   // ===========================================================================
 
   "pushBucketAndCombine" should "merge two size-2 buckets into size-4 on push (with existing size-1 seed)" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
 
     // seed to compile keys -> results in one size-1 bucket in the stack
-    exec.processTuple(tupleOf(schema, "v" -> 0), 0)
+    exec.processTuple(tupleOf(schema, "value" -> 0), 0)
 
     // two pre-sorted buckets of size 2
-    val b1 = ArrayBuffer(tupleOf(schema, "v" -> 1), tupleOf(schema, "v" -> 3))
-    val b2 = ArrayBuffer(tupleOf(schema, "v" -> 2), tupleOf(schema, "v" -> 4))
+    val bucket1 = ArrayBuffer(tupleOf(schema, "value" -> 1), tupleOf(schema, "value" -> 3))
+    val bucket2 = ArrayBuffer(tupleOf(schema, "value" -> 2), tupleOf(schema, "value" -> 4))
 
-    exec.pushBucketAndCombine(b1) // sizes now [1,2]
-    exec.pushBucketAndCombine(b2) // equal top [2,2] => merged to 4; sizes [1,4]
+    exec.pushBucketAndCombine(bucket1) // sizes now [1,2]
+    exec.pushBucketAndCombine(bucket2) // equal top [2,2] => merged to 4; sizes [1,4]
 
     val sizes = getBucketSizes(exec)
     assert(sizes == List(1, 4))
@@ -610,25 +613,25 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
   }
 
   it should "return the same sorted output if onFinish is called twice in a row" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
-    List(3,1,2).foreach(i => exec.processTuple(tupleOf(schema, "v" -> i), 0))
+    List(3,1,2).foreach(i => exec.processTuple(tupleOf(schema, "value" -> i), 0))
 
-    val first  = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("v"))
-    val second = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("v"))
+    val first  = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("value"))
+    val second = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("value"))
     assert(first == List(1,2,3))
     assert(second == List(1,2,3))
     exec.close()
   }
 
   it should "have processTuple always return empty iterators until finish" in {
-    val schema = schemaOf("v" -> AttributeType.INTEGER)
-    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("v"))
+    val schema = schemaOf("value" -> AttributeType.INTEGER)
+    val desc   = new StableMergeSortOpDesc(); desc.keys = sortKeysBuffer(sortKey("value"))
     val exec   = new StableMergeSortOpExec(objectMapper.writeValueAsString(desc)); exec.open()
-    val immediates = (10 to 1 by -1).map(i => exec.processTuple(tupleOf(schema, "v" -> i), 0))
+    val immediates = (10 to 1 by -1).map(i => exec.processTuple(tupleOf(schema, "value" -> i), 0))
     assert(immediates.forall(_.isEmpty))
-    val out = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("v"))
+    val out = exec.onFinish(0).map(_.asInstanceOf[Tuple]).toList.map(_.getField[Int]("value"))
     assert(out == (1 to 10).toList)
     exec.close()
   }

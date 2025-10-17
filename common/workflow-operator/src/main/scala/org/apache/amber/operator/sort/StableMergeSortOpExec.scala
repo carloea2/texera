@@ -95,10 +95,10 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     if (sortedBuckets.isEmpty) return Iterator.empty
 
     var accumulator = sortedBuckets(0)
-    var idx = 1
-    while (idx < sortedBuckets.length) {
-      accumulator = mergeSortedBuckets(accumulator, sortedBuckets(idx))
-      idx += 1
+    var bucketIdx = 1
+    while (bucketIdx < sortedBuckets.length) {
+      accumulator = mergeSortedBuckets(accumulator, sortedBuckets(bucketIdx))
+      bucketIdx += 1
     }
 
     sortedBuckets.clear()
@@ -111,11 +111,11 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
    * Outputs an array of compiled sort keys used by [[compareBySortKeys]].
    */
   private def compileSortKeys(schema: Schema): Array[CompiledSortKey] = {
-    desc.keys.map { k: SortCriteriaUnit =>
-      val name = k.attributeName
+    desc.keys.map { sortCriteria: SortCriteriaUnit =>
+      val name = sortCriteria.attributeName
       val index = schema.getIndex(name)
       val dataType = schema.getAttribute(name).getType
-      val isDescending = k.sortPreference == SortPreference.DESC
+      val isDescending = sortCriteria.sortPreference == SortPreference.DESC
       CompiledSortKey(index, dataType, isDescending)
     }.toArray
   }
@@ -170,19 +170,19 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
                                         leftBucket: ArrayBuffer[Tuple],
                                         rightBucket: ArrayBuffer[Tuple]
                                       ): ArrayBuffer[Tuple] = {
-    val out = new ArrayBuffer[Tuple](leftBucket.size + rightBucket.size)
+    val outMerged = new ArrayBuffer[Tuple](leftBucket.size + rightBucket.size)
     var leftIndex = 0
     var rightIndex = 0
     while (leftIndex < leftBucket.size && rightIndex < rightBucket.size) {
       if (compareBySortKeys(leftBucket(leftIndex), rightBucket(rightIndex)) <= 0) {
-        out += leftBucket(leftIndex); leftIndex += 1
+        outMerged += leftBucket(leftIndex); leftIndex += 1
       } else {
-        out += rightBucket(rightIndex); rightIndex += 1
+        outMerged += rightBucket(rightIndex); rightIndex += 1
       }
     }
-    while (leftIndex < leftBucket.size)  { out += leftBucket(leftIndex);  leftIndex  += 1 }
-    while (rightIndex < rightBucket.size){ out += rightBucket(rightIndex); rightIndex += 1 }
-    out
+    while (leftIndex < leftBucket.size)  { outMerged += leftBucket(leftIndex);  leftIndex  += 1 }
+    while (rightIndex < rightBucket.size){ outMerged += rightBucket(rightIndex); rightIndex += 1 }
+    outMerged
   }
 
   /**
@@ -228,19 +228,19 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
    *  - Uses java.lang.Double.compare (orders -Inf < ... < +Inf < NaN).
    *  - Callers if desired should define how NaN interacts with ASC/DESC and null policy.
    */
-  private def compareTypedNonNullValues(a: Any, b: Any, t: AttributeType): Int = t match {
+  private def compareTypedNonNullValues(leftValue: Any, rightValue: Any, attrType: AttributeType): Int = attrType match {
     case AttributeType.INTEGER   =>
-      java.lang.Integer.compare(a.asInstanceOf[Number].intValue(),  b.asInstanceOf[Number].intValue())
+      java.lang.Integer.compare(leftValue.asInstanceOf[Number].intValue(),  rightValue.asInstanceOf[Number].intValue())
     case AttributeType.LONG      =>
-      java.lang.Long.compare(   a.asInstanceOf[Number].longValue(), b.asInstanceOf[Number].longValue())
+      java.lang.Long.compare(   leftValue.asInstanceOf[Number].longValue(), rightValue.asInstanceOf[Number].longValue())
     case AttributeType.DOUBLE    =>
-      java.lang.Double.compare( a.asInstanceOf[Number].doubleValue(), b.asInstanceOf[Number].doubleValue())
+      java.lang.Double.compare( leftValue.asInstanceOf[Number].doubleValue(), rightValue.asInstanceOf[Number].doubleValue())
     case AttributeType.BOOLEAN   =>
-      java.lang.Boolean.compare(a.asInstanceOf[Boolean], b.asInstanceOf[Boolean])
+      java.lang.Boolean.compare(leftValue.asInstanceOf[Boolean], rightValue.asInstanceOf[Boolean])
     case AttributeType.TIMESTAMP =>
-      a.asInstanceOf[java.sql.Timestamp].compareTo(b.asInstanceOf[java.sql.Timestamp])
+      leftValue.asInstanceOf[java.sql.Timestamp].compareTo(rightValue.asInstanceOf[java.sql.Timestamp])
     case AttributeType.STRING    =>
-      a.asInstanceOf[String].compareTo(b.asInstanceOf[String])
+      leftValue.asInstanceOf[String].compareTo(rightValue.asInstanceOf[String])
     case other =>
       throw new IllegalStateException(s"Unsupported attribute type $other in StableMergeSort")
   }
