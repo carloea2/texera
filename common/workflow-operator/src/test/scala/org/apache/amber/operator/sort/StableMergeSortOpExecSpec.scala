@@ -247,6 +247,25 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
     assert(desc.map(_.getField[Boolean]("bool")) == List(true, true, false, false))
   }
 
+  it should "sort BINARY ascending (unsigned lexicographic) incl. empty and high-bit bytes" in {
+    val schema = schemaOf("bin" -> AttributeType.BINARY)
+
+    val a0 = Array[Byte]() // []
+    val a1 = Array(0x00.toByte) // [00]
+    val a1b = Array(0x00.toByte, 0x00.toByte) // [00,00]
+    val a2 = Array(0x00.toByte, 0x01.toByte) // [00,01]
+    val a3 = Array(0x7f.toByte) // [7F]
+    val a4 = Array(0x80.toByte) // [80] (-128)
+    val a5 = Array(0xff.toByte) // [FF] (-1)
+
+    val tuples = List(a4, a1b, a0, a5, a2, a1, a3).map(arr => tupleOf(schema, "bin" -> arr))
+    val result = runStableMergeSort(schema, tuples) { _.keys = sortKeysBuffer(sortKey("bin")) }
+
+    val got = result.map(_.getField[Array[Byte]]("bin").toSeq.map(b => b & 0xff))
+    val expect = List(a0, a1, a1b, a2, a3, a4, a5).map(_.toSeq.map(b => b & 0xff))
+    assert(got == expect)
+  }
+
   // ===========================================================================
   // B. Floating-point & Null/NaN policy
   // ===========================================================================
@@ -334,6 +353,26 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
     )
   }
 
+  it should "sort BINARY descending with nulls last and preserve stability for equal byte arrays" in {
+    val schema = schemaOf("bin" -> AttributeType.BINARY, "id" -> AttributeType.STRING)
+
+    val x = Array(0x00.toByte)
+    val y = Array(0xff.toByte)
+
+    val tuples = List(
+      tupleOf(schema, "bin" -> y, "id" -> "y1"),
+      tupleOf(schema, "bin" -> x, "id" -> "x1"),
+      tupleOf(schema, "bin" -> x, "id" -> "x2"), // same key as x1; should keep insertion order
+      tupleOf(schema, "bin" -> null, "id" -> "null-1")
+    )
+
+    val result = runStableMergeSort(schema, tuples) {
+      _.keys = sortKeysBuffer(sortKey("bin", SortPreference.DESC))
+    }
+
+    val ids = result.map(_.getField[String]("id"))
+    assert(ids == List("y1", "x1", "x2", "null-1"))
+  }
   // ===========================================================================
   // C. Multi-key semantics (lexicographic)
   // ===========================================================================
@@ -473,6 +512,33 @@ class StableMergeSortOpExecSpec extends AnyFlatSpec {
       result
         .map(_.getField[String]("id")) == List("non-null-a", "non-null-b", "null-a-1", "null-a-5")
     )
+  }
+
+  it should "use INTEGER secondary key to break ties when primary BINARY keys are equal" in {
+    val schema = schemaOf(
+      "bin" -> AttributeType.BINARY,
+      "idx" -> AttributeType.INTEGER,
+      "label" -> AttributeType.STRING
+    )
+
+    val b0 = Array(0x00.toByte)
+    val b1 = Array(0x01.toByte)
+
+    val tuples = List(
+      tupleOf(schema, "bin" -> b1, "idx" -> 1, "label" -> "b1-idx1"),
+      tupleOf(schema, "bin" -> b0, "idx" -> 9, "label" -> "b0-idx9"),
+      tupleOf(schema, "bin" -> b1, "idx" -> 2, "label" -> "b1-idx2")
+    )
+
+    val result = runStableMergeSort(schema, tuples) { desc =>
+      desc.keys = sortKeysBuffer(
+        sortKey("bin", SortPreference.ASC), // primary: binary ascending
+        sortKey("idx", SortPreference.DESC) // secondary: integer descending
+      )
+    }
+
+    val labels = result.map(_.getField[String]("label"))
+    assert(labels == List("b0-idx9", "b1-idx2", "b1-idx1"))
   }
 
   // ===========================================================================
