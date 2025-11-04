@@ -236,10 +236,6 @@ class StableMergeSortOpExec(descString: String) extends OperatorExecutor {
     *        - The first differing byte decides the order.
     *        - If all compared bytes are equal, the shorter array sorts first.
     *        - Example: [] < [0x00] < [0x00,0x00] < [0x00,0x01] < [0x7F] < [0x80] < [0xFF].
-    *
-    * Implementation note:
-    *   -  BINARY uses [[java.util.Arrays.compareUnsigned]] (JDK 9+). For JDK 8,
-    *     replace with a manual unsigned lexicographic comparator.
     */
   private def compareTypedNonNullValues(
       leftValue: Any,
