@@ -195,7 +195,8 @@ class AggregationOperation {
         if (value != null && comp < 0) value else partial
       },
       (partial1, partial2) =>
-        if (AttributeTypeUtils.compare(partial1, partial2, attributeType) < 0) partial1 else partial2,
+        if (AttributeTypeUtils.compare(partial1, partial2, attributeType) < 0) partial1
+        else partial2,
       partial => if (partial == AttributeTypeUtils.maxValue(attributeType)) null else partial
     )
   }
@@ -219,7 +220,8 @@ class AggregationOperation {
         if (value != null && comp > 0) value else partial
       },
       (partial1, partial2) =>
-        if (AttributeTypeUtils.compare(partial1, partial2, attributeType) > 0) partial1 else partial2,
+        if (AttributeTypeUtils.compare(partial1, partial2, attributeType) > 0) partial1
+        else partial2,
       partial => if (partial == AttributeTypeUtils.maxValue(attributeType)) null else partial
     )
   }

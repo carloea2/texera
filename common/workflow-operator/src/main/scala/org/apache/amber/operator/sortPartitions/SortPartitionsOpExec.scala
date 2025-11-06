@@ -20,7 +20,7 @@
 package org.apache.amber.operator.sortPartitions
 
 import org.apache.amber.core.executor.OperatorExecutor
-import org.apache.amber.core.tuple.{AttributeType, AttributeTypeUtils, Tuple, TupleLike}
+import org.apache.amber.core.tuple.{AttributeTypeUtils, Tuple, TupleLike}
 import org.apache.amber.util.JSONUtils.objectMapper
 
 import scala.collection.mutable.ArrayBuffer

@@ -19,13 +19,12 @@
 
 package org.apache.amber.operator.sort
 
-import org.apache.amber.core.tuple.{Attribute, AttributeType, Schema, Tuple}
+import org.apache.amber.core.tuple.{AttributeType, Schema, Tuple}
 import org.apache.amber.util.JSONUtils.objectMapper
 import org.scalatest.flatspec.AnyFlatSpec
 
 import java.sql.Timestamp
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.jdk.CollectionConverters.IterableHasAsJava
 
 /**
   * Integration and internal-behavior tests for [[StableMergeSortOpExec]].
