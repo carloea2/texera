@@ -112,6 +112,30 @@ case class Tuple @JsonCreator() (
 
 object Tuple {
 
+  /** Build a Tuple from (name -> value) pairs, coercing values to the schema types. */
+  def of(schema: Schema, values: (String, Any)*): Tuple = {
+    val nameToValue: Map[String, Any] = values.toMap
+    val coercedFields: Array[Any] =
+      schema.getAttributes
+        .map { attribute =>
+          val rawValue: Any = nameToValue.getOrElse(attribute.getName, null)
+          AttributeTypeUtils.parseField(rawValue, attribute.getType, force = true)
+        }
+        .toArray
+    Tuple(schema, coercedFields)
+  }
+
+  /** Build a Tuple without coercion.
+   * Uses the builder’s runtime type checks; values must already match the schema’s field classes.
+   * Missing attributes (or unknown attribute names) will cause an error.
+   */
+  def ofStrict(schema: Schema, values: (String, Any)*): Tuple =
+    values.foldLeft(Tuple.builder(schema)) {
+      case (builder, (attrName, value)) =>
+        builder.add(schema.getAttribute(attrName), value)
+    }.build()
+
+
   /**
     * Validates that the provided attributes match the provided fields in type and order.
     *

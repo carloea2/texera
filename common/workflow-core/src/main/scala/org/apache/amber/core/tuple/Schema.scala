@@ -191,6 +191,10 @@ case class Schema @JsonCreator() (
 
 object Schema {
 
+  /** Build a Schema with (name, type) pairs, in order, rejecting duplicates. */
+  def of(attrs: (String, AttributeType)*): Schema =
+    attrs.foldLeft(Schema()) { case (acc, (name, tpe)) => acc.add(name, tpe) }
+
   /**
     * Creates a Schema instance from a raw map representation.
     * Each entry in the map contains an attribute name and its type as strings.
