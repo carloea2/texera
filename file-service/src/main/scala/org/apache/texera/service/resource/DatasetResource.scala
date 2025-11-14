@@ -28,7 +28,6 @@ import org.apache.amber.core.storage.model.OnDataset
 import org.apache.amber.core.storage.util.LakeFSStorageClient
 import org.apache.amber.core.storage.{DocumentFactory, FileResolver}
 import org.apache.texera.auth.SessionUser
-import org.apache.texera.config.DefaultsConfig
 import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
@@ -54,7 +53,6 @@ import org.apache.texera.service.util.S3StorageClient.{
   MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
   MINIMUM_NUM_OF_MULTIPART_S3_PART
 }
-import org.jooq.impl.DSL
 import org.jooq.{DSLContext, EnumType}
 
 import java.io.{InputStream, OutputStream}
@@ -75,8 +73,8 @@ object DatasetResource {
     .createDSLContext()
 
   /**
-    * Helper function to get the dataset from DB using did
-    */
+   * Helper function to get the dataset from DB using did
+   */
   private def getDatasetByID(ctx: DSLContext, did: Integer): Dataset = {
     val datasetDao = new DatasetDao(ctx.configuration())
     val dataset = datasetDao.fetchOneByDid(did)
@@ -87,8 +85,8 @@ object DatasetResource {
   }
 
   /**
-    * Helper function to PUT exactly len bytes from buf to presigned URL, return the ETag
-    */
+   * Helper function to PUT exactly len bytes from buf to presigned URL, return the ETag
+   */
   private def put(buf: Array[Byte], len: Int, url: String, partNum: Int): String = {
     val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
     conn.setDoOutput(true);
@@ -108,12 +106,12 @@ object DatasetResource {
   }
 
   /**
-    * Helper function to get the dataset version from DB using dvid
-    */
+   * Helper function to get the dataset version from DB using dvid
+   */
   private def getDatasetVersionByID(
-      ctx: DSLContext,
-      dvid: Integer
-  ): DatasetVersion = {
+                                     ctx: DSLContext,
+                                     dvid: Integer
+                                   ): DatasetVersion = {
     val datasetVersionDao = new DatasetVersionDao(ctx.configuration())
     val version = datasetVersionDao.fetchOneByDvid(dvid)
     if (version == null) {
@@ -123,12 +121,12 @@ object DatasetResource {
   }
 
   /**
-    * Helper function to get the latest dataset version from the DB
-    */
+   * Helper function to get the latest dataset version from the DB
+   */
   private def getLatestDatasetVersion(
-      ctx: DSLContext,
-      did: Integer
-  ): Option[DatasetVersion] = {
+                                       ctx: DSLContext,
+                                       did: Integer
+                                     ): Option[DatasetVersion] = {
     ctx
       .selectFrom(DATASET_VERSION)
       .where(DATASET_VERSION.DID.eq(did))
@@ -139,38 +137,38 @@ object DatasetResource {
   }
 
   case class DashboardDataset(
-      dataset: Dataset,
-      ownerEmail: String,
-      accessPrivilege: EnumType,
-      isOwner: Boolean,
-      size: Long
-  )
+                               dataset: Dataset,
+                               ownerEmail: String,
+                               accessPrivilege: EnumType,
+                               isOwner: Boolean,
+                               size: Long
+                             )
 
   case class DashboardDatasetVersion(
-      datasetVersion: DatasetVersion,
-      fileNodes: List[DatasetFileNode]
-  )
+                                      datasetVersion: DatasetVersion,
+                                      fileNodes: List[DatasetFileNode]
+                                    )
 
   case class CreateDatasetRequest(
-      datasetName: String,
-      datasetDescription: String,
-      isDatasetPublic: Boolean,
-      isDatasetDownloadable: Boolean
-  )
+                                   datasetName: String,
+                                   datasetDescription: String,
+                                   isDatasetPublic: Boolean,
+                                   isDatasetDownloadable: Boolean
+                                 )
 
   case class Diff(
-      path: String,
-      pathType: String,
-      diffType: String, // "added", "removed", "changed", etc.
-      sizeBytes: Option[Long] // Size of the changed file (None for directories)
-  )
+                   path: String,
+                   pathType: String,
+                   diffType: String, // "added", "removed", "changed", etc.
+                   sizeBytes: Option[Long] // Size of the changed file (None for directories)
+                 )
 
   case class DatasetDescriptionModification(did: Integer, description: String)
 
   case class DatasetVersionRootFileNodesResponse(
-      fileNodes: List[DatasetFileNode],
-      size: Long
-  )
+                                                  fileNodes: List[DatasetFileNode],
+                                                  size: Long
+                                                )
 }
 
 @Produces(Array(MediaType.APPLICATION_JSON, "image/jpeg", "application/pdf"))
@@ -180,34 +178,14 @@ class DatasetResource {
   private val ERR_DATASET_VERSION_NOT_FOUND_MESSAGE = "The version of the dataset not found"
   private val EXPIRATION_MINUTES = 5
 
-  private val SingleFileUploadMaxSizeKey = "single_file_upload_max_size_mib"
-
-  def singleFileUploadMaxSizeMib: Int = {
-    val valueOpt = Option(
-      context
-        .select(DSL.field("value", classOf[String]))
-        .from(DSL.table("site_settings"))
-        .where(DSL.field("key", classOf[String]).eq(SingleFileUploadMaxSizeKey))
-        .fetchOne(0, classOf[String])
-    )
-
-    valueOpt
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .getOrElse(DefaultsConfig.allDefaults(SingleFileUploadMaxSizeKey).toInt)
-  }
-
-  /** Maximum allowed single-file upload size in bytes (MiB → bytes). */
-  private def maxSingleFileUploadBytes: Long =
-    singleFileUploadMaxSizeMib.toLong * 1024L * 1024L
-
   /**
-    * Helper function to get the dataset from DB with additional information including user access privilege and owner email
-    */
+   * Helper function to get the dataset from DB with additional information including user access privilege and owner email
+   */
   private def getDashboardDataset(
-      ctx: DSLContext,
-      did: Integer,
-      requesterUid: Option[Integer]
-  ): DashboardDataset = {
+                                   ctx: DSLContext,
+                                   did: Integer,
+                                   requesterUid: Option[Integer]
+                                 ): DashboardDataset = {
     val targetDataset = getDatasetByID(ctx, did)
 
     if (requesterUid.isEmpty && !targetDataset.getIsPublic) {
@@ -236,9 +214,9 @@ class DatasetResource {
   @Path("/create")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def createDataset(
-      request: CreateDatasetRequest,
-      @Auth user: SessionUser
-  ): DashboardDataset = {
+                     request: CreateDatasetRequest,
+                     @Auth user: SessionUser
+                   ): DashboardDataset = {
 
     withTransaction(context) { ctx =>
       val uid = user.getUid
@@ -323,10 +301,10 @@ class DatasetResource {
   @Path("/{did}/version/create")
   @Consumes(Array(MediaType.TEXT_PLAIN))
   def createDatasetVersion(
-      versionName: String,
-      @PathParam("did") did: Integer,
-      @Auth user: SessionUser
-  ): DashboardDatasetVersion = {
+                            versionName: String,
+                            @PathParam("did") did: Integer,
+                            @Auth user: SessionUser
+                          ): DashboardDatasetVersion = {
     val uid = user.getUid
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, uid)) {
@@ -423,6 +401,7 @@ class DatasetResource {
             e
           )
       }
+
       // delete the directory on S3
       if (
         S3StorageClient.directoryExists(StorageConfig.lakefsBucketName, dataset.getRepositoryName)
@@ -443,9 +422,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/update/description")
   def updateDatasetDescription(
-      modificator: DatasetDescriptionModification,
-      @Auth sessionUser: SessionUser
-  ): Response = {
+                                modificator: DatasetDescriptionModification,
+                                @Auth sessionUser: SessionUser
+                              ): Response = {
     withTransaction(context) { ctx =>
       val uid = sessionUser.getUid
       val datasetDao = new DatasetDao(ctx.configuration())
@@ -465,13 +444,13 @@ class DatasetResource {
   @Path("/{did}/upload")
   @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
   def uploadOneFileToDataset(
-      @PathParam("did") did: Integer,
-      @QueryParam("filePath") encodedFilePath: String,
-      @QueryParam("message") message: String,
-      fileStream: InputStream,
-      @Context headers: HttpHeaders,
-      @Auth user: SessionUser
-  ): Response = {
+                              @PathParam("did") did: Integer,
+                              @QueryParam("filePath") encodedFilePath: String,
+                              @QueryParam("message") message: String,
+                              fileStream: InputStream,
+                              @Context headers: HttpHeaders,
+                              @Auth user: SessionUser
+                            ): Response = {
     // These variables are defined at the top so catch block can access them
     val uid = user.getUid
     var repoName: String = null
@@ -525,7 +504,6 @@ class DatasetResource {
         var buffered = 0
         var partNumber = 1
         val completedParts = ListBuffer[(Int, String)]()
-        var totalBytesRead = 0L
 
         @inline def flush(): Unit = {
           if (buffered == 0) return
@@ -541,13 +519,6 @@ class DatasetResource {
         var read = fileStream.read(buf, buffered, buf.length - buffered)
         while (read != -1) {
           buffered += read
-          totalBytesRead += read
-          if (totalBytesRead > maxSingleFileUploadBytes) {
-            throw new WebApplicationException(
-              s"File exceeds maximum allowed size of ${singleFileUploadMaxSizeMib} MiB.",
-              Response.Status.REQUEST_ENTITY_TOO_LARGE
-            )
-          }
           if (buffered == buf.length) flush() // buffer full
           read = fileStream.read(buf, buffered, buf.length - buffered)
         }
@@ -586,11 +557,11 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/presign-download")
   def getPresignedUrl(
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("repositoryName") repositoryName: String,
-      @QueryParam("commitHash") commitHash: String,
-      @Auth user: SessionUser
-  ): Response = {
+                       @QueryParam("filePath") encodedUrl: String,
+                       @QueryParam("repositoryName") repositoryName: String,
+                       @QueryParam("commitHash") commitHash: String,
+                       @Auth user: SessionUser
+                     ): Response = {
     val uid = user.getUid
     generatePresignedResponse(encodedUrl, repositoryName, commitHash, uid)
   }
@@ -599,11 +570,11 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/presign-download-s3")
   def getPresignedUrlWithS3(
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("repositoryName") repositoryName: String,
-      @QueryParam("commitHash") commitHash: String,
-      @Auth user: SessionUser
-  ): Response = {
+                             @QueryParam("filePath") encodedUrl: String,
+                             @QueryParam("repositoryName") repositoryName: String,
+                             @QueryParam("commitHash") commitHash: String,
+                             @Auth user: SessionUser
+                           ): Response = {
     val uid = user.getUid
     generatePresignedResponse(encodedUrl, repositoryName, commitHash, uid)
   }
@@ -611,20 +582,20 @@ class DatasetResource {
   @GET
   @Path("/public-presign-download")
   def getPublicPresignedUrl(
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("repositoryName") repositoryName: String,
-      @QueryParam("commitHash") commitHash: String
-  ): Response = {
+                             @QueryParam("filePath") encodedUrl: String,
+                             @QueryParam("repositoryName") repositoryName: String,
+                             @QueryParam("commitHash") commitHash: String
+                           ): Response = {
     generatePresignedResponse(encodedUrl, repositoryName, commitHash, null)
   }
 
   @GET
   @Path("/public-presign-download-s3")
   def getPublicPresignedUrlWithS3(
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("repositoryName") repositoryName: String,
-      @QueryParam("commitHash") commitHash: String
-  ): Response = {
+                                   @QueryParam("filePath") encodedUrl: String,
+                                   @QueryParam("repositoryName") repositoryName: String,
+                                   @QueryParam("commitHash") commitHash: String
+                                 ): Response = {
     generatePresignedResponse(encodedUrl, repositoryName, commitHash, null)
   }
 
@@ -633,10 +604,10 @@ class DatasetResource {
   @Path("/{did}/file")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def deleteDatasetFile(
-      @PathParam("did") did: Integer,
-      @QueryParam("filePath") encodedFilePath: String,
-      @Auth user: SessionUser
-  ): Response = {
+                         @PathParam("did") did: Integer,
+                         @QueryParam("filePath") encodedFilePath: String,
+                         @Auth user: SessionUser
+                       ): Response = {
     val uid = user.getUid
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, uid)) {
@@ -665,18 +636,18 @@ class DatasetResource {
   @Path("/multipart-upload")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def multipartUpload(
-      @QueryParam("type") operationType: String,
-      @QueryParam("ownerEmail") ownerEmail: String,
-      @QueryParam("datasetName") datasetName: String,
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("uploadId") uploadId: Optional[String],
-      @QueryParam("numParts") numParts: Optional[Integer],
-      payload: Map[
-        String,
-        Any
-      ], // Expecting {"parts": [...], "physicalAddress": "s3://bucket/path"}
-      @Auth user: SessionUser
-  ): Response = {
+                       @QueryParam("type") operationType: String,
+                       @QueryParam("ownerEmail") ownerEmail: String,
+                       @QueryParam("datasetName") datasetName: String,
+                       @QueryParam("filePath") encodedUrl: String,
+                       @QueryParam("uploadId") uploadId: Optional[String],
+                       @QueryParam("numParts") numParts: Optional[Integer],
+                       payload: Map[
+                         String,
+                         Any
+                       ], // Expecting {"parts": [...], "physicalAddress": "s3://bucket/path"}
+                       @Auth user: SessionUser
+                     ): Response = {
     val uid = user.getUid
 
     withTransaction(context) { ctx =>
@@ -766,20 +737,7 @@ class DatasetResource {
             partsList,
             physicalAddress
           )
-          val sizeBytes = Option(objectStats.getSizeBytes).map(_.longValue()).getOrElse(0L)
-          if (sizeBytes > maxSingleFileUploadBytes) {
-            // Roll back staged object to previous committed state (or remove if new).
-            try {
-              LakeFSStorageClient.resetObjectUploadOrDeletion(repositoryName, filePath)
-            } catch {
-              case _: Exception => // best-effort cleanup
-            }
-            throw new WebApplicationException(
-              s"File exceeds maximum allowed size of " +
-                s"${singleFileUploadMaxSizeMib} MiB. Upload has been rolled back.",
-              Response.Status.REQUEST_ENTITY_TOO_LARGE
-            )
-          }
+
           Response
             .ok(
               Map(
@@ -820,9 +778,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/update/publicity")
   def toggleDatasetPublicity(
-      @PathParam("did") did: Integer,
-      @Auth sessionUser: SessionUser
-  ): Response = {
+                              @PathParam("did") did: Integer,
+                              @Auth sessionUser: SessionUser
+                            ): Response = {
     withTransaction(context) { ctx =>
       val datasetDao = new DatasetDao(ctx.configuration())
       val uid = sessionUser.getUid
@@ -844,9 +802,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/update/downloadable")
   def toggleDatasetDownloadable(
-      @PathParam("did") did: Integer,
-      @Auth sessionUser: SessionUser
-  ): Response = {
+                                 @PathParam("did") did: Integer,
+                                 @Auth sessionUser: SessionUser
+                               ): Response = {
     withTransaction(context) { ctx =>
       val datasetDao = new DatasetDao(ctx.configuration())
       val uid = sessionUser.getUid
@@ -869,9 +827,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/diff")
   def getDatasetDiff(
-      @PathParam("did") did: Integer,
-      @Auth user: SessionUser
-  ): List[Diff] = {
+                      @PathParam("did") did: Integer,
+                      @Auth user: SessionUser
+                    ): List[Diff] = {
     val uid = user.getUid
     withTransaction(context) { ctx =>
       if (!userHasReadAccess(ctx, did, uid)) {
@@ -899,10 +857,10 @@ class DatasetResource {
   @Path("/{did}/diff")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def resetDatasetFileDiff(
-      @PathParam("did") did: Integer,
-      @QueryParam("filePath") encodedFilePath: String,
-      @Auth user: SessionUser
-  ): Response = {
+                            @PathParam("did") did: Integer,
+                            @QueryParam("filePath") encodedFilePath: String,
+                            @Auth user: SessionUser
+                          ): Response = {
     val uid = user.getUid
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, uid)) {
@@ -926,17 +884,17 @@ class DatasetResource {
   }
 
   /**
-    * This method returns a list of DashboardDatasets objects that are accessible by current user.
-    *
-    * @param user the session user
-    * @return list of user accessible DashboardDataset objects
-    */
+   * This method returns a list of DashboardDatasets objects that are accessible by current user.
+   *
+   * @param user the session user
+   * @return list of user accessible DashboardDataset objects
+   */
   @GET
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/list")
   def listDatasets(
-      @Auth user: SessionUser
-  ): List[DashboardDataset] = {
+                    @Auth user: SessionUser
+                  ): List[DashboardDataset] = {
     val uid = user.getUid
     withTransaction(context)(ctx => {
       var accessibleDatasets: ListBuffer[DashboardDataset] = ListBuffer()
@@ -1010,9 +968,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/version/list")
   def getDatasetVersionList(
-      @PathParam("did") did: Integer,
-      @Auth user: SessionUser
-  ): List[DatasetVersion] = {
+                             @PathParam("did") did: Integer,
+                             @Auth user: SessionUser
+                           ): List[DatasetVersion] = {
     val uid = user.getUid
     withTransaction(context)(ctx => {
       val dataset = getDatasetByID(ctx, did)
@@ -1026,8 +984,8 @@ class DatasetResource {
   @GET
   @Path("/{name}/publicVersion/list")
   def getPublicDatasetVersionList(
-      @PathParam("name") did: Integer
-  ): List[DatasetVersion] = {
+                                   @PathParam("name") did: Integer
+                                 ): List[DatasetVersion] = {
     withTransaction(context)(ctx => {
       if (!isDatasetPublic(ctx, did)) {
         throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
@@ -1040,9 +998,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/version/latest")
   def retrieveLatestDatasetVersion(
-      @PathParam("did") did: Integer,
-      @Auth user: SessionUser
-  ): DashboardDatasetVersion = {
+                                    @PathParam("did") did: Integer,
+                                    @Auth user: SessionUser
+                                  ): DashboardDatasetVersion = {
     val uid = user.getUid
     withTransaction(context)(ctx => {
       if (!userHasReadAccess(ctx, did, uid)) {
@@ -1082,11 +1040,11 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/versionZip")
   def getDatasetVersionZip(
-      @PathParam("did") did: Integer,
-      @QueryParam("dvid") dvid: Integer, // Dataset version ID, nullable
-      @QueryParam("latest") latest: java.lang.Boolean, // Flag to get latest version, nullable
-      @Auth user: SessionUser
-  ): Response = {
+                            @PathParam("did") did: Integer,
+                            @QueryParam("dvid") dvid: Integer, // Dataset version ID, nullable
+                            @QueryParam("latest") latest: java.lang.Boolean, // Flag to get latest version, nullable
+                            @Auth user: SessionUser
+                          ): Response = {
 
     withTransaction(context) { ctx =>
       if ((dvid != null && latest != null) || (dvid == null && latest == null)) {
@@ -1162,10 +1120,10 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}/version/{dvid}/rootFileNodes")
   def retrieveDatasetVersionRootFileNodes(
-      @PathParam("did") did: Integer,
-      @PathParam("dvid") dvid: Integer,
-      @Auth user: SessionUser
-  ): DatasetVersionRootFileNodesResponse = {
+                                           @PathParam("did") did: Integer,
+                                           @PathParam("dvid") dvid: Integer,
+                                           @Auth user: SessionUser
+                                         ): DatasetVersionRootFileNodesResponse = {
     val uid = user.getUid
     withTransaction(context)(ctx => fetchDatasetVersionRootFileNodes(ctx, did, dvid, Some(uid)))
   }
@@ -1173,9 +1131,9 @@ class DatasetResource {
   @GET
   @Path("/{did}/publicVersion/{dvid}/rootFileNodes")
   def retrievePublicDatasetVersionRootFileNodes(
-      @PathParam("did") did: Integer,
-      @PathParam("dvid") dvid: Integer
-  ): DatasetVersionRootFileNodesResponse = {
+                                                 @PathParam("did") did: Integer,
+                                                 @PathParam("dvid") dvid: Integer
+                                               ): DatasetVersionRootFileNodesResponse = {
     withTransaction(context)(ctx => fetchDatasetVersionRootFileNodes(ctx, did, dvid, None))
   }
 
@@ -1183,9 +1141,9 @@ class DatasetResource {
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/{did}")
   def getDataset(
-      @PathParam("did") did: Integer,
-      @Auth user: SessionUser
-  ): DashboardDataset = {
+                  @PathParam("did") did: Integer,
+                  @Auth user: SessionUser
+                ): DashboardDataset = {
     val uid = user.getUid
     withTransaction(context)(ctx => getDashboardDataset(ctx, did, Some(uid)))
   }
@@ -1193,16 +1151,16 @@ class DatasetResource {
   @GET
   @Path("/public/{did}")
   def getPublicDataset(
-      @PathParam("did") did: Integer
-  ): DashboardDataset = {
+                        @PathParam("did") did: Integer
+                      ): DashboardDataset = {
     withTransaction(context)(ctx => getDashboardDataset(ctx, did, None))
   }
 
   @GET
   @Path("/file")
   def retrieveDatasetSingleFile(
-      @QueryParam("path") pathStr: String
-  ): Response = {
+                                 @QueryParam("path") pathStr: String
+                               ): Response = {
     val decodedPathStr = URLDecoder.decode(pathStr, StandardCharsets.UTF_8.name())
 
     withTransaction(context)(_ => {
@@ -1245,10 +1203,10 @@ class DatasetResource {
   }
 
   /**
-    * This method returns all owner user names of the dataset that the user has access to
-    *
-    * @return OwnerName[]
-    */
+   * This method returns all owner user names of the dataset that the user has access to
+   *
+   * @return OwnerName[]
+   */
   @GET
   @RolesAllowed(Array("REGULAR", "ADMIN"))
   @Path("/user-dataset-owners")
@@ -1265,16 +1223,16 @@ class DatasetResource {
   }
 
   /**
-    * Validates the dataset name.
-    *
-    * Rules:
-    * - Must be at least 1 character long.
-    * - Only lowercase letters, numbers, underscores, and hyphens are allowed.
-    * - Cannot start with a hyphen.
-    *
-    * @param name The dataset name to validate.
-    * @throws IllegalArgumentException if the name is invalid.
-    */
+   * Validates the dataset name.
+   *
+   * Rules:
+   * - Must be at least 1 character long.
+   * - Only lowercase letters, numbers, underscores, and hyphens are allowed.
+   * - Cannot start with a hyphen.
+   *
+   * @param name The dataset name to validate.
+   * @throws IllegalArgumentException if the name is invalid.
+   */
   private def validateDatasetName(name: String): Unit = {
     val datasetNamePattern = "^[A-Za-z0-9_-]+$".r
     if (!datasetNamePattern.matches(name)) {
@@ -1298,11 +1256,11 @@ class DatasetResource {
   }
 
   private def fetchDatasetVersionRootFileNodes(
-      ctx: DSLContext,
-      did: Integer,
-      dvid: Integer,
-      uid: Option[Integer]
-  ): DatasetVersionRootFileNodesResponse = {
+                                                ctx: DSLContext,
+                                                did: Integer,
+                                                dvid: Integer,
+                                                uid: Option[Integer]
+                                              ): DatasetVersionRootFileNodesResponse = {
     val dataset = getDashboardDataset(ctx, did, uid)
     val datasetVersion = getDatasetVersionByID(ctx, dvid)
     val datasetName = dataset.dataset.getName
@@ -1332,11 +1290,11 @@ class DatasetResource {
   }
 
   private def generatePresignedResponse(
-      encodedUrl: String,
-      repositoryName: String,
-      commitHash: String,
-      uid: Integer
-  ): Response = {
+                                         encodedUrl: String,
+                                         repositoryName: String,
+                                         commitHash: String,
+                                         uid: Integer
+                                       ): Response = {
     resolveDatasetAndPath(encodedUrl, repositoryName, commitHash, uid) match {
       case Left(errorResponse) =>
         errorResponse
@@ -1353,11 +1311,11 @@ class DatasetResource {
   }
 
   private def resolveDatasetAndPath(
-      encodedUrl: String,
-      repositoryName: String,
-      commitHash: String,
-      uid: Integer
-  ): Either[Response, (String, String, String)] = {
+                                     encodedUrl: String,
+                                     repositoryName: String,
+                                     commitHash: String,
+                                     uid: Integer
+                                   ): Either[Response, (String, String, String)] = {
     val decodedPathStr = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.name())
 
     (Option(repositoryName), Option(commitHash)) match {
