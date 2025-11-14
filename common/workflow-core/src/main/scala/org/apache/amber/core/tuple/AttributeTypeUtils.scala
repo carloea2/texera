@@ -440,35 +440,34 @@ object AttributeTypeUtils extends Serializable {
 
   /** Type-aware addition (null is identity). */
   @throws[UnsupportedOperationException]
-  def add(left: Object, right: Object, attrType: AttributeType): Object =
-    (left, right) match {
-      case (null, null) => zeroValue(attrType)
-      case (null, r)    => r
-      case (l, null)    => l
-      case (l, r) =>
-        attrType match {
-          case AttributeType.INTEGER =>
-            java.lang.Integer.valueOf(
-              l.asInstanceOf[Number].intValue() + r.asInstanceOf[Number].intValue()
-            )
-          case AttributeType.LONG =>
-            java.lang.Long.valueOf(
-              l.asInstanceOf[Number].longValue() + r.asInstanceOf[Number].longValue()
-            )
-          case AttributeType.DOUBLE =>
-            java.lang.Double.valueOf(
-              l.asInstanceOf[Number].doubleValue() + r.asInstanceOf[Number].doubleValue()
-            )
-          case AttributeType.TIMESTAMP =>
-            new Timestamp(
-              l.asInstanceOf[Timestamp].getTime + r.asInstanceOf[Timestamp].getTime
-            )
-          case _ =>
-            throw new UnsupportedOperationException(
-              s"Unsupported attribute type for addition: $attrType"
-            )
-        }
+  def add(left: Object, right: Object, attrType: AttributeType): Object = {
+    if (left == null && right == null) return zeroValue(attrType)
+    if (left == null) return right
+    if (right == null) return left
+
+    attrType match {
+      case AttributeType.INTEGER =>
+        java.lang.Integer.valueOf(
+          left.asInstanceOf[Number].intValue() + right.asInstanceOf[Number].intValue()
+        )
+      case AttributeType.LONG =>
+        java.lang.Long.valueOf(
+          left.asInstanceOf[Number].longValue() + right.asInstanceOf[Number].longValue()
+        )
+      case AttributeType.DOUBLE =>
+        java.lang.Double.valueOf(
+          left.asInstanceOf[Number].doubleValue() + right.asInstanceOf[Number].doubleValue()
+        )
+      case AttributeType.TIMESTAMP =>
+        new Timestamp(
+          left.asInstanceOf[Timestamp].getTime + right.asInstanceOf[Timestamp].getTime
+        )
+      case _ =>
+        throw new UnsupportedOperationException(
+          s"Unsupported attribute type for addition: $attrType"
+        )
     }
+  }
 
   /** Additive identity for supported numeric/timestamp types.
     * For BINARY an empty array is returned as a benign identity value.

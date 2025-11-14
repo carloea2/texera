@@ -28,7 +28,6 @@ import org.apache.amber.core.storage.model.OnDataset
 import org.apache.amber.core.storage.util.LakeFSStorageClient
 import org.apache.amber.core.storage.{DocumentFactory, FileResolver}
 import org.apache.texera.auth.SessionUser
-import org.apache.texera.config.DefaultsConfig
 import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
@@ -54,7 +53,6 @@ import org.apache.texera.service.util.S3StorageClient.{
   MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
   MINIMUM_NUM_OF_MULTIPART_S3_PART
 }
-import org.jooq.impl.DSL
 import org.jooq.{DSLContext, EnumType}
 
 import java.io.{InputStream, OutputStream}
@@ -179,26 +177,6 @@ class DatasetResource {
   private val ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE = "User has no access to this dataset"
   private val ERR_DATASET_VERSION_NOT_FOUND_MESSAGE = "The version of the dataset not found"
   private val EXPIRATION_MINUTES = 5
-
-  private val SingleFileUploadMaxSizeKey = "single_file_upload_max_size_mib"
-
-  def singleFileUploadMaxSizeMib: Int = {
-    val valueOpt = Option(
-      context
-        .select(DSL.field("value", classOf[String]))
-        .from(DSL.table("site_settings"))
-        .where(DSL.field("key", classOf[String]).eq(SingleFileUploadMaxSizeKey))
-        .fetchOne(0, classOf[String])
-    )
-
-    valueOpt
-      .flatMap(v => scala.util.Try(v.toInt).toOption)
-      .getOrElse(DefaultsConfig.allDefaults(SingleFileUploadMaxSizeKey).toInt)
-  }
-
-  /** Maximum allowed single-file upload size in bytes (MiB → bytes). */
-  private def maxSingleFileUploadBytes: Long =
-    singleFileUploadMaxSizeMib.toLong * 1024L * 1024L
 
   /**
     * Helper function to get the dataset from DB with additional information including user access privilege and owner email
@@ -423,6 +401,7 @@ class DatasetResource {
             e
           )
       }
+
       // delete the directory on S3
       if (
         S3StorageClient.directoryExists(StorageConfig.lakefsBucketName, dataset.getRepositoryName)
@@ -525,7 +504,6 @@ class DatasetResource {
         var buffered = 0
         var partNumber = 1
         val completedParts = ListBuffer[(Int, String)]()
-        var totalBytesRead = 0L
 
         @inline def flush(): Unit = {
           if (buffered == 0) return
@@ -541,13 +519,6 @@ class DatasetResource {
         var read = fileStream.read(buf, buffered, buf.length - buffered)
         while (read != -1) {
           buffered += read
-          totalBytesRead += read
-          if (totalBytesRead > maxSingleFileUploadBytes) {
-            throw new WebApplicationException(
-              s"File exceeds maximum allowed size of ${singleFileUploadMaxSizeMib} MiB.",
-              Response.Status.REQUEST_ENTITY_TOO_LARGE
-            )
-          }
           if (buffered == buf.length) flush() // buffer full
           read = fileStream.read(buf, buffered, buf.length - buffered)
         }
@@ -766,20 +737,7 @@ class DatasetResource {
             partsList,
             physicalAddress
           )
-          val sizeBytes = Option(objectStats.getSizeBytes).map(_.longValue()).getOrElse(0L)
-          if (sizeBytes > maxSingleFileUploadBytes) {
-            // Roll back staged object to previous committed state (or remove if new).
-            try {
-              LakeFSStorageClient.resetObjectUploadOrDeletion(repositoryName, filePath)
-            } catch {
-              case _: Exception => // best-effort cleanup
-            }
-            throw new WebApplicationException(
-              s"File exceeds maximum allowed size of " +
-                s"${singleFileUploadMaxSizeMib} MiB. Upload has been rolled back.",
-              Response.Status.REQUEST_ENTITY_TOO_LARGE
-            )
-          }
+
           Response
             .ok(
               Map(
