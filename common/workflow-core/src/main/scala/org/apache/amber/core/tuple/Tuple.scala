@@ -123,18 +123,6 @@ object Tuple {
     Tuple(schema, coercedFields)
   }
 
-  /** Build a Tuple without coercion.
-    * Uses the builder’s runtime type checks; values must already match the schema’s field classes.
-    * Missing attributes (or unknown attribute names) will cause an error.
-    */
-  def ofStrict(schema: Schema, values: (String, Any)*): Tuple =
-    values
-      .foldLeft(Tuple.builder(schema)) {
-        case (builder, (attrName, value)) =>
-          builder.add(schema.getAttribute(attrName), value)
-      }
-      .build()
-
   /**
     * Validates that the provided attributes match the provided fields in type and order.
     *
