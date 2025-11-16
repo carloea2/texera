@@ -413,7 +413,7 @@ object AttributeTypeUtils extends Serializable {
             java.lang.Double.compare(
               left.asInstanceOf[Number].doubleValue(),
               right.asInstanceOf[Number].doubleValue()
-            ) // handles ±Inf/NaN per JDK
+            ) // -Infinity < ... < -0.0 < +0.0 < ... < +Infinity < NaN
           case AttributeType.BOOLEAN =>
             java.lang.Boolean.compare(
               left.asInstanceOf[Boolean],
@@ -471,7 +471,7 @@ object AttributeTypeUtils extends Serializable {
     }
 
   /** Additive identity for supported numeric/timestamp types.
-    * For BINARY an empty array is returned as a benign identity value.
+    * For BINARY an empty array is returned as an identity value.
     */
   @throws[UnsupportedOperationException]
   def zeroValue(attrType: AttributeType): Object =
@@ -487,7 +487,7 @@ object AttributeTypeUtils extends Serializable {
         )
     }
 
-  /** Maximum sentinel. */
+  /** Returns the maximum possible value for a given attribute type. */
   @throws[UnsupportedOperationException]
   def maxValue(attrType: AttributeType): Object =
     attrType match {
@@ -501,7 +501,7 @@ object AttributeTypeUtils extends Serializable {
         )
     }
 
-  /** Minimum sentinel (note Double.MIN_VALUE is > 0).
+  /** Returns the minimum possible value for a given attribute type. (note Double.MIN_VALUE is > 0).
     * For BINARY under lexicographic order, the empty array is the global minimum.
     */
   @throws[UnsupportedOperationException]
