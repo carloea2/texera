@@ -20,7 +20,7 @@
 package org.apache.amber.operator.sortPartitions
 
 import org.apache.amber.core.executor.OperatorExecutor
-import org.apache.amber.core.tuple.{AttributeTypeUtils, Tuple, TupleLike}
+import org.apache.amber.core.tuple.{AttributeType, Tuple, TupleLike}
 import org.apache.amber.util.JSONUtils.objectMapper
 
 import scala.collection.mutable.ArrayBuffer
@@ -47,11 +47,18 @@ class SortPartitionsOpExec(descString: String) extends OperatorExecutor {
 
   override def onFinish(port: Int): Iterator[TupleLike] = sortTuples()
 
-  private def compareTuples(t1: Tuple, t2: Tuple): Boolean =
-    AttributeTypeUtils.compare(
-      t1.getField[Any](t1.getSchema.getIndex(desc.sortAttributeName)),
-      t2.getField[Any](t2.getSchema.getIndex(desc.sortAttributeName)),
-      t1.getSchema.getAttribute(desc.sortAttributeName).getType
-    ) < 0
-
+  private def compareTuples(t1: Tuple, t2: Tuple): Boolean = {
+    val attributeType = t1.getSchema.getAttribute(desc.sortAttributeName).getType
+    val attributeIndex = t1.getSchema.getIndex(desc.sortAttributeName)
+    attributeType match {
+      case AttributeType.LONG =>
+        t1.getField[Long](attributeIndex) < t2.getField[Long](attributeIndex)
+      case AttributeType.INTEGER =>
+        t1.getField[Int](attributeIndex) < t2.getField[Int](attributeIndex)
+      case AttributeType.DOUBLE =>
+        t1.getField[Double](attributeIndex) < t2.getField[Double](attributeIndex)
+      case _ =>
+        true // unsupported type
+    }
+  }
 }
