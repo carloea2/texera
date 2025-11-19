@@ -442,9 +442,9 @@ object AttributeTypeUtils extends Serializable {
   @throws[UnsupportedOperationException]
   def add(left: Object, right: Object, attrType: AttributeType): Object =
     (left, right) match {
-      case (null, null) => zeroValue(attrType)
-      case (null, right)    => right
-      case (left, null)    => left
+      case (null, null)  => zeroValue(attrType)
+      case (null, right) => right
+      case (left, null)  => left
       case (left, right) =>
         attrType match {
           case AttributeType.INTEGER =>
