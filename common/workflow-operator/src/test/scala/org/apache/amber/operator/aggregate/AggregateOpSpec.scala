@@ -32,11 +32,11 @@ class AggregateOpSpec extends AnyFunSuite {
       attributeName: String,
       resultName: String
   ): AggregationOperation = {
-    val op = new AggregationOperation()
-    op.aggFunction = fn
-    op.attribute = attributeName
-    op.resultAttribute = resultName
-    op
+    val operation = new AggregationOperation()
+    operation.aggFunction = fn
+    operation.attribute = attributeName
+    operation.resultAttribute = resultName
+    operation
   }
 
   private def makeSchema(fields: (String, AttributeType)*): Schema =
@@ -46,24 +46,24 @@ class AggregateOpSpec extends AnyFunSuite {
     Tuple(schema, values.toArray)
 
   test("getAggregationAttribute keeps original type for SUM") {
-    val op = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
-    val attr = op.getAggregationAttribute(AttributeType.DOUBLE)
+    val operation = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
+    val attr = operation.getAggregationAttribute(AttributeType.DOUBLE)
 
     assert(attr.getName == "total_amount")
     assert(attr.getType == AttributeType.DOUBLE)
   }
 
   test("getAggregationAttribute maps COUNT result to INTEGER regardless of input type") {
-    val op = makeAggregationOp(AggregationFunction.COUNT, "quantity", "row_count")
-    val attr = op.getAggregationAttribute(AttributeType.LONG)
+    val operation = makeAggregationOp(AggregationFunction.COUNT, "quantity", "row_count")
+    val attr = operation.getAggregationAttribute(AttributeType.LONG)
 
     assert(attr.getName == "row_count")
     assert(attr.getType == AttributeType.INTEGER)
   }
 
   test("getAggregationAttribute maps CONCAT result type to STRING") {
-    val op = makeAggregationOp(AggregationFunction.CONCAT, "tag", "all_tags")
-    val attr = op.getAggregationAttribute(AttributeType.INTEGER)
+    val operation = makeAggregationOp(AggregationFunction.CONCAT, "tag", "all_tags")
+    val attr = operation.getAggregationAttribute(AttributeType.INTEGER)
 
     assert(attr.getName == "all_tags")
     assert(attr.getType == AttributeType.STRING)
@@ -75,17 +75,17 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("SUM aggregation over INTEGER column adds values correctly") {
     val schema = makeSchema("amount" -> AttributeType.INTEGER)
-    val t1 = makeTuple(schema, 5)
-    val t2 = makeTuple(schema, 7)
-    val t3 = makeTuple(schema, 3)
+    val tuple1 = makeTuple(schema, 5)
+    val tuple2 = makeTuple(schema, 7)
+    val tuple3 = makeTuple(schema, 3)
 
-    val op = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
-    val agg = op.getAggFunc(AttributeType.INTEGER)
+    val operation = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
+    val agg = operation.getAggFunc(AttributeType.INTEGER)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val result = agg.finalAgg(partial).asInstanceOf[Number].intValue()
     assert(result == 15)
@@ -93,15 +93,15 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("SUM aggregation over DOUBLE column keeps fractional part") {
     val schema = makeSchema("score" -> AttributeType.DOUBLE)
-    val t1 = makeTuple(schema, 1.25)
-    val t2 = makeTuple(schema, 2.75)
+    val tuple1 = makeTuple(schema, 1.25)
+    val tuple2 = makeTuple(schema, 2.75)
 
-    val op = makeAggregationOp(AggregationFunction.SUM, "score", "total_score")
-    val agg = op.getAggFunc(AttributeType.DOUBLE)
+    val operation = makeAggregationOp(AggregationFunction.SUM, "score", "total_score")
+    val agg = operation.getAggFunc(AttributeType.DOUBLE)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
 
     val result = agg.finalAgg(partial).asInstanceOf[java.lang.Double].doubleValue()
     assert(math.abs(result - 4.0) < 1e-6)
@@ -109,17 +109,17 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("COUNT aggregation with attribute == null counts all rows") {
     val schema = makeSchema("points" -> AttributeType.INTEGER)
-    val t1 = makeTuple(schema, 10)
-    val t2 = makeTuple(schema, null)
-    val t3 = makeTuple(schema, 20)
+    val tuple1 = makeTuple(schema, 10)
+    val tuple2 = makeTuple(schema, null)
+    val tuple3 = makeTuple(schema, 20)
 
-    val op = makeAggregationOp(AggregationFunction.COUNT, null, "row_count")
-    val agg = op.getAggFunc(AttributeType.INTEGER)
+    val operation = makeAggregationOp(AggregationFunction.COUNT, null, "row_count")
+    val agg = operation.getAggFunc(AttributeType.INTEGER)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val result = agg.finalAgg(partial).asInstanceOf[Number].intValue()
     assert(result == 3)
@@ -127,17 +127,17 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("COUNT aggregation with attribute set only counts non-null values") {
     val schema = makeSchema("points" -> AttributeType.INTEGER)
-    val t1 = makeTuple(schema, 10)
-    val t2 = makeTuple(schema, null)
-    val t3 = makeTuple(schema, 5)
+    val tuple1 = makeTuple(schema, 10)
+    val tuple2 = makeTuple(schema, null)
+    val tuple3 = makeTuple(schema, 5)
 
-    val op = makeAggregationOp(AggregationFunction.COUNT, "points", "non_null_points")
-    val agg = op.getAggFunc(AttributeType.INTEGER)
+    val operation = makeAggregationOp(AggregationFunction.COUNT, "points", "non_null_points")
+    val agg = operation.getAggFunc(AttributeType.INTEGER)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val result = agg.finalAgg(partial).asInstanceOf[Number].intValue()
     assert(result == 2)
@@ -145,34 +145,30 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("CONCAT aggregation concatenates string representations with commas") {
     val schema = makeSchema("tag" -> AttributeType.STRING)
-    val t1 = makeTuple(schema, "red")
-    val t2 = makeTuple(schema, null)
-    val t3 = makeTuple(schema, "blue")
+    val tuple1 = makeTuple(schema, "red")
+    val tuple2 = makeTuple(schema, null)
+    val tuple3 = makeTuple(schema, "blue")
 
-    val op = makeAggregationOp(AggregationFunction.CONCAT, "tag", "all_tags")
-    val agg = op.getAggFunc(AttributeType.STRING)
+    val operation = makeAggregationOp(AggregationFunction.CONCAT, "tag", "all_tags")
+    val agg = operation.getAggFunc(AttributeType.STRING)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
-    // concatAgg semantics:
-    // "" + "red" -> "red"
-    // "red" + "," + "" -> "red,"
-    // "red," + "," + "blue" -> "red,,blue"
     val result = agg.finalAgg(partial).asInstanceOf[String]
     assert(result == "red,,blue")
   }
 
   test("MIN aggregation finds smallest INTEGER and returns null when given no values") {
     val schema = makeSchema("temperature" -> AttributeType.INTEGER)
-    val t1 = makeTuple(schema, 10)
-    val t2 = makeTuple(schema, -2)
-    val t3 = makeTuple(schema, 5)
+    val tuple1 = makeTuple(schema, 10)
+    val tuple2 = makeTuple(schema, -2)
+    val tuple3 = makeTuple(schema, 5)
 
-    val op = makeAggregationOp(AggregationFunction.MIN, "temperature", "min_temp")
-    val agg = op.getAggFunc(AttributeType.INTEGER)
+    val operation = makeAggregationOp(AggregationFunction.MIN, "temperature", "min_temp")
+    val agg = operation.getAggFunc(AttributeType.INTEGER)
 
     // Empty case: never iterate, just finalize init
     val emptyPartial = agg.init()
@@ -181,9 +177,9 @@ class AggregateOpSpec extends AnyFunSuite {
 
     // Non-empty case
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val result = agg.finalAgg(partial).asInstanceOf[Number].intValue()
     assert(result == -2)
@@ -191,17 +187,17 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("MAX aggregation finds largest LONG value") {
     val schema = makeSchema("latency" -> AttributeType.LONG)
-    val t1 = makeTuple(schema, 100L)
-    val t2 = makeTuple(schema, 50L)
-    val t3 = makeTuple(schema, 250L)
+    val tuple1 = makeTuple(schema, 100L)
+    val tuple2 = makeTuple(schema, 50L)
+    val tuple3 = makeTuple(schema, 250L)
 
-    val op = makeAggregationOp(AggregationFunction.MAX, "latency", "max_latency")
-    val agg = op.getAggFunc(AttributeType.LONG)
+    val operation = makeAggregationOp(AggregationFunction.MAX, "latency", "max_latency")
+    val agg = operation.getAggFunc(AttributeType.LONG)
 
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val result = agg.finalAgg(partial).asInstanceOf[java.lang.Long].longValue()
     assert(result == 250L)
@@ -209,18 +205,18 @@ class AggregateOpSpec extends AnyFunSuite {
 
   test("AVERAGE aggregation ignores nulls and returns null when all values are null") {
     val schema = makeSchema("price" -> AttributeType.DOUBLE)
-    val t1 = makeTuple(schema, 10.0)
-    val t2 = makeTuple(schema, null)
-    val t3 = makeTuple(schema, 20.0)
+    val tuple1 = makeTuple(schema, 10.0)
+    val tuple2 = makeTuple(schema, null)
+    val tuple3 = makeTuple(schema, 20.0)
 
-    val op = makeAggregationOp(AggregationFunction.AVERAGE, "price", "avg_price")
-    val agg = op.getAggFunc(AttributeType.DOUBLE)
+    val operation = makeAggregationOp(AggregationFunction.AVERAGE, "price", "avg_price")
+    val agg = operation.getAggFunc(AttributeType.DOUBLE)
 
     // Mixed null and non-null
     var partial = agg.init()
-    partial = agg.iterate(partial, t1)
-    partial = agg.iterate(partial, t2)
-    partial = agg.iterate(partial, t3)
+    partial = agg.iterate(partial, tuple1)
+    partial = agg.iterate(partial, tuple2)
+    partial = agg.iterate(partial, tuple3)
 
     val avg = agg.finalAgg(partial).asInstanceOf[java.lang.Double].doubleValue()
     assert(math.abs(avg - 15.0) < 1e-6)
@@ -238,8 +234,8 @@ class AggregateOpSpec extends AnyFunSuite {
   // ---------------------------------------------------------------------------
 
   test("getFinal rewrites COUNT into SUM over the intermediate result attribute") {
-    val op = makeAggregationOp(AggregationFunction.COUNT, "price", "price_count")
-    val finalOp = op.getFinal
+    val operation = makeAggregationOp(AggregationFunction.COUNT, "price", "price_count")
+    val finalOp = operation.getFinal
 
     assert(finalOp.aggFunction == AggregationFunction.SUM)
     assert(finalOp.attribute == "price_count")
@@ -247,8 +243,8 @@ class AggregateOpSpec extends AnyFunSuite {
   }
 
   test("getFinal keeps non-COUNT aggregation function and rewires attribute to resultAttribute") {
-    val op = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
-    val finalOp = op.getFinal
+    val operation = makeAggregationOp(AggregationFunction.SUM, "amount", "total_amount")
+    val finalOp = operation.getFinal
 
     assert(finalOp.aggFunction == AggregationFunction.SUM)
     assert(finalOp.attribute == "total_amount")
@@ -266,9 +262,9 @@ class AggregateOpSpec extends AnyFunSuite {
       "sales" -> AttributeType.INTEGER
     )
 
-    val t1 = makeTuple(schema, "NY", 10)
-    val t2 = makeTuple(schema, "SF", 20)
-    val t3 = makeTuple(schema, "NY", 5)
+    val tuple1 = makeTuple(schema, "NY", 10)
+    val tuple2 = makeTuple(schema, "SF", 20)
+    val tuple3 = makeTuple(schema, "NY", 5)
 
     val desc = new AggregateOpDesc()
     val sumAgg = makeAggregationOp(AggregationFunction.SUM, "sales", "total_sales")
@@ -279,9 +275,9 @@ class AggregateOpSpec extends AnyFunSuite {
 
     val exec = new AggregateOpExec(descJson)
     exec.open()
-    exec.processTuple(t1, 0)
-    exec.processTuple(t2, 0)
-    exec.processTuple(t3, 0)
+    exec.processTuple(tuple1, 0)
+    exec.processTuple(tuple2, 0)
+    exec.processTuple(tuple3, 0)
 
     val results = exec.onFinish(0).toList
 
@@ -305,9 +301,9 @@ class AggregateOpSpec extends AnyFunSuite {
       "revenue" -> AttributeType.INTEGER
     )
 
-    val t1 = makeTuple(schema, "west", 100)
-    val t2 = makeTuple(schema, "east", 200)
-    val t3 = makeTuple(schema, "west", 50)
+    val tuple1 = makeTuple(schema, "west", 100)
+    val tuple2 = makeTuple(schema, "east", 200)
+    val tuple3 = makeTuple(schema, "west", 50)
 
     val desc = new AggregateOpDesc()
     val sumAgg = makeAggregationOp(AggregationFunction.SUM, "revenue", "total_revenue")
@@ -319,9 +315,9 @@ class AggregateOpSpec extends AnyFunSuite {
 
     val exec = new AggregateOpExec(descJson)
     exec.open()
-    exec.processTuple(t1, 0)
-    exec.processTuple(t2, 0)
-    exec.processTuple(t3, 0)
+    exec.processTuple(tuple1, 0)
+    exec.processTuple(tuple2, 0)
+    exec.processTuple(tuple3, 0)
 
     val results = exec.onFinish(0).toList
     assert(results.size == 1)

@@ -47,11 +47,11 @@ class SortPartitionsOpExec(descString: String) extends OperatorExecutor {
 
   override def onFinish(port: Int): Iterator[TupleLike] = sortTuples()
 
-  private def compareTuples(t1: Tuple, t2: Tuple): Boolean =
+  private def compareTuples(tuple1: Tuple, tuple2: Tuple): Boolean =
     AttributeTypeUtils.compare(
-      t1.getField[Any](t1.getSchema.getIndex(desc.sortAttributeName)),
-      t2.getField[Any](t2.getSchema.getIndex(desc.sortAttributeName)),
-      t1.getSchema.getAttribute(desc.sortAttributeName).getType
+      tuple1.getField[Any](tuple1.getSchema.getIndex(desc.sortAttributeName)),
+      tuple2.getField[Any](tuple2.getSchema.getIndex(desc.sortAttributeName)),
+      tuple1.getSchema.getAttribute(desc.sortAttributeName).getType
     ) < 0
 
 }

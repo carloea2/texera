@@ -443,25 +443,25 @@ object AttributeTypeUtils extends Serializable {
   def add(left: Object, right: Object, attrType: AttributeType): Object =
     (left, right) match {
       case (null, null) => zeroValue(attrType)
-      case (null, r)    => r
-      case (l, null)    => l
-      case (l, r) =>
+      case (null, right)    => right
+      case (left, null)    => left
+      case (left, right) =>
         attrType match {
           case AttributeType.INTEGER =>
             java.lang.Integer.valueOf(
-              l.asInstanceOf[Number].intValue() + r.asInstanceOf[Number].intValue()
+              left.asInstanceOf[Number].intValue() + right.asInstanceOf[Number].intValue()
             )
           case AttributeType.LONG =>
             java.lang.Long.valueOf(
-              l.asInstanceOf[Number].longValue() + r.asInstanceOf[Number].longValue()
+              left.asInstanceOf[Number].longValue() + right.asInstanceOf[Number].longValue()
             )
           case AttributeType.DOUBLE =>
             java.lang.Double.valueOf(
-              l.asInstanceOf[Number].doubleValue() + r.asInstanceOf[Number].doubleValue()
+              left.asInstanceOf[Number].doubleValue() + right.asInstanceOf[Number].doubleValue()
             )
           case AttributeType.TIMESTAMP =>
             new Timestamp(
-              l.asInstanceOf[Timestamp].getTime + r.asInstanceOf[Timestamp].getTime
+              left.asInstanceOf[Timestamp].getTime + right.asInstanceOf[Timestamp].getTime
             )
           case _ =>
             throw new UnsupportedOperationException(
