@@ -560,10 +560,11 @@ class DatasetResource {
         }
 
         var read = fileStream.read(buf, buffered, buf.length - buffered)
+        val tmpMaxSize = maxSingleFileUploadBytes
         while (read != -1) {
           buffered += read
           totalBytesRead += read
-          if (totalBytesRead > maxSingleFileUploadBytes) {
+          if (totalBytesRead > tmpMaxSize) {
             throw new WebApplicationException(
               s"File exceeds maximum allowed size of ${singleFileUploadMaxSizeMib} MiB.",
               Response.Status.REQUEST_ENTITY_TOO_LARGE
@@ -871,11 +872,12 @@ class DatasetResource {
     val outStream = conn.getOutputStream
     val buffer = new Array[Byte](8 * 1024)
     var bytesRead = partStream.read(buffer)
+    val tmpMaxSize = maxSingleFileUploadBytes
 
     try {
       while (bytesRead != -1) {
         val newTotal = session.totalBytes.addAndGet(bytesRead.toLong)
-        if (newTotal > maxSingleFileUploadBytes) {
+        if (newTotal > tmpMaxSize) {
           session.status = "aborted"
           DatasetResource.uploadSessions.remove(uploadToken)
 
