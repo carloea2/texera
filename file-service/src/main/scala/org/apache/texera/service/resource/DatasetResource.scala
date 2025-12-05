@@ -63,7 +63,9 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.{ZipEntry, ZipOutputStream}
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -171,6 +173,25 @@ object DatasetResource {
       fileNodes: List[DatasetFileNode],
       size: Long
   )
+
+  /** Case class to hold state of an ongoing multipart upload session */
+  private case class SessionState(
+      token: String,
+      repoName: String,
+      did: Int,
+      uid: Int,
+      uploadId: String,
+      filePath: String,
+      physicalAddress: String,
+      presignedUrls: Array[String],
+      var totalBytes: AtomicLong = new AtomicLong(0L),
+      @volatile var status: String = "ongoing",
+      var parts: ListBuffer[(Int, String)] = ListBuffer.empty
+  )
+
+  /** In-memory map of active upload sessions (uploadToken -> SessionState) */
+  private val uploadSessions = TrieMap[String, SessionState]()
+
 }
 
 @Produces(Array(MediaType.APPLICATION_JSON, "image/jpeg", "application/pdf"))
@@ -669,12 +690,11 @@ class DatasetResource {
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
       @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("uploadId") uploadId: Optional[String],
       @QueryParam("numParts") numParts: Optional[Integer],
       payload: Map[
         String,
         Any
-      ], // Expecting {"parts": [...], "physicalAddress": "s3://bucket/path"}
+      ], // Expecting {"uploadToken": "..."} for abort and finish
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -702,77 +722,66 @@ class DatasetResource {
             throw new BadRequestException("numParts is required for initialization")
           )
 
-          val presignedResponse = LakeFSStorageClient.initiatePresignedMultipartUploads(
+          val presign = LakeFSStorageClient.initiatePresignedMultipartUploads(
             repositoryName,
             filePath,
             numPartsValue
           )
+          val uploadIdStr = presign.getUploadId
+          val presignedUrlsArr = presign.getPresignedUrls.asScala.toArray.map(_.toString)
+          val physicalAddr = presign.getPhysicalAddress
+
+          val token = java.util.UUID.randomUUID().toString
+
+          DatasetResource.uploadSessions.put(
+            token,
+            SessionState(
+              token = token,
+              repoName = dataset.getRepositoryName,
+              did = dataset.getDid,
+              uid = uid,
+              uploadId = uploadIdStr,
+              filePath = filePath,
+              physicalAddress = physicalAddr,
+              presignedUrls = presignedUrlsArr
+            )
+          )
+
           Response
             .ok(
               Map(
-                "uploadId" -> presignedResponse.getUploadId,
-                "presignedUrls" -> presignedResponse.getPresignedUrls,
-                "physicalAddress" -> presignedResponse.getPhysicalAddress
+                "uploadToken" -> token
               )
             )
             .build()
 
         case "finish" =>
-          val uploadIdValue = uploadId.toScala.getOrElse(
-            throw new BadRequestException("uploadId is required for completion")
+          val tokenValue = payload.get("uploadToken").map(_.asInstanceOf[String]).getOrElse {
+            throw new BadRequestException("uploadToken is required for completion")
+          }
+          val session = DatasetResource.uploadSessions.getOrElse(
+            tokenValue, {
+              throw new NotFoundException("Upload session not found or already finalized")
+            }
           )
 
-          // Extract parts from the payload
-          val partsList = payload.get("parts") match {
-            case Some(rawList: List[_]) =>
-              try {
-                rawList.map {
-                  case part: Map[_, _] =>
-                    val partMap = part.asInstanceOf[Map[String, Any]]
-                    val partNumber = partMap.get("PartNumber") match {
-                      case Some(i: Int)    => i
-                      case Some(s: String) => s.toInt
-                      case _               => throw new BadRequestException("Invalid or missing PartNumber")
-                    }
-                    val eTag = partMap.get("ETag") match {
-                      case Some(s: String) => s
-                      case _               => throw new BadRequestException("Invalid or missing ETag")
-                    }
-                    (partNumber, eTag)
+          if (user.getUid != session.uid)
+            throw new ForbiddenException("User has no access to this upload session")
 
-                  case _ =>
-                    throw new BadRequestException("Each part must be a Map[String, Any]")
-                }
-              } catch {
-                case e: NumberFormatException =>
-                  throw new BadRequestException("PartNumber must be an integer", e)
-              }
-
-            case _ =>
-              throw new BadRequestException("Missing or invalid 'parts' list in payload")
-          }
-
-          // Extract physical address from payload
-          val physicalAddress = payload.get("physicalAddress") match {
-            case Some(address: String) => address
-            case _                     => throw new BadRequestException("Missing physicalAddress in payload")
-          }
-
-          // Complete the multipart upload with parts and physical address
+          DatasetResource.uploadSessions.remove(tokenValue)
           val objectStats = LakeFSStorageClient.completePresignedMultipartUploads(
             repositoryName,
-            filePath,
-            uploadIdValue,
-            partsList,
-            physicalAddress
+            session.filePath,
+            session.uploadId,
+            session.parts.toList,
+            session.physicalAddress
           )
           val sizeBytes = Option(objectStats.getSizeBytes).map(_.longValue()).getOrElse(0L)
           if (sizeBytes > maxSingleFileUploadBytes) {
-            // Roll back staged object to previous committed state (or remove if new).
             try {
               LakeFSStorageClient.resetObjectUploadOrDeletion(repositoryName, filePath)
             } catch {
-              case _: Exception => // best-effort cleanup
+              case _: Exception =>
             }
             throw new WebApplicationException(
               s"File exceeds maximum allowed size of " +
@@ -790,30 +799,132 @@ class DatasetResource {
             .build()
 
         case "abort" =>
-          val uploadIdValue = uploadId.toScala.getOrElse(
-            throw new BadRequestException("uploadId is required for abortion")
+          val tokenValue = payload
+            .get("uploadToken")
+            .map(_.asInstanceOf[String])
+            .getOrElse {
+              throw new BadRequestException("uploadToken is required for abortion")
+            }
+          val session = DatasetResource.uploadSessions.getOrElse(
+            tokenValue, {
+              throw new NotFoundException("Upload session not found or already finished")
+            }
           )
 
-          // Extract physical address from payload
-          val physicalAddress = payload.get("physicalAddress") match {
-            case Some(address: String) => address
-            case _                     => throw new BadRequestException("Missing physicalAddress in payload")
+          if (user.getUid != session.uid) {
+            throw new ForbiddenException("User has no access to this upload session")
           }
 
-          // Abort the multipart upload
+          DatasetResource.uploadSessions.remove(tokenValue)
+
           LakeFSStorageClient.abortPresignedMultipartUploads(
-            repositoryName,
-            filePath,
-            uploadIdValue,
-            physicalAddress
+            session.repoName,
+            session.filePath,
+            session.uploadId,
+            session.physicalAddress
           )
-
           Response.ok(Map("message" -> "Multipart upload aborted successfully")).build()
-
         case _ =>
           throw new BadRequestException("Invalid type parameter. Use 'init', 'finish', or 'abort'.")
       }
     }
+  }
+
+  @POST
+  @RolesAllowed(Array("REGULAR", "ADMIN"))
+  @Path("/multipart-upload/part")
+  @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
+  def uploadPart(
+      @QueryParam("token") uploadToken: String,
+      @QueryParam("partNumber") partNumber: Int,
+      partStream: InputStream,
+      @Context headers: HttpHeaders,
+      @Auth user: SessionUser
+  ): Response = {
+    val sessionOpt = DatasetResource.uploadSessions.get(uploadToken)
+    if (sessionOpt.isEmpty) {
+      throw new NotFoundException("Upload session not found or expired")
+    }
+    val session = sessionOpt.get
+
+    if (user.getUid != session.uid)
+      throw new ForbiddenException("User has no access to this upload session")
+
+    if (session.status == "aborted")
+      throw new WebApplicationException("Upload session already aborted", Response.Status.GONE)
+
+    if (partNumber < 1 || partNumber > session.presignedUrls.length)
+      throw new BadRequestException("Invalid partNumber")
+
+    val presignedUrl = session.presignedUrls(partNumber - 1)
+
+    val conn = new URL(presignedUrl).openConnection().asInstanceOf[HttpURLConnection]
+    conn.setDoOutput(true)
+    conn.setRequestMethod("PUT")
+
+    // Don't trust Content-Length for enforcement, we only use it to hint streaming mode if present
+    Option(headers.getHeaderString(HttpHeaders.CONTENT_LENGTH))
+      .flatMap(s => scala.util.Try(s.toLong).toOption)
+      .foreach(len => conn.setFixedLengthStreamingMode(len))
+    conn.setRequestProperty("Content-Type", "application/octet-stream")
+
+    val outStream = conn.getOutputStream
+    val buffer = new Array[Byte](8 * 1024)
+    var bytesRead = partStream.read(buffer)
+
+    try {
+      while (bytesRead != -1) {
+        val newTotal = session.totalBytes.addAndGet(bytesRead.toLong)
+        if (newTotal > maxSingleFileUploadBytes) {
+          session.status = "aborted"
+          DatasetResource.uploadSessions.remove(uploadToken)
+
+          // Close streams before aborting
+          try outStream.close()
+          catch { case _: Exception => () }
+          try partStream.close()
+          catch { case _: Exception => () }
+
+          LakeFSStorageClient.abortPresignedMultipartUploads(
+            session.repoName,
+            session.filePath,
+            session.uploadId,
+            session.physicalAddress
+          )
+
+          throw new WebApplicationException(
+            s"File exceeds maximum allowed size of ${singleFileUploadMaxSizeMib} MiB. " +
+              "Upload has been rolled back.",
+            Response.Status.REQUEST_ENTITY_TOO_LARGE
+          )
+        }
+        outStream.write(buffer, 0, bytesRead)
+        bytesRead = partStream.read(buffer)
+      }
+    } finally {
+      try outStream.close()
+      catch { case _: Exception => () }
+      try partStream.close()
+      catch { case _: Exception => () }
+    }
+
+    val code = conn.getResponseCode
+    if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_CREATED) {
+      conn.disconnect()
+      throw new RuntimeException(s"Part $partNumber upload failed (HTTP $code)")
+    }
+
+    val eTag = Option(conn.getHeaderField("ETag")).map(_.replace("\"", "")).getOrElse("")
+    conn.disconnect()
+
+    session.synchronized {
+      if (session.status == "aborted") {
+        throw new WebApplicationException("Upload session already aborted", Response.Status.GONE)
+      }
+      session.parts += ((partNumber, eTag))
+    }
+
+    Response.ok().build()
   }
 
   @POST
