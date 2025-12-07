@@ -350,7 +350,6 @@ export class DatasetService {
                       try {
                         xhr.abort();
                       } catch {}
-                      partProgress.delete(partNumber);
                     };
                   });
                 },

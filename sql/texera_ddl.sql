@@ -58,6 +58,8 @@ DROP TABLE IF EXISTS workflow_version CASCADE;
 DROP TABLE IF EXISTS project CASCADE;
 DROP TABLE IF EXISTS workflow_of_project CASCADE;
 DROP TABLE IF EXISTS workflow_executions CASCADE;
+DROP TABLE IF EXISTS dataset_upload_session_part CASCADE;
+DROP TABLE IF EXISTS dataset_upload_session CASCADE;
 DROP TABLE IF EXISTS dataset CASCADE;
 DROP TABLE IF EXISTS dataset_user_access CASCADE;
 DROP TABLE IF EXISTS dataset_version CASCADE;
@@ -79,11 +81,13 @@ DROP TABLE IF EXISTS computing_unit_user_access CASCADE;
 DROP TYPE IF EXISTS user_role_enum CASCADE;
 DROP TYPE IF EXISTS privilege_enum CASCADE;
 DROP TYPE IF EXISTS action_enum CASCADE;
+DROP TYPE IF EXISTS upload_part_status_enum CASCADE;
 
 CREATE TYPE user_role_enum AS ENUM ('INACTIVE', 'RESTRICTED', 'REGULAR', 'ADMIN');
 CREATE TYPE action_enum AS ENUM ('like', 'unlike', 'view', 'clone');
 CREATE TYPE privilege_enum AS ENUM ('NONE', 'READ', 'WRITE');
 CREATE TYPE workflow_computing_unit_type_enum AS ENUM ('local', 'kubernetes');
+CREATE TYPE upload_part_status_enum AS ENUM ('PENDING', 'UPLOADING', 'COMPLETED');
 
 -- ============================================
 -- 5. Create tables
@@ -273,6 +277,37 @@ CREATE TABLE IF NOT EXISTS dataset_version
     creation_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE
     );
+
+-- dataset_upload_session: tracks one multipart upload session for a single file
+CREATE TABLE IF NOT EXISTS dataset_upload_session
+(
+    upload_token       UUID PRIMARY KEY,
+    did                 INT NOT NULL,
+    uid                 INT NOT NULL,
+    file_path           TEXT NOT NULL,
+    upload_id           VARCHAR(256) NOT NULL,
+    physical_address    TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE,
+    FOREIGN KEY (uid) REFERENCES "user"(uid) ON DELETE CASCADE
+);
+
+-- dataset_upload_session_part: one row per (session, partNumber)
+CREATE TABLE IF NOT EXISTS dataset_upload_session_part
+(
+    upload_token   UUID NOT NULL,
+    part_number     INT NOT NULL,
+    status          upload_part_status_enum NOT NULL DEFAULT 'PENDING',
+    etag            VARCHAR(256),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    presigned_url  TEXT NOT NULL,
+
+    PRIMARY KEY (upload_token, part_number),
+    FOREIGN KEY (upload_token) REFERENCES dataset_upload_session(upload_token) ON DELETE CASCADE
+);
 
 -- operator_executions (modified to match MySQL: no separate primary key; added console_messages_uri)
 CREATE TABLE IF NOT EXISTS operator_executions
