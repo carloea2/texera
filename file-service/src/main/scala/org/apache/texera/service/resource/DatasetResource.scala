@@ -1426,7 +1426,7 @@ class DatasetResource {
           (r.getPartNumber.intValue(), etag)
         }
 
-      // TODO: later enforce contiguity & total size here.
+      // TODO: later enforce max total size here.
 
       val objectStats = LakeFSStorageClient.completePresignedMultipartUploads(
         dataset.getRepositoryName,
