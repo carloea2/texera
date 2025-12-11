@@ -636,14 +636,14 @@ class DatasetResource {
   @Path("/multipart-upload")
   @Consumes(Array(MediaType.APPLICATION_JSON))
   def multipartUpload(
-                       @QueryParam("type") operationType: String,
-                       @QueryParam("ownerEmail") ownerEmail: String,
-                       @QueryParam("datasetName") datasetName: String,
-                       @QueryParam("filePath") encodedUrl: String,
-                       @QueryParam("numParts") numParts: Optional[Integer],
-                       payload: Map[String, Any],
-                       @Auth user: SessionUser
-                     ): Response = {
+      @QueryParam("type") operationType: String,
+      @QueryParam("ownerEmail") ownerEmail: String,
+      @QueryParam("datasetName") datasetName: String,
+      @QueryParam("filePath") encodedUrl: String,
+      @QueryParam("numParts") numParts: Optional[Integer],
+      payload: Map[String, Any],
+      @Auth user: SessionUser
+  ): Response = {
     val uid = user.getUid
     operationType.toLowerCase match {
       case "init"   => initMultipartUpload(ownerEmail, datasetName, encodedUrl, numParts, uid)
@@ -659,12 +659,12 @@ class DatasetResource {
   @Path("/multipart-upload/part")
   @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
   def uploadPart(
-                  @QueryParam("token") uploadToken: String,
-                  @QueryParam("partNumber") partNumber: Int,
-                  partStream: InputStream,
-                  @Context headers: HttpHeaders,
-                  @Auth user: SessionUser
-                ): Response = {
+      @QueryParam("token") uploadToken: String,
+      @QueryParam("partNumber") partNumber: Int,
+      partStream: InputStream,
+      @Context headers: HttpHeaders,
+      @Auth user: SessionUser
+  ): Response = {
 
     if (uploadToken == null || uploadToken.isEmpty)
       throw new BadRequestException("token is required")
@@ -680,17 +680,16 @@ class DatasetResource {
     val contentLength = Option(contentLenHeader).map(_.toLong)
 
     S3StorageClient.uploadPart(
-      bucket      = bucket,
-      key         = key,
-      uploadId    = uploadId,
-      partNumber  = partNumber,
+      bucket = bucket,
+      key = key,
+      uploadId = uploadId,
+      partNumber = partNumber,
       inputStream = partStream,
       contentLength = contentLength
     )
 
     Response.ok().build()
   }
-
 
   @POST
   @RolesAllowed(Array("REGULAR", "ADMIN"))
@@ -1292,34 +1291,32 @@ class DatasetResource {
   }
   // === Multipart helpers (stateless, token-based) ===
   /**
-   * Stateless uploadToken:
-   *   inner format: uploadId|did|uid|filePathB64
-   *   outer: base64-url of that string
-   */
+    * Stateless uploadToken:
+    *   inner format: uploadId|did|uid|filePathB64
+    *   outer: base64-url of that string
+    */
   private def buildUploadToken(
-                                did: Int,
-                                uid: Int,
-                                filePath: String,
-                                uploadId: String
-                              ): String = {
-    val filePathB64 = java.util.Base64
-      .getUrlEncoder
+      did: Int,
+      uid: Int,
+      filePath: String,
+      uploadId: String
+  ): String = {
+    val filePathB64 = java.util.Base64.getUrlEncoder
       .withoutPadding()
       .encodeToString(filePath.getBytes(java.nio.charset.StandardCharsets.UTF_8))
 
     val raw = s"$uploadId|$did|$uid|$filePathB64"
 
-    java.util.Base64
-      .getUrlEncoder
+    java.util.Base64.getUrlEncoder
       .withoutPadding()
       .encodeToString(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8))
   }
   private case class DecodedUploadToken(
-                                         uploadId: String,
-                                         did: Int,
-                                         uid: Int,
-                                         filePath: String
-                                       )
+      uploadId: String,
+      did: Int,
+      uid: Int,
+      filePath: String
+  )
 
   private def parseUploadToken(token: String): DecodedUploadToken = {
     val raw = new String(
@@ -1333,8 +1330,7 @@ class DatasetResource {
       throw new BadRequestException("Invalid uploadToken format")
 
     val filePath = new String(
-      java.util.Base64
-        .getUrlDecoder
+      java.util.Base64.getUrlDecoder
         .decode(parts(3)),
       java.nio.charset.StandardCharsets.UTF_8
     )
@@ -1348,13 +1344,13 @@ class DatasetResource {
   }
 
   /**
-   * Given a decoded token and current authenticated user, rediscover the
-   * correct (dataset, key, uploadId) in S3/MinIO using uploadId directly.
-   */
+    * Given a decoded token and current authenticated user, rediscover the
+    * correct (dataset, key, uploadId) in S3/MinIO using uploadId directly.
+    */
   private def findMultipartUploadForToken(
-                                           token: DecodedUploadToken,
-                                           currentUid: Int
-                                         ): (Dataset, String, String) = {
+      token: DecodedUploadToken,
+      currentUid: Int
+  ): (Dataset, String, String) = {
     if (token.uid != currentUid) {
       throw new ForbiddenException("User has no access to this upload")
     }
@@ -1390,20 +1386,20 @@ class DatasetResource {
   }
 
   /**
-   * Initialize a multipart upload for a given dataset + logical file path.
-   *
-   * Keeps the HTTP API the same but:
-   *  - ignores numParts
-   *  - does not use any presigned URLs from lakeFS
-   *  - returns a stateless uploadToken instead of DB-backed session
-   */
+    * Initialize a multipart upload for a given dataset + logical file path.
+    *
+    * Keeps the HTTP API the same but:
+    *  - ignores numParts
+    *  - does not use any presigned URLs from lakeFS
+    *  - returns a stateless uploadToken instead of DB-backed session
+    */
   private def initMultipartUpload(
-                                   ownerEmail: String,
-                                   datasetName: String,
-                                   encodedUrl: String,
-                                   numParts: Optional[Integer],
-                                   uid: Int
-                                 ): Response = {
+      ownerEmail: String,
+      datasetName: String,
+      encodedUrl: String,
+      numParts: Optional[Integer],
+      uid: Int
+  ): Response = {
     withTransaction(context) { ctx =>
       val dataset = ctx
         .select(DATASET.fields: _*)
@@ -1442,15 +1438,15 @@ class DatasetResource {
   }
 
   /**
-   * Complete a multipart upload:
-   *  - token -> dataset + (key, uploadId) via S3 multipart listing
-   *  - list parts from S3 (ListParts)
-   *  - call lakeFS completePresignMultipartUpload with physicalAddress
-   */
+    * Complete a multipart upload:
+    *  - token -> dataset + (key, uploadId) via S3 multipart listing
+    *  - list parts from S3 (ListParts)
+    *  - call lakeFS completePresignMultipartUpload with physicalAddress
+    */
   private def finishMultipartUpload(
-                                     payload: Map[String, Any],
-                                     uid: Int
-                                   ): Response = {
+      payload: Map[String, Any],
+      uid: Int
+  ): Response = {
     val tokenValueStr = payload
       .get("uploadToken")
       .map(_.asInstanceOf[String])
@@ -1486,7 +1482,7 @@ class DatasetResource {
     Response
       .ok(
         Map(
-          "message"  -> "Multipart upload completed successfully",
+          "message" -> "Multipart upload completed successfully",
           "filePath" -> objectStats.getPath
         )
       )
@@ -1494,15 +1490,15 @@ class DatasetResource {
   }
 
   /**
-   * Abort a multipart upload:
-   *  - token -> dataset + (key, uploadId)
-   *  - abort multipart in S3
-   *  - abort in lakeFS
-   */
+    * Abort a multipart upload:
+    *  - token -> dataset + (key, uploadId)
+    *  - abort multipart in S3
+    *  - abort in lakeFS
+    */
   private def abortMultipartUpload(
-                                    payload: Map[String, Any],
-                                    uid: Int
-                                  ): Response = {
+      payload: Map[String, Any],
+      uid: Int
+  ): Response = {
     val tokenValueStr = payload
       .get("uploadToken")
       .map(_.asInstanceOf[String])

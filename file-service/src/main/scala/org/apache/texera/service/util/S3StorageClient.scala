@@ -30,10 +30,10 @@ import java.io.InputStream
 import scala.jdk.CollectionConverters._
 
 /**
- * S3Storage provides an abstraction for S3-compatible storage (e.g., MinIO).
- * - Uses credentials and endpoint from StorageConfig.
- * - Supports object upload, download, listing, and deletion.
- */
+  * S3Storage provides an abstraction for S3-compatible storage (e.g., MinIO).
+  * - Uses credentials and endpoint from StorageConfig.
+  * - Supports object upload, download, listing, and deletion.
+  */
 object S3StorageClient {
   val MINIMUM_NUM_OF_MULTIPART_S3_PART: Long = 5L * 1024 * 1024 // 5 MiB
   val MAXIMUM_NUM_OF_MULTIPART_S3_PARTS = 10_000
@@ -60,12 +60,12 @@ object S3StorageClient {
   }
 
   /**
-   * Checks if a directory (prefix) exists within an S3 bucket.
-   *
-   * @param bucketName The bucket name.
-   * @param directoryPrefix The directory (prefix) to check (must end with `/`).
-   * @return True if the directory contains at least one object, False otherwise.
-   */
+    * Checks if a directory (prefix) exists within an S3 bucket.
+    *
+    * @param bucketName The bucket name.
+    * @param directoryPrefix The directory (prefix) to check (must end with `/`).
+    * @return True if the directory contains at least one object, False otherwise.
+    */
   def directoryExists(bucketName: String, directoryPrefix: String): Boolean = {
     // Ensure the prefix ends with `/` to correctly match directories
     val normalizedPrefix =
@@ -83,10 +83,10 @@ object S3StorageClient {
   }
 
   /**
-   * Creates an S3 bucket if it does not already exist.
-   *
-   * @param bucketName The name of the bucket to create.
-   */
+    * Creates an S3 bucket if it does not already exist.
+    *
+    * @param bucketName The name of the bucket to create.
+    */
   def createBucketIfNotExist(bucketName: String): Unit = {
     try {
       // Check if the bucket already exists
@@ -101,11 +101,11 @@ object S3StorageClient {
   }
 
   /**
-   * Deletes a directory (all objects under a given prefix) from a bucket.
-   *
-   * @param bucketName Target S3/MinIO bucket.
-   * @param directoryPrefix The directory to delete (must end with `/`).
-   */
+    * Deletes a directory (all objects under a given prefix) from a bucket.
+    *
+    * @param bucketName Target S3/MinIO bucket.
+    * @param directoryPrefix The directory to delete (must end with `/`).
+    */
   def deleteDirectory(bucketName: String, directoryPrefix: String): Unit = {
     // Ensure the directory prefix ends with `/` to avoid accidental deletions
     val prefix = if (directoryPrefix.endsWith("/")) directoryPrefix else directoryPrefix + "/"
@@ -143,13 +143,13 @@ object S3StorageClient {
     }
   }
   def uploadPart(
-                  bucket: String,
-                  key: String,
-                  uploadId: String,
-                  partNumber: Int,
-                  inputStream: InputStream,
-                  contentLength: Option[Long]
-                ): Unit = {
+      bucket: String,
+      key: String,
+      uploadId: String,
+      partNumber: Int,
+      inputStream: InputStream,
+      contentLength: Option[Long]
+  ): Unit = {
     val body: RequestBody = contentLength match {
       case Some(len) => RequestBody.fromInputStream(inputStream, len)
       case None =>
@@ -169,13 +169,13 @@ object S3StorageClient {
   }
 
   /**
-   * List *all* active multipart uploads in a bucket, optionally under a prefix.
-   * Handles pagination (up to 1000 per page).
-   */
+    * List *all* active multipart uploads in a bucket, optionally under a prefix.
+    * Handles pagination (up to 1000 per page).
+    */
   def listAllMultipartUploads(
-                               bucket: String,
-                               prefix: Option[String]
-                             ): Seq[MultipartUploadInfo] = {
+      bucket: String,
+      prefix: Option[String]
+  ): Seq[MultipartUploadInfo] = {
     val acc = scala.collection.mutable.ArrayBuffer.empty[MultipartUploadInfo]
     var keyMarker: String = null
     var uploadIdMarker: String = null
@@ -200,14 +200,14 @@ object S3StorageClient {
   }
 
   /**
-   * List *all* parts for a given multipart upload (bucket + key + uploadId).
-   * Handles pagination (up to 1000 parts per page).
-   */
+    * List *all* parts for a given multipart upload (bucket + key + uploadId).
+    * Handles pagination (up to 1000 parts per page).
+    */
   def listAllParts(
-                    bucket: String,
-                    key: String,
-                    uploadId: String
-                  ): Seq[PartInfo] = {
+      bucket: String,
+      key: String,
+      uploadId: String
+  ): Seq[PartInfo] = {
     val acc = scala.collection.mutable.ArrayBuffer.empty[PartInfo]
     var partNumberMarker: Integer = null
     var truncated = true
