@@ -29,7 +29,7 @@ import javax.crypto.spec.{GCMParameterSpec, SecretKeySpec}
   * Generic AES-GCM crypto utilities.
   *
   * Usage:
-  *   val crypto = CryptoService("super-long-random-secret")
+  *   val crypto = CryptoService("secret")
   *   val token  = crypto.encrypt("hello")
   *   val plain  = crypto.decrypt(token)
   */
@@ -44,18 +44,14 @@ final class CryptoService private (private val key: SecretKey) {
 
 object CryptoService {
   private val Algorithm = "AES/GCM/NoPadding"
-  private val IvLength = 12 // 96-bit IV
-  private val TagLength = 128 // bits
+  private val IvLength = 12
+  private val TagLength = 128
 
   private val random = new SecureRandom()
 
   /** Build an instance from a String secret. */
   def apply(secret: String): CryptoService =
     new CryptoService(deriveKeyFromSecret(secret))
-
-  /** Build an instance from an existing SecretKey. */
-  def fromKey(key: SecretKey): CryptoService =
-    new CryptoService(key)
 
   /** Derive a 256-bit AES key from a String. */
   def deriveKeyFromSecret(secret: String): SecretKey = {
@@ -97,16 +93,5 @@ object CryptoService {
 
     val plainBytes = cipher.doFinal(cipherText)
     new String(plainBytes, StandardCharsets.UTF_8)
-  }
-
-  /** Convenience helpers if you *really* want one-liners. */
-  def encryptWithSecret(plain: String, secret: String): String = {
-    val key = deriveKeyFromSecret(secret)
-    encrypt(plain, key)
-  }
-
-  def decryptWithSecret(token: String, secret: String): String = {
-    val key = deriveKeyFromSecret(secret)
-    decrypt(token, key)
   }
 }
