@@ -146,7 +146,7 @@ export class DatasetService {
    * Backend flow:
    *   POST /dataset/multipart-upload?type=init&ownerEmail=...&datasetName=...&filePath=...&numParts=N
    *     -> { uploadToken }
-   *   POST /dataset/multipart-upload/part?token=<uploadToken>&partNumber=<n>  (body: raw chunk)
+   *   POST /dataset/multipart-upload/part?uploadToken=<uploadToken>&partNumber=<n>  (body: raw chunk)
    *   POST /dataset/multipart-upload?type=finish (body: { uploadToken })
    *   POST /dataset/multipart-upload?type=abort  (body: { uploadToken })
    */
@@ -337,7 +337,7 @@ export class DatasetService {
 
                     const partUrl =
                       `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload/part` +
-                      `?token=${encodeURIComponent(uploadToken)}&partNumber=${partNumber}`;
+                      `?uploadToken=${encodeURIComponent(uploadToken)}&partNumber=${partNumber}`;
 
                     xhr.open("POST", partUrl);
                     xhr.setRequestHeader("Content-Type", "application/octet-stream");

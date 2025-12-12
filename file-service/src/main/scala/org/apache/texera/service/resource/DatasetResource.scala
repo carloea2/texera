@@ -27,7 +27,8 @@ import org.apache.texera.amber.config.StorageConfig
 import org.apache.texera.amber.core.storage.model.OnDataset
 import org.apache.texera.amber.core.storage.util.LakeFSStorageClient
 import org.apache.texera.amber.core.storage.{DocumentFactory, FileResolver}
-import org.apache.texera.auth.SessionUser
+import org.apache.texera.auth.UploadTokenParser.UploadTokenPayload
+import org.apache.texera.auth.{SessionUser, UploadTokenParser}
 import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
@@ -659,7 +660,7 @@ class DatasetResource {
   @Path("/multipart-upload/part")
   @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
   def uploadPart(
-      @QueryParam("token") uploadToken: String,
+      @QueryParam("uploadToken") uploadToken: String,
       @QueryParam("partNumber") partNumber: Int,
       partStream: InputStream,
       @Context headers: HttpHeaders,
@@ -672,9 +673,9 @@ class DatasetResource {
     if (partNumber < 1)
       throw new BadRequestException("partNumber must be >= 1")
 
-    val decoded = parseUploadToken(uploadToken)
-    val (_, key, uploadId) = findMultipartUploadForToken(decoded, user.getUid)
-    val bucket = StorageConfig.lakefsBucketName
+    val decoded = UploadTokenParser.decode(uploadToken)
+    val (dataset, bucket, key, uploadId, physicalAddress) =
+      resolveMultipartUploadContextFromToken(decoded, user.getUid)
 
     val contentLenHeader = headers.getHeaderString(HttpHeaders.CONTENT_LENGTH)
     val contentLength = Option(contentLenHeader).map(_.toLong)
@@ -1289,68 +1290,17 @@ class DatasetResource {
         Right(response)
     }
   }
+
   // === Multipart helpers (stateless, token-based) ===
   /**
-    * Stateless uploadToken:
-    *   inner format: uploadId|did|uid|filePathB64
-    *   outer: base64-url of that string
+    * Given a decoded token and current authenticated user, rediscover:
+    *   (dataset, bucket, key, uploadId, physicalAddress)
+    * using only the data encrypted into the token.
     */
-  private def buildUploadToken(
-      did: Int,
-      uid: Int,
-      filePath: String,
-      uploadId: String
-  ): String = {
-    val filePathB64 = java.util.Base64.getUrlEncoder
-      .withoutPadding()
-      .encodeToString(filePath.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-
-    val raw = s"$uploadId|$did|$uid|$filePathB64"
-
-    java.util.Base64.getUrlEncoder
-      .withoutPadding()
-      .encodeToString(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-  }
-  private case class DecodedUploadToken(
-      uploadId: String,
-      did: Int,
-      uid: Int,
-      filePath: String
-  )
-
-  private def parseUploadToken(token: String): DecodedUploadToken = {
-    val raw = new String(
-      java.util.Base64.getUrlDecoder.decode(token),
-      java.nio.charset.StandardCharsets.UTF_8
-    )
-
-    // uploadId|did|uid|filePathB64
-    val parts = raw.split("\\|", 4)
-    if (parts.length != 4)
-      throw new BadRequestException("Invalid uploadToken format")
-
-    val filePath = new String(
-      java.util.Base64.getUrlDecoder
-        .decode(parts(3)),
-      java.nio.charset.StandardCharsets.UTF_8
-    )
-
-    DecodedUploadToken(
-      uploadId = parts(0),
-      did = parts(1).toInt,
-      uid = parts(2).toInt,
-      filePath = filePath
-    )
-  }
-
-  /**
-    * Given a decoded token and current authenticated user, rediscover the
-    * correct (dataset, key, uploadId) in S3/MinIO using uploadId directly.
-    */
-  private def findMultipartUploadForToken(
-      token: DecodedUploadToken,
+  private def resolveMultipartUploadContextFromToken(
+      token: UploadTokenPayload,
       currentUid: Int
-  ): (Dataset, String, String) = {
+  ): (Dataset, String, String, String, String) = {
     if (token.uid != currentUid) {
       throw new ForbiddenException("User has no access to this upload")
     }
@@ -1364,25 +1314,11 @@ class DatasetResource {
       ds
     }
 
-    val bucket = StorageConfig.lakefsBucketName
+    // 2) parse physical address into bucket + key
+    val (bucket, key) = LakeFSStorageClient.parsePhysicalAddress(token.physicalAddress)
 
-    // 2) List all multipart uploads under this repo prefix and match by uploadId
-    val uploads = S3StorageClient.listAllMultipartUploads(bucket, None)
-
-    val candidates = uploads.filter(_.uploadId == token.uploadId)
-
-    if (candidates.isEmpty) {
-      throw new NotFoundException("No active multipart upload found for token")
-    }
-    if (candidates.size > 1) {
-      throw new WebApplicationException(
-        "Ambiguous multipart upload for token",
-        Response.Status.CONFLICT
-      )
-    }
-
-    val u = candidates.head
-    (dataset, u.key, u.uploadId)
+    // dataset, bucket, key, uploadId, physicalAddress
+    (dataset, bucket, key, token.uploadId, token.physicalAddress)
   }
 
   /**
@@ -1391,7 +1327,7 @@ class DatasetResource {
     * Keeps the HTTP API the same but:
     *  - ignores numParts
     *  - does not use any presigned URLs from lakeFS
-    *  - returns a stateless uploadToken instead of DB-backed session
+    *  - returns a stateless, encrypted uploadToken
     */
   private def initMultipartUpload(
       ownerEmail: String,
@@ -1423,23 +1359,25 @@ class DatasetResource {
         LakeFSStorageClient.initiatePresignedMultipartUploads(repositoryName, filePath, 1)
 
       val uploadIdStr = presign.getUploadId
+      val physicalAddress = presign.getPhysicalAddress
 
-      val token =
-        buildUploadToken(dataset.getDid.intValue(), uid, filePath, uploadIdStr)
+      val payload = UploadTokenParser.buildPayload(
+        did = dataset.getDid.intValue(),
+        uid = uid,
+        filePath = filePath,
+        uploadId = uploadIdStr,
+        physicalAddress = physicalAddress
+      )
 
-      Response
-        .ok(
-          Map(
-            "uploadToken" -> token
-          )
-        )
-        .build()
+      val token = UploadTokenParser.encode(payload)
+
+      Response.ok(Map("uploadToken" -> token)).build()
     }
   }
 
   /**
     * Complete a multipart upload:
-    *  - token -> dataset + (key, uploadId) via S3 multipart listing
+    *  - token -> dataset + bucket/key/uploadId/physicalAddress
     *  - list parts from S3 (ListParts)
     *  - call lakeFS completePresignMultipartUpload with physicalAddress
     */
@@ -1454,10 +1392,10 @@ class DatasetResource {
         throw new BadRequestException("uploadToken is required for completion")
       }
 
-    val decoded = parseUploadToken(tokenValueStr)
-    val (dataset, key, uploadId) = findMultipartUploadForToken(decoded, uid)
+    val decoded = UploadTokenParser.decode(tokenValueStr)
+    val (dataset, bucket, key, uploadId, physicalAddress) =
+      resolveMultipartUploadContextFromToken(decoded, uid)
 
-    val bucket = StorageConfig.lakefsBucketName
     val partInfos =
       S3StorageClient.listAllParts(bucket, key, uploadId)
 
@@ -1467,9 +1405,6 @@ class DatasetResource {
 
     val partsList: List[(Int, String)] =
       partInfos.map(pi => (pi.partNumber, pi.eTag)).toList
-
-    val physicalAddress =
-      s"${StorageConfig.lakefsBlockStorageType}://${bucket}/${key}"
 
     val objectStats = LakeFSStorageClient.completePresignedMultipartUploads(
       dataset.getRepositoryName,
@@ -1491,7 +1426,7 @@ class DatasetResource {
 
   /**
     * Abort a multipart upload:
-    *  - token -> dataset + (key, uploadId)
+    *  - token -> dataset + bucket/key/uploadId/physicalAddress
     *  - abort multipart in S3
     *  - abort in lakeFS
     */
@@ -1506,13 +1441,9 @@ class DatasetResource {
         throw new BadRequestException("uploadToken is required for abortion")
       }
 
-    val decoded = parseUploadToken(tokenValueStr)
-    val (dataset, key, uploadId) = findMultipartUploadForToken(decoded, uid)
-
-    val bucket = StorageConfig.lakefsBucketName
-
-    val physicalAddress =
-      s"${StorageConfig.lakefsBlockStorageType}://${bucket}/${key}"
+    val decoded = UploadTokenParser.decode(tokenValueStr)
+    val (dataset, _, _, uploadId, physicalAddress) =
+      resolveMultipartUploadContextFromToken(decoded, uid)
 
     LakeFSStorageClient.abortPresignedMultipartUploads(
       dataset.getRepositoryName,

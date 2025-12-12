@@ -293,37 +293,6 @@ object S3StorageClient {
   }
 
   /**
-    * List *all* active multipart uploads in a bucket, optionally under a prefix.
-    * Handles pagination (up to 1000 per page).
-    */
-  def listAllMultipartUploads(
-      bucket: String,
-      prefix: Option[String]
-  ): Seq[MultipartUploadInfo] = {
-    val acc = scala.collection.mutable.ArrayBuffer.empty[MultipartUploadInfo]
-    var keyMarker: String = null
-    var uploadIdMarker: String = null
-    var truncated = true
-
-    while (truncated) {
-      val builder = ListMultipartUploadsRequest.builder().bucket(bucket)
-      prefix.foreach(builder.prefix)
-      if (keyMarker != null) builder.keyMarker(keyMarker)
-      if (uploadIdMarker != null) builder.uploadIdMarker(uploadIdMarker)
-
-      val resp = s3Client.listMultipartUploads(builder.build())
-      resp.uploads().asScala.foreach { u =>
-        acc += MultipartUploadInfo(u.key(), u.uploadId())
-      }
-      truncated = resp.isTruncated
-      keyMarker = resp.nextKeyMarker()
-      uploadIdMarker = resp.nextUploadIdMarker()
-    }
-
-    acc.toSeq
-  }
-
-  /**
     * List *all* parts for a given multipart upload (bucket + key + uploadId).
     * Handles pagination (up to 1000 parts per page).
     */
