@@ -48,18 +48,12 @@ object AuthConfig {
 
   /**
     * Secret used for encrypting upload tokens
-    * Config path: auth.upload-token.secret
-    * If set to "random", a fresh 256-bit hex secret is generated per JVM.
+    * Config path: auth.upload-token.256-bit-secret
     */
   def uploadTokenSecretKey: String =
     synchronized {
       if (uploadTokenSecret == null) {
-        val configured = conf.getString("auth.upload-token.256-bit-secret")
-        uploadTokenSecret =
-          if (configured.equalsIgnoreCase("random"))
-            getRandomHexString
-          else
-            configured
+        conf.getString("auth.upload-token.256-bit-secret")
       }
       uploadTokenSecret
     }
