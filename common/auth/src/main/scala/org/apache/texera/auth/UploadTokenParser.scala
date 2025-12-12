@@ -52,7 +52,6 @@ object UploadTokenParser {
   private val Encoder = Base64.getUrlEncoder.withoutPadding()
   private val Decoder = Base64.getUrlDecoder
 
-  // One crypto instance for this JVM, using the configured upload-token secret
   private val crypto: CryptoService =
     CryptoService(AuthConfig.uploadTokenSecretKey)
 
