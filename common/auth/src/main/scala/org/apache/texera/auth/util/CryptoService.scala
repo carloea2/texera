@@ -60,22 +60,59 @@ object CryptoService {
     new SecretKeySpec(keyBytes, "AES")
   }
 
-  /** Low-level encrypt with explicit key. */
+  /** Low-level encrypt with explicit key.
+   *
+   * Algorithm: AES-GCM (AEAD).
+   * - Provides confidentiality (encryption) and integrity/authenticity (GCM tag).
+   * - Output format (before Base64): [ IV || (ciphertext || tag) ]
+   *   In JCE, `doFinal()` in GCM returns ciphertext with the authentication tag appended.
+   */
   def encrypt(plain: String, key: SecretKey): String = {
+
+    // Allocate a fresh IV/nonce for this encryption.
+    // In GCM the IV must be unique per message under the same key; uniqueness prevents nonce-reuse attacks (keystream reuse and possible tag forgery).
     val iv = new Array[Byte](IvLength)
+
+    // Fill IV with cryptographically secure random bytes.
+    // Random IVs make identical plaintexts encrypt to different outputs and make collisions extremely unlikely.
     random.nextBytes(iv)
 
+    // Create a Cipher for the requested transformation (e.g., "AES/GCM/NoPadding").
+    // GCM is the mode; "NoPadding" is standard for GCM in JCE.
     val cipher = Cipher.getInstance(Algorithm)
+
+    // Initialize cipher for ENCRYPT using:
+    // - `key`: the AES key material
+    // - `GCMParameterSpec(TagLength, iv)`: supplies the IV and the desired authentication tag length.
+    //   TagLength is in bits (commonly 128 bits = 16 bytes).
+    // The tag is what later allows decryption to detect tampering.
     cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TagLength, iv))
 
-    val cipherText = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8))
+    // Convert the plaintext string to bytes in a deterministic encoding (UTF-8).
+    // Crypto APIs operate on bytes; UTF-8 avoids platform-dependent encodings.
+    val plainBytes = plain.getBytes(StandardCharsets.UTF_8)
 
+    // Encrypt and compute the authentication tag.
+    // For AES-GCM in JCE, `doFinal()` returns: ciphertext || tag (tag appended at the end).
+    // Any modification of the ciphertext/tag will be detected during decrypt via tag verification.
+    val cipherText = cipher.doFinal(plainBytes)
+
+    // Build the final payload to return.
+    // We must include the IV with the output because decryption needs the same IV to recompute the keystream
+    // and verify the authentication tag. The IV is not secret, only required to be unique.
     val combined = new Array[Byte](iv.length + cipherText.length)
+
+    // Prefix the payload with the IV so the decrypt() routine can read it back.
     System.arraycopy(iv, 0, combined, 0, iv.length)
+
+    // Append ciphertext+tag after the IV.
     System.arraycopy(cipherText, 0, combined, iv.length, cipherText.length)
 
+    // Encode binary payload as URL-safe Base64 text (no '+', '/', or '=' padding).
+    // This makes it safe to store/transport in URLs, cookies, headers, etc.
     Base64.getUrlEncoder.withoutPadding().encodeToString(combined)
   }
+
 
   /** Low-level decrypt with explicit key. */
   def decrypt(token: String, key: SecretKey): String = {
