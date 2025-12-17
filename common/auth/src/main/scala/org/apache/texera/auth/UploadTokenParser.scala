@@ -16,121 +16,58 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 package org.apache.texera.auth
 
 import org.apache.texera.auth.util.CryptoService
 import org.apache.texera.config.AuthConfig
 
-import java.nio.charset.StandardCharsets
-import java.util.Base64
+import com.fasterxml.jackson.annotation.{JsonCreator, JsonIgnoreProperties, JsonProperty}
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 
-/**
-  * Upload-token codec.
-  *
-  * Stateless, self-contained encrypted token that encodes:
-  *   - uploadId
-  *   - did (dataset id)
-  *   - uid (user id)
-  *   - filePath
-  *   - physicalAddress (e.g. s3://bucket/key)
-  *
-  * Wire format (before AES-GCM encryption):
-  *   v1|uploadId|did|uid|filePathB64|physicalB64
-  */
 object UploadTokenParser {
 
-  final case class UploadTokenPayload(
+  val Version: String = "v1"
+
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  final case class UploadTokenPayload @JsonCreator(mode = JsonCreator.Mode.PROPERTIES) (
+      @JsonProperty(value = "version", required = true)
+      version: String,
+      @JsonProperty(value = "uploadId", required = true)
       uploadId: String,
+      @JsonProperty(value = "did", required = true)
       did: Int,
+      @JsonProperty(value = "uid", required = true)
       uid: Int,
+      @JsonProperty(value = "filePath", required = true)
       filePath: String,
+      @JsonProperty(value = "physicalAddress", required = true)
       physicalAddress: String
   )
 
-  private val Version = "v1"
-  private val Encoder = Base64.getUrlEncoder.withoutPadding()
-  private val Decoder = Base64.getUrlDecoder
-
-  private val crypto: CryptoService =
+  private lazy val cryptoService: CryptoService =
     CryptoService(AuthConfig.uploadTokenSecretKey)
 
-  /**
-    * Build a payload (no expiration).
-    */
-  def buildPayload(
-      did: Int,
-      uid: Int,
-      filePath: String,
-      uploadId: String,
-      physicalAddress: String
-  ): UploadTokenPayload =
-    UploadTokenPayload(
-      uploadId = uploadId,
-      did = did,
-      uid = uid,
-      filePath = filePath,
-      physicalAddress = physicalAddress
-    )
+  private lazy val objectMapper: ObjectMapper =
+    new ObjectMapper()
+      .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-  /**
-    * Encode a Payload into an encrypted, URL-safe token string.
-    */
   def encode(payload: UploadTokenPayload): String = {
-    val filePathB64 = Encoder.encodeToString(
-      payload.filePath.getBytes(StandardCharsets.UTF_8)
-    )
-    val physicalB64 = Encoder.encodeToString(
-      payload.physicalAddress.getBytes(StandardCharsets.UTF_8)
-    )
+    val node = objectMapper.createObjectNode()
+    node.put("version", Version)
+    node.put("uploadId", payload.uploadId)
+    node.put("did", payload.did)
+    node.put("uid", payload.uid)
+    node.put("filePath", payload.filePath)
+    node.put("physicalAddress", payload.physicalAddress)
 
-    val raw =
-      s"$Version|${payload.uploadId}|${payload.did}|${payload.uid}|$filePathB64|$physicalB64"
-
-    crypto.encrypt(raw)
+    val rawJson = objectMapper.writeValueAsString(node)
+    cryptoService.encrypt(rawJson)
   }
 
-  /**
-    * Decode and decrypt a token string into a Payload.
-    *
-    * Throws IllegalArgumentException on:
-    *   - invalid ciphertext
-    *   - malformed structure
-    *   - unsupported version
-    */
   def decode(token: String): UploadTokenPayload = {
-    val raw =
-      try crypto.decrypt(token)
-      catch {
-        case e: Exception =>
-          throw new IllegalArgumentException("Invalid upload token", e)
-      }
+    val decryptedJson = cryptoService.decrypt(token)
+    val decodedPayload = objectMapper.readValue(decryptedJson, classOf[UploadTokenPayload])
 
-    val parts = raw.split("\\|", 7) // expect: v1 + 5 fields = 6 parts
-    if (parts.length != 6 || parts(0) != Version) {
-      throw new IllegalArgumentException("Unsupported or malformed upload token")
-    }
-
-    val uploadId = parts(1)
-    val did = parts(2).toInt
-    val uid = parts(3).toInt
-
-    val filePath = new String(
-      Decoder.decode(parts(4)),
-      StandardCharsets.UTF_8
-    )
-
-    val physicalAddress = new String(
-      Decoder.decode(parts(5)),
-      StandardCharsets.UTF_8
-    )
-
-    UploadTokenPayload(
-      uploadId = uploadId,
-      did = did,
-      uid = uid,
-      filePath = filePath,
-      physicalAddress = physicalAddress
-    )
+    decodedPayload
   }
 }

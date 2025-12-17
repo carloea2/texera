@@ -53,7 +53,7 @@ object AuthConfig {
   def uploadTokenSecretKey: String =
     synchronized {
       if (uploadTokenSecret == null) {
-        conf.getString("auth.upload-token.256-bit-secret")
+        uploadTokenSecret = conf.getString("auth.upload-token.256-bit-secret")
       }
       uploadTokenSecret
     }

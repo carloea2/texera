@@ -61,12 +61,12 @@ object CryptoService {
   }
 
   /** Low-level encrypt with explicit key.
-   *
-   * Algorithm: AES-GCM (AEAD).
-   * - Provides confidentiality (encryption) and integrity/authenticity (GCM tag).
-   * - Output format (before Base64): [ IV || (ciphertext || tag) ]
-   *   In JCE, `doFinal()` in GCM returns ciphertext with the authentication tag appended.
-   */
+    *
+    * Algorithm: AES-GCM (AEAD).
+    * - Provides confidentiality (encryption) and integrity/authenticity (GCM tag).
+    * - Output format (before Base64): [ IV || (ciphertext || tag) ]
+    *   In JCE, `doFinal()` in GCM returns ciphertext with the authentication tag appended.
+    */
   def encrypt(plain: String, key: SecretKey): String = {
 
     // Allocate a fresh IV/nonce for this encryption.
@@ -112,7 +112,6 @@ object CryptoService {
     // This makes it safe to store/transport in URLs, cookies, headers, etc.
     Base64.getUrlEncoder.withoutPadding().encodeToString(combined)
   }
-
 
   /** Low-level decrypt with explicit key. */
   def decrypt(token: String, key: SecretKey): String = {

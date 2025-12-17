@@ -1361,11 +1361,12 @@ class DatasetResource {
       val uploadIdStr = presign.getUploadId
       val physicalAddress = presign.getPhysicalAddress
 
-      val payload = UploadTokenParser.buildPayload(
+      val payload = UploadTokenParser.UploadTokenPayload(
+        version = UploadTokenParser.Version,
+        uploadId = uploadIdStr,
         did = dataset.getDid.intValue(),
         uid = uid,
         filePath = filePath,
-        uploadId = uploadIdStr,
         physicalAddress = physicalAddress
       )
 
