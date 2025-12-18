@@ -58,6 +58,7 @@ DROP TABLE IF EXISTS workflow_version CASCADE;
 DROP TABLE IF EXISTS project CASCADE;
 DROP TABLE IF EXISTS workflow_of_project CASCADE;
 DROP TABLE IF EXISTS workflow_executions CASCADE;
+DROP TABLE IF EXISTS dataset_upload_session CASCADE;
 DROP TABLE IF EXISTS dataset CASCADE;
 DROP TABLE IF EXISTS dataset_user_access CASCADE;
 DROP TABLE IF EXISTS dataset_version CASCADE;
@@ -274,6 +275,19 @@ CREATE TABLE IF NOT EXISTS dataset_version
     FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE
     );
 
+CREATE TABLE IF NOT EXISTS dataset_upload_session
+(
+    did              INT NOT NULL,
+    uid              INT NOT NULL,
+    file_path        TEXT NOT NULL,
+    upload_id        VARCHAR(256) NOT NULL,
+    physical_address TEXT,
+
+    PRIMARY KEY (uid, did, file_path),
+
+    FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE,
+    FOREIGN KEY (uid) REFERENCES "user"(uid) ON DELETE CASCADE
+);
 -- operator_executions (modified to match MySQL: no separate primary key; added console_messages_uri)
 CREATE TABLE IF NOT EXISTS operator_executions
 (

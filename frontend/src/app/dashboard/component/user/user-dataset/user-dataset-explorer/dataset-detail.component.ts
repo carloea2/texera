@@ -104,8 +104,8 @@ export class DatasetDetailComponent implements OnInit {
   //  List of upload tasks – each task tracked by its filePath
   public uploadTasks: Array<
     MultipartUploadProgress & {
-      filePath: string;
-    }
+    filePath: string;
+  }
   > = [];
 
   @Output() userMakeChanges = new EventEmitter<void>();
@@ -416,8 +416,6 @@ export class DatasetDetailComponent implements OnInit {
             filePath: file.name,
             percentage: 0,
             status: "initializing",
-            uploadId: "",
-            physicalAddress: "",
           });
           // Start multipart upload
           const subscription = this.datasetService
@@ -558,21 +556,19 @@ export class DatasetDetailComponent implements OnInit {
       this.onUploadComplete();
     }
 
+
     this.datasetService
       .finalizeMultipartUpload(
         this.ownerEmail,
         this.datasetName,
         task.filePath,
-        task.uploadId,
-        [],
-        task.physicalAddress,
         true // abort flag
       )
       .pipe(untilDestroyed(this))
       .subscribe(() => {
         this.notificationService.info(`${task.filePath} uploading has been terminated`);
       });
-    // Remove the aborted task immediately
+
     this.uploadTasks = this.uploadTasks.filter(t => t.filePath !== task.filePath);
   }
 

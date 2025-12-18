@@ -65,6 +65,8 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
+import scala.util.Try
 
 object DatasetResource {
 
@@ -89,11 +91,11 @@ object DatasetResource {
     */
   private def put(buf: Array[Byte], len: Int, url: String, partNum: Int): String = {
     val conn = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
-    conn.setDoOutput(true);
+    conn.setDoOutput(true)
     conn.setRequestMethod("PUT")
     conn.setFixedLengthStreamingMode(len)
     val out = conn.getOutputStream
-    out.write(buf, 0, len);
+    out.write(buf, 0, len)
     out.close()
 
     val code = conn.getResponseCode
@@ -401,7 +403,6 @@ class DatasetResource {
             e
           )
       }
-
       // delete the directory on S3
       if (
         S3StorageClient.directoryExists(StorageConfig.lakefsBucketName, dataset.getRepositoryName)
@@ -639,138 +640,82 @@ class DatasetResource {
       @QueryParam("type") operationType: String,
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
-      @QueryParam("filePath") encodedUrl: String,
-      @QueryParam("uploadId") uploadId: Optional[String],
+      @QueryParam("filePath") filePath: String,
       @QueryParam("numParts") numParts: Optional[Integer],
-      payload: Map[
-        String,
-        Any
-      ], // Expecting {"parts": [...], "physicalAddress": "s3://bucket/path"}
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
+    val dataset: Dataset = getDataset(ownerEmail, datasetName)
+
+    operationType.toLowerCase match {
+      case "init"   => initMultipartUpload(dataset.getDid, filePath, numParts, uid)
+      case "finish" => finishMultipartUpload(dataset.getDid, filePath, uid)
+      case "abort"  => abortMultipartUpload(dataset.getDid, filePath, uid)
+      case _ =>
+        throw new BadRequestException("Invalid type parameter. Use 'init', 'finish', or 'abort'.")
+    }
+  }
+
+  @POST
+  @RolesAllowed(Array("REGULAR", "ADMIN"))
+  @Path("/multipart-upload/part")
+  @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
+  def uploadPart(
+      @QueryParam("ownerEmail") ownerEmail: String,
+      @QueryParam("datasetName") datasetName: String,
+      @QueryParam("filePath") encodedFilePath: String,
+      @QueryParam("partNumber") partNumber: Int,
+      partStream: InputStream,
+      @Context headers: HttpHeaders,
+      @Auth user: SessionUser
+  ): Response = {
+    val uid = user.getUid
+    val dataset: Dataset = getDataset(ownerEmail, datasetName)
+    val did = dataset.getDid
+    if (did == null) throw new BadRequestException("did is required")
+    if (encodedFilePath == null || encodedFilePath.isEmpty)
+      throw new BadRequestException("filePath is required")
+    if (partNumber < 1)
+      throw new BadRequestException("partNumber must be >= 1")
+
+    val filePath = normalizeFilePath(
+      URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
+    )
 
     withTransaction(context) { ctx =>
-      val dataset = context
-        .select(DATASET.fields: _*)
-        .from(DATASET)
-        .leftJoin(USER)
-        .on(USER.UID.eq(DATASET.OWNER_UID))
-        .where(USER.EMAIL.eq(ownerEmail))
-        .and(DATASET.NAME.eq(datasetName))
-        .fetchOneInto(classOf[Dataset])
-      if (dataset == null || !userHasWriteAccess(ctx, dataset.getDid, uid)) {
+      if (!userHasWriteAccess(ctx, did, uid))
         throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+
+      val session = ctx
+        .selectFrom(DATASET_UPLOAD_SESSION)
+        .where(
+          DATASET_UPLOAD_SESSION.UID
+            .eq(uid)
+            .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+            .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+        )
+        .fetchOne()
+
+      if (session == null) {
+        throw new NotFoundException("Upload session not found. Call type=init first.")
       }
 
-      // Decode the file path
-      val repositoryName = dataset.getRepositoryName
-      val filePath = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.name())
+      val (bucket, key) = LakeFSStorageClient.parsePhysicalAddress(session.getPhysicalAddress)
 
-      operationType.toLowerCase match {
-        case "init" =>
-          val numPartsValue = numParts.toScala.getOrElse(
-            throw new BadRequestException("numParts is required for initialization")
-          )
+      val contentLenOpt =
+        Option(headers.getHeaderString(HttpHeaders.CONTENT_LENGTH))
+          .flatMap(s => Try(s.toLong).toOption)
 
-          val presignedResponse = LakeFSStorageClient.initiatePresignedMultipartUploads(
-            repositoryName,
-            filePath,
-            numPartsValue
-          )
-          Response
-            .ok(
-              Map(
-                "uploadId" -> presignedResponse.getUploadId,
-                "presignedUrls" -> presignedResponse.getPresignedUrls,
-                "physicalAddress" -> presignedResponse.getPhysicalAddress
-              )
-            )
-            .build()
+      S3StorageClient.uploadPart(
+        bucket = bucket,
+        key = key,
+        uploadId = session.getUploadId,
+        partNumber = partNumber,
+        inputStream = partStream,
+        contentLength = contentLenOpt
+      )
 
-        case "finish" =>
-          val uploadIdValue = uploadId.toScala.getOrElse(
-            throw new BadRequestException("uploadId is required for completion")
-          )
-
-          // Extract parts from the payload
-          val partsList = payload.get("parts") match {
-            case Some(rawList: List[_]) =>
-              try {
-                rawList.map {
-                  case part: Map[_, _] =>
-                    val partMap = part.asInstanceOf[Map[String, Any]]
-                    val partNumber = partMap.get("PartNumber") match {
-                      case Some(i: Int)    => i
-                      case Some(s: String) => s.toInt
-                      case _               => throw new BadRequestException("Invalid or missing PartNumber")
-                    }
-                    val eTag = partMap.get("ETag") match {
-                      case Some(s: String) => s
-                      case _               => throw new BadRequestException("Invalid or missing ETag")
-                    }
-                    (partNumber, eTag)
-
-                  case _ =>
-                    throw new BadRequestException("Each part must be a Map[String, Any]")
-                }
-              } catch {
-                case e: NumberFormatException =>
-                  throw new BadRequestException("PartNumber must be an integer", e)
-              }
-
-            case _ =>
-              throw new BadRequestException("Missing or invalid 'parts' list in payload")
-          }
-
-          // Extract physical address from payload
-          val physicalAddress = payload.get("physicalAddress") match {
-            case Some(address: String) => address
-            case _                     => throw new BadRequestException("Missing physicalAddress in payload")
-          }
-
-          // Complete the multipart upload with parts and physical address
-          val objectStats = LakeFSStorageClient.completePresignedMultipartUploads(
-            repositoryName,
-            filePath,
-            uploadIdValue,
-            partsList,
-            physicalAddress
-          )
-
-          Response
-            .ok(
-              Map(
-                "message" -> "Multipart upload completed successfully",
-                "filePath" -> objectStats.getPath
-              )
-            )
-            .build()
-
-        case "abort" =>
-          val uploadIdValue = uploadId.toScala.getOrElse(
-            throw new BadRequestException("uploadId is required for abortion")
-          )
-
-          // Extract physical address from payload
-          val physicalAddress = payload.get("physicalAddress") match {
-            case Some(address: String) => address
-            case _                     => throw new BadRequestException("Missing physicalAddress in payload")
-          }
-
-          // Abort the multipart upload
-          LakeFSStorageClient.abortPresignedMultipartUploads(
-            repositoryName,
-            filePath,
-            uploadIdValue,
-            physicalAddress
-          )
-
-          Response.ok(Map("message" -> "Multipart upload aborted successfully")).build()
-
-        case _ =>
-          throw new BadRequestException("Invalid type parameter. Use 'init', 'finish', or 'abort'.")
-      }
+      Response.ok().build()
     }
   }
 
@@ -1014,9 +959,8 @@ class DatasetResource {
       val ownerNode = DatasetFileNode
         .fromLakeFSRepositoryCommittedObjects(
           Map(
-            (user.getEmail, dataset.getName, latestVersion.getName) ->
-              LakeFSStorageClient
-                .retrieveObjectsOfVersion(dataset.getRepositoryName, latestVersion.getVersionHash)
+            (user.getEmail, dataset.getName, latestVersion.getName) -> LakeFSStorageClient
+              .retrieveObjectsOfVersion(dataset.getRepositoryName, latestVersion.getVersionHash)
           )
         )
         .head
@@ -1370,6 +1314,218 @@ class DatasetResource {
           )
         }
         Right(response)
+    }
+  }
+
+  // === Multipart helpers ===
+
+  private def getDataset(ownerEmail: String, datasetName: String) = {
+    val dataset = context
+      .select(DATASET.fields: _*)
+      .from(DATASET)
+      .leftJoin(USER)
+      .on(USER.UID.eq(DATASET.OWNER_UID))
+      .where(USER.EMAIL.eq(ownerEmail))
+      .and(DATASET.NAME.eq(datasetName))
+      .fetchOneInto(classOf[Dataset])
+    dataset
+  }
+  private def normalizeFilePath(filePath: String): String = {
+    // Normalize separators, remove leading '/', and strip any '..' path segments.
+    // This keeps DB keys stable and reduces path traversal surprises.
+    val withSlashes = Option(filePath).getOrElse("").replace("\\", "/")
+    val noLeading = withSlashes.stripPrefix("/")
+    noLeading.replaceAll("""\.\.(?=/|$)""", "")
+  }
+
+  private def initMultipartUpload(
+      did: Integer,
+      encodedFilePath: String,
+      numParts: Optional[Integer],
+      uid: Integer
+  ): Response = {
+    withTransaction(context) { ctx =>
+      if (!userHasWriteAccess(ctx, did, uid)) {
+        throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+      }
+
+      val dataset = getDatasetByID(ctx, did)
+      val repositoryName = dataset.getRepositoryName
+      val filePath =
+        normalizeFilePath(URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name()))
+
+      val numPartsValue = numParts.toScala.getOrElse {
+        throw new BadRequestException("numParts is required for initialization")
+      }
+
+      if (numPartsValue < 1 || numPartsValue > MAXIMUM_NUM_OF_MULTIPART_S3_PARTS) {
+        throw new BadRequestException(
+          "numParts must be between 1 and" + MAXIMUM_NUM_OF_MULTIPART_S3_PARTS
+        )
+      }
+
+      // We still ask LakeFS to create/init the multipart upload, but we DO NOT use presigned URLs.
+      val presign = LakeFSStorageClient.initiatePresignedMultipartUploads(
+        repositoryName,
+        filePath,
+        numPartsValue
+      )
+
+      val uploadIdStr = presign.getUploadId
+      val physicalAddr = presign.getPhysicalAddress
+
+      // Upsert the session (re-init is allowed).
+      ctx
+        .insertInto(DATASET_UPLOAD_SESSION)
+        .set(DATASET_UPLOAD_SESSION.FILE_PATH, filePath)
+        .set(DATASET_UPLOAD_SESSION.DID, did)
+        .set(DATASET_UPLOAD_SESSION.UID, uid)
+        .set(DATASET_UPLOAD_SESSION.UPLOAD_ID, uploadIdStr)
+        .set(DATASET_UPLOAD_SESSION.PHYSICAL_ADDRESS, physicalAddr)
+        .onDuplicateKeyUpdate()
+        .set(DATASET_UPLOAD_SESSION.UPLOAD_ID, uploadIdStr)
+        .set(DATASET_UPLOAD_SESSION.PHYSICAL_ADDRESS, physicalAddr)
+        .execute()
+
+      Response.ok().build()
+    }
+  }
+
+  private def finishMultipartUpload(
+      did: Integer,
+      encodedFilePath: String,
+      uid: Int
+  ): Response = {
+    val filePath = normalizeFilePath(
+      URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
+    )
+
+    withTransaction(context) { ctx =>
+      if (!userHasWriteAccess(ctx, did, uid)) {
+        throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+      }
+
+      val dataset = getDatasetByID(ctx, did)
+
+      val session = ctx
+        .selectFrom(DATASET_UPLOAD_SESSION)
+        .where(
+          DATASET_UPLOAD_SESSION.UID
+            .eq(uid)
+            .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+            .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+        )
+        .fetchOne()
+
+      if (session == null) {
+        throw new NotFoundException("Upload session not found or already finalized")
+      }
+
+      if (session.getUid != uid) {
+        throw new ForbiddenException("User has no access to this upload session")
+      }
+
+      val (bucket, key) = LakeFSStorageClient.parsePhysicalAddress(session.getPhysicalAddress)
+
+      val parts = S3StorageClient
+        .listAllParts(bucket, key, session.getUploadId)
+        .sortBy(_.partNumber)
+
+      if (parts.isEmpty) {
+        throw new BadRequestException("No uploaded parts found for this uploadId")
+      }
+
+      val partsList: List[(Int, String)] = parts.map { p =>
+        val et = Option(p.eTag).getOrElse {
+          throw new WebApplicationException(
+            s"Missing ETag for part ${p.partNumber}",
+            Response.Status.INTERNAL_SERVER_ERROR
+          )
+        }
+        (p.partNumber, et)
+      }.toList
+
+      val objectStats = LakeFSStorageClient.completePresignedMultipartUploads(
+        dataset.getRepositoryName,
+        filePath,
+        session.getUploadId,
+        partsList,
+        session.getPhysicalAddress
+      )
+
+      ctx
+        .deleteFrom(DATASET_UPLOAD_SESSION)
+        .where(
+          DATASET_UPLOAD_SESSION.UID
+            .eq(uid)
+            .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+            .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+        )
+        .execute()
+
+      Response
+        .ok(
+          Map(
+            "message" -> "Multipart upload completed successfully",
+            "filePath" -> objectStats.getPath
+          )
+        )
+        .build()
+    }
+  }
+
+  private def abortMultipartUpload(
+      did: Integer,
+      encodedFilePath: String,
+      uid: Int
+  ): Response = {
+    val filePath = normalizeFilePath(
+      URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
+    )
+
+    withTransaction(context) { ctx =>
+      if (!userHasWriteAccess(ctx, did, uid)) {
+        throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+      }
+
+      val dataset = getDatasetByID(ctx, did)
+
+      val session = ctx
+        .selectFrom(DATASET_UPLOAD_SESSION)
+        .where(
+          DATASET_UPLOAD_SESSION.UID
+            .eq(uid)
+            .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+            .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+        )
+        .fetchOne()
+
+      if (session == null) {
+        throw new NotFoundException("Upload session not found or already finalized")
+      }
+
+      if (session.getUid != uid) {
+        throw new ForbiddenException("User has no access to this upload session")
+      }
+
+      LakeFSStorageClient.abortPresignedMultipartUploads(
+        dataset.getRepositoryName,
+        filePath,
+        session.getUploadId,
+        session.getPhysicalAddress
+      )
+
+      ctx
+        .deleteFrom(DATASET_UPLOAD_SESSION)
+        .where(
+          DATASET_UPLOAD_SESSION.UID
+            .eq(uid)
+            .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+            .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+        )
+        .execute()
+
+      Response.ok(Map("message" -> "Multipart upload aborted successfully")).build()
     }
   }
 }

@@ -358,4 +358,11 @@ object LakeFSStorageClient {
 
     branchesApi.resetBranch(repoName, branchName, resetCreation).execute()
   }
+  def parsePhysicalAddress(address: String): (String, String) = {
+    // expected: "<scheme>://bucket/key..."
+    val uri = new java.net.URI(address)
+    val bucket = uri.getHost
+    val key = uri.getPath.stripPrefix("/")
+    (bucket, key)
+  }
 }
