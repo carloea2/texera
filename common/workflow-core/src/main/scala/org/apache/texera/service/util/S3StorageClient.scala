@@ -39,9 +39,6 @@ object S3StorageClient {
   val MINIMUM_NUM_OF_MULTIPART_S3_PART: Long = 5L * 1024 * 1024 // 5 MiB
   val MAXIMUM_NUM_OF_MULTIPART_S3_PARTS = 10_000
 
-  /** Minimal info about an active multipart upload. */
-  final case class MultipartUploadInfo(key: String, uploadId: String)
-
   /** Minimal info about a completed part in an upload. */
   final case class PartInfo(partNumber: Int, eTag: String)
 

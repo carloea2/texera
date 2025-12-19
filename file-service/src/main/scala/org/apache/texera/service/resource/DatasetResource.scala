@@ -684,9 +684,14 @@ class DatasetResource {
       URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
     )
 
-    val contentLenOpt =
+    val contentLength =
       Option(headers.getHeaderString(HttpHeaders.CONTENT_LENGTH))
+        .map(_.trim)
         .flatMap(s => Try(s.toLong).toOption)
+        .filter(_ > 0)
+        .getOrElse {
+          throw new BadRequestException("Invalid/Missing Content-Length")
+        }
 
     val (bucket, key, uploadId) = withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, uid))
@@ -720,7 +725,7 @@ class DatasetResource {
       uploadId = uploadId,
       partNumber = partNumber,
       inputStream = partStream,
-      contentLength = contentLenOpt
+      contentLength = Some(contentLength)
     )
 
     Response.ok().build()
@@ -1399,7 +1404,6 @@ class DatasetResource {
         )
       }
 
-      // Keep LakeFS call inside transaction (as requested)
       val presign = LakeFSStorageClient.initiatePresignedMultipartUploads(
         repositoryName,
         filePath,
