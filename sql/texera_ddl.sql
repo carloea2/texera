@@ -282,12 +282,14 @@ CREATE TABLE IF NOT EXISTS dataset_upload_session
     file_path        TEXT NOT NULL,
     upload_id        VARCHAR(256) NOT NULL,
     physical_address TEXT,
+    num_parts_requested INT NOT NULL,
 
     PRIMARY KEY (uid, did, file_path),
 
     FOREIGN KEY (did) REFERENCES dataset(did) ON DELETE CASCADE,
     FOREIGN KEY (uid) REFERENCES "user"(uid) ON DELETE CASCADE
 );
+
 -- operator_executions (modified to match MySQL: no separate primary key; added console_messages_uri)
 CREATE TABLE IF NOT EXISTS operator_executions
 (
