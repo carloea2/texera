@@ -121,7 +121,7 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
     * S3 client pointed at MinIO.
     *
     * Notes:
-    * - Region can be any value for MinIO, but MUST match what your signing expects. Your logs show `us-west-2`,
+    * - Region can be any value for MinIO, but MUST match what your signing expects.
     *   so we use that.
     * - Path-style is important: http://host:port/bucket/key
     */
