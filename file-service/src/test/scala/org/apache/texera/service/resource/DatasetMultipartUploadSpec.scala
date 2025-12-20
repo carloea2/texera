@@ -42,7 +42,6 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.jdk.CollectionConverters._
 
 import java.io.ByteArrayInputStream
 import java.net.URLEncoder

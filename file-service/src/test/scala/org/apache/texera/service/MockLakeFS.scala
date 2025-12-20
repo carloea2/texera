@@ -20,8 +20,7 @@
 package org.apache.texera.service
 
 import com.dimafeng.testcontainers._
-import io.lakefs.clients.sdk.{ApiClient, ApiException, RepositoriesApi}
-import io.lakefs.clients.sdk.model.RepositoryCreation
+import io.lakefs.clients.sdk.{ApiClient, RepositoriesApi}
 import org.apache.texera.amber.config.StorageConfig
 import org.apache.texera.service.util.S3StorageClient
 import org.scalatest.{BeforeAndAfterAll, Suite}
@@ -31,10 +30,8 @@ import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCrede
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
-import software.amazon.awssdk.services.s3.model._
 
 import java.net.URI
-import scala.jdk.CollectionConverters._
 
 /**
   * Trait to spin up a LakeFS + MinIO + Postgres stack using Testcontainers,
