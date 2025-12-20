@@ -20,11 +20,21 @@
 package org.apache.texera.service
 
 import com.dimafeng.testcontainers._
+import io.lakefs.clients.sdk.{ApiClient, ApiException, RepositoriesApi}
+import io.lakefs.clients.sdk.model.RepositoryCreation
 import org.apache.texera.amber.config.StorageConfig
 import org.apache.texera.service.util.S3StorageClient
 import org.scalatest.{BeforeAndAfterAll, Suite}
 import org.testcontainers.containers.Network
 import org.testcontainers.utility.DockerImageName
+import software.amazon.awssdk.auth.credentials.{AwsBasicCredentials, StaticCredentialsProvider}
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.model._
+
+import java.net.URI
+import scala.jdk.CollectionConverters._
 
 /**
   * Trait to spin up a LakeFS + MinIO + Postgres stack using Testcontainers,
@@ -58,9 +68,14 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
     s"postgresql://${postgres.username}:${postgres.password}" +
       s"@${postgres.container.getNetworkAliases.get(0)}:5432/${postgres.databaseName}" +
       s"?sslmode=disable"
+
   val lakefsUsername = "texera-admin"
+
+  // These are the API credentials created/used during setup.
+  // In lakeFS, the access key + secret key are used as basic-auth username/password for the API.
   val lakefsAccessKeyID = "AKIAIOSFOLKFSSAMPLES"
   val lakefsSecretAccessKey = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
   val lakefs = GenericContainer(
     dockerImage = "treeverse/lakefs:1.51",
     exposedPorts = Seq(8000),
@@ -87,11 +102,44 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
 
   def lakefsBaseUrl: String = s"http://${lakefs.host}:${lakefs.mappedPort(8000)}"
   def minioEndpoint: String = s"http://${minio.host}:${minio.mappedPort(9000)}"
+  def lakefsApiBasePath: String = s"$lakefsBaseUrl/api/v1"
+
+  // ---- Clients (lazy so they initialize after containers are started) ----
+
+  lazy val lakefsApiClient: ApiClient = {
+    val c = new ApiClient()
+    c.setBasePath(lakefsApiBasePath)
+    // basic-auth for lakeFS API uses accessKey as username, secretKey as password
+    c.setUsername(lakefsAccessKeyID)
+    c.setPassword(lakefsSecretAccessKey)
+    c
+  }
+
+  lazy val repositoriesApi: RepositoriesApi = new RepositoriesApi(lakefsApiClient)
+
+  /**
+    * S3 client pointed at MinIO.
+    *
+    * Notes:
+    * - Region can be any value for MinIO, but MUST match what your signing expects. Your logs show `us-west-2`,
+    *   so we use that.
+    * - Path-style is important: http://host:port/bucket/key
+    */
+  lazy val s3Client: S3Client = {
+    val creds = AwsBasicCredentials.create("texera_minio", "password")
+    S3Client
+      .builder()
+      .endpointOverride(URI.create(StorageConfig.s3Endpoint)) // set in afterStart()
+      .region(Region.US_WEST_2)
+      .credentialsProvider(StaticCredentialsProvider.create(creds))
+      .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+      .build()
+  }
 
   override def afterStart(): Unit = {
     super.afterStart()
 
-    // setup LakeFS
+    // setup LakeFS (idempotent-ish, but will fail if it truly cannot run)
     val lakefsSetupResult = lakefs.container.execInContainer(
       "lakefs",
       "setup",
@@ -103,16 +151,14 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
       lakefsSecretAccessKey
     )
     if (lakefsSetupResult.getExitCode != 0) {
-      throw new RuntimeException(
-        s"Failed to setup LakeFS: ${lakefsSetupResult.getStderr}"
-      )
+      throw new RuntimeException(s"Failed to setup LakeFS: ${lakefsSetupResult.getStderr}")
     }
 
     // replace storage endpoints in StorageConfig
     StorageConfig.s3Endpoint = minioEndpoint
-    StorageConfig.lakefsEndpoint = s"$lakefsBaseUrl/api/v1"
+    StorageConfig.lakefsEndpoint = lakefsApiBasePath
 
-    // create S3 bucket
+    // create S3 bucket used by lakeFS in tests
     S3StorageClient.createBucketIfNotExist(StorageConfig.lakefsBucketName)
   }
 }

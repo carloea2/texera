@@ -675,6 +675,7 @@ class DatasetResource {
     val uid = user.getUid
     val dataset: Dataset = getDatasetBy(ownerEmail, datasetName)
     val did = dataset.getDid
+
     if (encodedFilePath == null || encodedFilePath.isEmpty)
       throw new BadRequestException("filePath is required")
     if (partNumber < 1)
@@ -693,7 +694,7 @@ class DatasetResource {
           throw new BadRequestException("Invalid/Missing Content-Length")
         }
 
-    val (bucket, key, uploadId) = withTransaction(context) { ctx =>
+    val (bucket, key, uploadId, expectedParts) = withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, uid))
         throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
 
@@ -710,13 +711,23 @@ class DatasetResource {
       if (session == null)
         throw new NotFoundException("Upload session not found. Call type=init first.")
 
-      if (partNumber > session.getNumPartsRequested) {
+      val expectedParts = session.getNumPartsRequested
+
+      if (partNumber > expectedParts) {
         throw new BadRequestException(
-          s"$partNumber exceeds the requested parts on init: " + session.getNumPartsRequested
+          s"$partNumber exceeds the requested parts on init: $expectedParts"
         )
       }
+
       val (bucket, key) = LakeFSStorageClient.parsePhysicalAddress(session.getPhysicalAddress)
-      (bucket, key, session.getUploadId)
+      (bucket, key, session.getUploadId, expectedParts)
+    }
+
+    if (partNumber < expectedParts && contentLength < MINIMUM_NUM_OF_MULTIPART_S3_PART) {
+      throw new BadRequestException(
+        s"Part $partNumber is too small ($contentLength bytes). " +
+          s"All non-final parts must be >= $MINIMUM_NUM_OF_MULTIPART_S3_PART bytes."
+      )
     }
 
     S3StorageClient.uploadPart(
