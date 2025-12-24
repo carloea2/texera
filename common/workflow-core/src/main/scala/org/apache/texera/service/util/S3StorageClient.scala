@@ -39,9 +39,6 @@ object S3StorageClient {
   val MINIMUM_NUM_OF_MULTIPART_S3_PART: Long = 5L * 1024 * 1024 // 5 MiB
   val MAXIMUM_NUM_OF_MULTIPART_S3_PARTS = 10_000
 
-  /** Minimal info about a completed part in an upload. */
-  final case class PartInfo(partNumber: Int, eTag: String)
-
   // Initialize MinIO-compatible S3 Client
   private lazy val s3Client: S3Client = {
     val credentials = AwsBasicCredentials.create(StorageConfig.s3Username, StorageConfig.s3Password)
@@ -269,7 +266,7 @@ object S3StorageClient {
       partNumber: Int,
       inputStream: InputStream,
       contentLength: Option[Long]
-  ): Unit = {
+  ): UploadPartResponse = {
     val body: RequestBody = contentLength match {
       case Some(len) => RequestBody.fromInputStream(inputStream, len)
       case None =>
@@ -286,55 +283,6 @@ object S3StorageClient {
       .build()
 
     s3Client.uploadPart(req, body)
-  }
-
-  /**
-    * List *all* parts for a given multipart upload (bucket + key + uploadId).
-    * Handles pagination (up to 1000 parts per page).
-    *
-    * If the backend throws "no such upload / not found" while listing parts,
-    * treat it as "0 parts uploaded" and return Seq.empty.
-    */
-  def listAllParts(
-      bucket: String,
-      key: String,
-      uploadId: String
-  ): Seq[PartInfo] = {
-    val acc = scala.collection.mutable.ArrayBuffer.empty[PartInfo]
-    var partNumberMarker: Integer = null
-    var truncated = true
-
-    while (truncated) {
-      val builder =
-        ListPartsRequest.builder().bucket(bucket).key(key).uploadId(uploadId)
-      if (partNumberMarker != null) builder.partNumberMarker(partNumberMarker)
-
-      val resp =
-        try s3Client.listParts(builder.build())
-        catch {
-          case _: NoSuchUploadException =>
-            return Seq.empty // 0 parts
-          case e: S3Exception
-              if e.statusCode() == 404 ||
-                Option(e.awsErrorDetails())
-                  .exists(d => d.errorCode() == "NoSuchUpload" || d.errorCode() == "NoSuchKey") =>
-            return Seq.empty // 0 parts
-        }
-
-      Option(resp.parts())
-        .fold(Seq.empty[Part])(_.asScala.toSeq)
-        .foreach { p =>
-          acc += PartInfo(
-            p.partNumber(),
-            Option(p.eTag()).map(_.replace("\"", "")).orNull
-          )
-        }
-
-      truncated = resp.isTruncated
-      partNumberMarker = resp.nextPartNumberMarker()
-    }
-
-    acc.toSeq
   }
 
 }
