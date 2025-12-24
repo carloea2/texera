@@ -21,7 +21,6 @@ package org.apache.texera.service.resource
 
 import jakarta.ws.rs._
 import jakarta.ws.rs.core.{Cookie, HttpHeaders, MediaType, MultivaluedHashMap, Response}
-
 import io.lakefs.clients.sdk.ApiException
 import org.apache.texera.amber.core.storage.util.LakeFSStorageClient
 import org.apache.texera.auth.SessionUser
@@ -42,10 +41,11 @@ import org.scalatest.matchers.should.Matchers
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
-
 import java.io.{ByteArrayInputStream, IOException, InputStream}
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
+import java.security.MessageDigest
 import java.util.concurrent.CyclicBarrier
 import java.util.{Collections, Date, Locale, Optional}
 import scala.util.Random
@@ -130,7 +130,26 @@ class DatasetMultipartUploadSpec
       case e: ApiException if e.getCode == 409 => // ok
     }
   }
+  // ---------- SHA-256 Utils ----------
+  private def sha256OfChunks(chunks: Seq[Array[Byte]]): Array[Byte] = {
+    val md = MessageDigest.getInstance("SHA-256")
+    chunks.foreach(md.update)
+    md.digest()
+  }
 
+  private def sha256OfFile(path: java.nio.file.Path): Array[Byte] = {
+    val md = MessageDigest.getInstance("SHA-256")
+    val in = Files.newInputStream(path)
+    try {
+      val buf = new Array[Byte](8192)
+      var n = in.read(buf)
+      while (n != -1) {
+        md.update(buf, 0, n)
+        n = in.read(buf)
+      }
+      md.digest()
+    } finally in.close()
+  }
   // ---------- helpers ----------
   private def enc(s: String): String =
     URLEncoder.encode(s, StandardCharsets.UTF_8.name())
@@ -901,6 +920,69 @@ class DatasetMultipartUploadSpec
     // Nothing should be deleted on failure
     fetchSession(filePath) should not be null
     fetchPartRows(uploadId).nonEmpty shouldEqual true
+  }
+
+  // ---------------------------------------------------------------------------
+  // CORRUPTION CHEKS
+  // ---------------------------------------------------------------------------
+
+  it should "upload without corruption (sha256 matches final object)" in {
+    val filePath = uniqueFilePath("sha256-positive")
+    initUpload(filePath, numParts = 3).getStatus shouldEqual 200
+
+    val p1 = minPartBytes(1.toByte)
+    val p2 = minPartBytes(2.toByte)
+    val p3 = Array.fill[Byte](123)(3.toByte)
+
+    uploadPart(filePath, 1, p1).getStatus shouldEqual 200
+    uploadPart(filePath, 2, p2).getStatus shouldEqual 200
+    uploadPart(filePath, 3, p3).getStatus shouldEqual 200
+
+    finishUpload(filePath).getStatus shouldEqual 200
+
+    val expected = sha256OfChunks(Seq(p1, p2, p3))
+
+    val repoName = testDataset.getRepositoryName
+    val ref = "main"
+    val downloaded = LakeFSStorageClient.getFileFromRepo(repoName, ref, filePath)
+
+    val got = sha256OfFile(Paths.get(downloaded.toURI))
+
+    got.toSeq shouldEqual expected.toSeq
+  }
+
+  it should "detect corruption (sha256 mismatch when a part is altered)" in {
+    val filePath = uniqueFilePath("sha256-negative")
+    initUpload(filePath, numParts = 3).getStatus shouldEqual 200
+
+    val p1 = minPartBytes(1.toByte)
+    val p2 = minPartBytes(2.toByte)
+    val p3 = Array.fill[Byte](123)(3.toByte)
+
+    // Intended bytes hash
+    val intendedHash = sha256OfChunks(Seq(p1, p2, p3))
+
+    // Corrupt one byte in part 2 before uploading
+    val p2Corrupt = p2.clone()
+    p2Corrupt(0) = (p2Corrupt(0) ^ 0x01).toByte
+
+    uploadPart(filePath, 1, p1).getStatus shouldEqual 200
+    uploadPart(filePath, 2, p2Corrupt).getStatus shouldEqual 200
+    uploadPart(filePath, 3, p3).getStatus shouldEqual 200
+
+    finishUpload(filePath).getStatus shouldEqual 200
+
+    val repoName = testDataset.getRepositoryName
+    val ref = "main"
+    val downloaded = LakeFSStorageClient.getFileFromRepo(repoName, ref, filePath)
+
+    val gotHash = sha256OfFile(Paths.get(downloaded.toURI))
+
+    // Must NOT equal the intended bytes
+    gotHash.toSeq should not equal intendedHash.toSeq
+
+    val corruptHash = sha256OfChunks(Seq(p1, p2Corrupt, p3))
+    gotHash.toSeq shouldEqual corruptHash.toSeq
   }
 
   // ---------------------------------------------------------------------------
