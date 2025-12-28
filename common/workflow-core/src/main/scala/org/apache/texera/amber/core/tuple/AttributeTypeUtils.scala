@@ -201,10 +201,15 @@ object AttributeTypeUtils extends Serializable {
   def parseTimestamp(fieldValue: Any): Timestamp = {
     val attempt: Try[Timestamp] = Try {
       fieldValue match {
-        case str: String          => new Timestamp(DateParserUtils.parseDate(str.trim).getTime)
-        case long: java.lang.Long => new Timestamp(long)
-        case timestamp: Timestamp => timestamp
-        case date: java.util.Date => new Timestamp(date.getTime)
+        case str: String                   => new Timestamp(DateParserUtils.parseDate(str.trim).getTime)
+        case long: java.lang.Long          => new Timestamp(long)
+        case timestamp: Timestamp          => timestamp
+        case date: java.util.Date          => new Timestamp(date.getTime)
+        case ldt: java.time.LocalDateTime  => Timestamp.valueOf(ldt)
+        case inst: java.time.Instant       => Timestamp.from(inst)
+        case odt: java.time.OffsetDateTime => Timestamp.from(odt.toInstant)
+        case zdt: java.time.ZonedDateTime  => Timestamp.from(zdt.toInstant)
+        case ld: java.time.LocalDate       => Timestamp.valueOf(ld.atStartOfDay())
         // Integer, Double, Boolean, Binary are considered to be illegal here.
         case _ =>
           throw new AttributeTypeException(

@@ -22,16 +22,19 @@ package org.apache.texera.amber.core.tuple
 import org.apache.texera.amber.core.tuple.AttributeType._
 import org.apache.texera.amber.core.tuple.AttributeTypeUtils.{
   AttributeTypeException,
+  add,
+  compare,
   inferField,
   inferSchemaFromRows,
-  parseField,
-  compare,
-  add,
-  minValue,
   maxValue,
+  minValue,
+  parseField,
   zeroValue
 }
 import org.scalatest.funsuite.AnyFunSuite
+
+import java.sql.Timestamp
+import java.time.{Instant, LocalDate, LocalDateTime, OffsetDateTime, ZoneId, ZonedDateTime}
 
 class AttributeTypeUtilsSpec extends AnyFunSuite {
 
@@ -179,8 +182,39 @@ class AttributeTypeUtilsSpec extends AnyFunSuite {
         .getTime == 1699820130000L
     )
 
+    val ldt = LocalDateTime.of(2023, 11, 13, 10, 15, 30)
+    val tsFromLdt = parseField(ldt, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromLdt == Timestamp.valueOf(ldt))
+
+    val inst = Instant.parse("2023-11-13T10:15:30Z")
+    val tsFromInst = parseField(inst, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromInst == Timestamp.from(inst))
+
+    val odt = OffsetDateTime.parse("2023-11-13T12:15:30+02:00")
+    val tsFromOdt = parseField(odt, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromOdt == Timestamp.from(odt.toInstant))
+
+    val zdt = ZonedDateTime.of(2023, 11, 13, 2, 15, 30, 0, ZoneId.of("America/Los_Angeles"))
+    val tsFromZdt = parseField(zdt, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromZdt == Timestamp.from(zdt.toInstant))
+
+    val ld = LocalDate.of(2023, 11, 13)
+    val tsFromLd = parseField(ld, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromLd == Timestamp.valueOf(ld.atStartOfDay()))
+
+    val utilDate = new java.util.Date(1699820130000L)
+    val tsFromDate = parseField(utilDate, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromDate.getTime == 1699820130000L)
+
+    val ts = new Timestamp(1699820130000L)
+    val tsFromTs = parseField(ts, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    assert(tsFromTs eq ts)
+
     assertThrows[AttributeTypeException] {
       parseField("invalid", AttributeType.TIMESTAMP)
+    }
+    assertThrows[AttributeTypeException] {
+      parseField(123.45, AttributeType.TIMESTAMP)
     }
   }
 
