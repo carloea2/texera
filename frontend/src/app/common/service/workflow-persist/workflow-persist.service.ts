@@ -250,10 +250,7 @@ export class WorkflowPersistService {
       params = params.append("fields", f);
     });
 
-    return this.http.get<User>(
-      `${AppSettings.getApiEndpoint()}/${WORKFLOW_OWNER_INFO}`,
-      { params }
-    );
+    return this.http.get<User>(`${AppSettings.getApiEndpoint()}/${WORKFLOW_OWNER_INFO}`, { params });
   }
 
   /**
