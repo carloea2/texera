@@ -205,11 +205,11 @@ object AttributeTypeUtils extends Serializable {
         case long: java.lang.Long          => new Timestamp(long)
         case timestamp: Timestamp          => timestamp
         case date: java.util.Date          => new Timestamp(date.getTime)
-        case ldt: java.time.LocalDateTime  => Timestamp.valueOf(ldt)
-        case inst: java.time.Instant       => Timestamp.from(inst)
-        case odt: java.time.OffsetDateTime => Timestamp.from(odt.toInstant)
-        case zdt: java.time.ZonedDateTime  => Timestamp.from(zdt.toInstant)
-        case ld: java.time.LocalDate       => Timestamp.valueOf(ld.atStartOfDay())
+        case localDateTime: java.time.LocalDateTime  => Timestamp.valueOf(localDateTime)
+        case instant: java.time.Instant       => Timestamp.from(instant)
+        case offsetDateTime: java.time.OffsetDateTime => Timestamp.from(offsetDateTime.toInstant)
+        case zonedDateTime: java.time.ZonedDateTime  => Timestamp.from(zonedDateTime.toInstant)
+        case localDate: java.time.LocalDate       => Timestamp.valueOf(localDate.atStartOfDay())
         // Integer, Double, Boolean, Binary are considered to be illegal here.
         case _ =>
           throw new AttributeTypeException(
