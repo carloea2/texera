@@ -712,18 +712,34 @@ class WorkflowResource extends LazyLogging {
   }
 
   @GET
-  @Produces(Array(MediaType.TEXT_PLAIN))
-  @Path("/owner_name")
-  def getOwnerName(@QueryParam("wid") wid: Integer): String = {
+  @Path("/owner_info")
+  @Produces(Array(MediaType.APPLICATION_JSON))
+  def getOwnerInfo(
+                    @QueryParam("wid") wid: Integer,
+                    @QueryParam("fields") fields: java.util.List[String] // e.g. &fields=name
+                  ): User = {
+
+    val allowedFields = Map(
+      "name" -> USER.NAME
+    )
+
+    val requestedFields =
+      Option(fields).map(_.asScala.toList).getOrElse(List("name"))
+        .map(_.trim.toLowerCase)
+        .filter(_.nonEmpty)
+        .distinct
+
+    val selectedFields = requestedFields.map { field =>
+      allowedFields.getOrElse(field, throw new NotAcceptableException(s"Unsupported field: $field"))
+    }
+
     context
-      .select(
-        USER.NAME
-      )
+      .select(selectedFields: _*)
       .from(WORKFLOW_OF_USER)
       .join(USER)
       .on(WORKFLOW_OF_USER.UID.eq(USER.UID))
       .where(WORKFLOW_OF_USER.WID.eq(wid))
-      .fetchOneInto(classOf[String])
+      .fetchOneInto(classOf[User])
   }
 
   @GET
