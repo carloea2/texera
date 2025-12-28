@@ -712,23 +712,18 @@ class WorkflowResource extends LazyLogging {
   }
 
   @GET
-  @Path("/owner_user")
-  def getOwnerUser(@QueryParam("wid") wid: Integer): User = {
+  @Produces(Array(MediaType.TEXT_PLAIN))
+  @Path("/owner_name")
+  def getOwnerName(@QueryParam("wid") wid: Integer): String = {
     context
       .select(
-        USER.UID,
-        USER.NAME,
-        USER.EMAIL,
-        USER.PASSWORD,
-        USER.GOOGLE_ID,
-        USER.ROLE,
-        USER.GOOGLE_AVATAR
+        USER.NAME
       )
       .from(WORKFLOW_OF_USER)
       .join(USER)
       .on(WORKFLOW_OF_USER.UID.eq(USER.UID))
       .where(WORKFLOW_OF_USER.WID.eq(wid))
-      .fetchOneInto(classOf[User])
+      .fetchOneInto(classOf[String])
   }
 
   @GET
