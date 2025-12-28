@@ -32,7 +32,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import javax.ws.rs.NotAcceptableException
 
-class WorkflowResourceBackendSpec extends AnyFlatSpec with BeforeAndAfterAll with MockTexeraDB {
+class WorkflowResourceDashboardUserSpec extends AnyFlatSpec with BeforeAndAfterAll with MockTexeraDB {
 
   private val widSeq = new AtomicInteger(3000)
   private val uidSeq = new AtomicInteger(1000)
