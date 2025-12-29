@@ -712,8 +712,8 @@ class WorkflowResource extends LazyLogging {
   }
 
   @GET
-  @Path("/owner_name")
   @Produces(Array(MediaType.TEXT_PLAIN))
+  @Path("/owner_name")
   def getOwnerName(@QueryParam("wid") wid: Integer): String = {
     context
       .select(USER.NAME)
