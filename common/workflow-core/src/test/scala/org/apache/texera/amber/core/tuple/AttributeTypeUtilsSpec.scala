@@ -183,7 +183,8 @@ class AttributeTypeUtilsSpec extends AnyFunSuite {
     )
 
     val localDateTime = LocalDateTime.of(2023, 11, 13, 10, 15, 30)
-    val timestampFromLocalDateTime = parseField(localDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    val timestampFromLocalDateTime =
+      parseField(localDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
     assert(timestampFromLocalDateTime == Timestamp.valueOf(localDateTime))
 
     val instant = Instant.parse("2023-11-13T10:15:30Z")
@@ -191,15 +192,19 @@ class AttributeTypeUtilsSpec extends AnyFunSuite {
     assert(timestampFromInstant == Timestamp.from(instant))
 
     val offsetDateTime = OffsetDateTime.parse("2023-11-13T12:15:30+02:00")
-    val timestampFromOffsetDateTime = parseField(offsetDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    val timestampFromOffsetDateTime =
+      parseField(offsetDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
     assert(timestampFromOffsetDateTime == Timestamp.from(offsetDateTime.toInstant))
 
-    val zonedDateTime = ZonedDateTime.of(2023, 11, 13, 2, 15, 30, 0, ZoneId.of("America/Los_Angeles"))
-    val timestampFromZonedDateTime = parseField(zonedDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    val zonedDateTime =
+      ZonedDateTime.of(2023, 11, 13, 2, 15, 30, 0, ZoneId.of("America/Los_Angeles"))
+    val timestampFromZonedDateTime =
+      parseField(zonedDateTime, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
     assert(timestampFromZonedDateTime == Timestamp.from(zonedDateTime.toInstant))
 
     val localDate = LocalDate.of(2023, 11, 13)
-    val timestampFromLocalDate = parseField(localDate, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
+    val timestampFromLocalDate =
+      parseField(localDate, AttributeType.TIMESTAMP).asInstanceOf[Timestamp]
     assert(timestampFromLocalDate == Timestamp.valueOf(localDate.atStartOfDay()))
 
     val utilDate = new java.util.Date(1699820130000L)
