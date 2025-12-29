@@ -1,22 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.apache.texera.web.resource.dashboard.user.workflow
 
 import org.apache.texera.dao.MockTexeraDB
@@ -27,23 +8,19 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.BeforeAndAfterAll
 
 import java.sql.Timestamp
-import java.util
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
-import javax.ws.rs.NotAcceptableException
 
-class WorkflowResourceDashboardUserSpec extends AnyFlatSpec with BeforeAndAfterAll with MockTexeraDB {
+class WorkflowResourceDashboardUserSpec
+    extends AnyFlatSpec
+    with BeforeAndAfterAll
+    with MockTexeraDB {
 
   private val widSeq = new AtomicInteger(3000)
   private val uidSeq = new AtomicInteger(1000)
 
-  override protected def beforeAll(): Unit = {
-    initializeDBAndReplaceDSLContext()
-  }
-
-  override protected def afterAll(): Unit = {
-    shutdownDB()
-  }
+  override protected def beforeAll(): Unit = initializeDBAndReplaceDSLContext()
+  override protected def afterAll(): Unit = shutdownDB()
 
   private def seedUser(uid: Int, name: String): Unit = {
     val userDao = new UserDao(getDSLContext.configuration())
@@ -67,7 +44,6 @@ class WorkflowResourceDashboardUserSpec extends AnyFlatSpec with BeforeAndAfterA
     workflowDao.insert(wf)
   }
 
-  /** Setup row needed by /owner_info */
   private def linkWorkflowOwner(wid: Int, uid: Int): Unit = {
     getDSLContext
       .insertInto(WORKFLOW_OF_USER)
@@ -76,7 +52,6 @@ class WorkflowResourceDashboardUserSpec extends AnyFlatSpec with BeforeAndAfterA
       .execute()
   }
 
-  // --- Owner-info test fixture (reusable for any owner_info-related tests) ---
   private def withOwnerInfoFixture(testCode: (Int, Int) => Any): Unit = {
     val wid = widSeq.getAndIncrement()
     val uid = uidSeq.getAndIncrement()
@@ -100,27 +75,10 @@ class WorkflowResourceDashboardUserSpec extends AnyFlatSpec with BeforeAndAfterA
     getDSLContext.deleteFrom(USER).where(USER.UID.eq(uid)).execute()
   }
 
-  // --- Tests ---
-
-  "WorkflowResource /owner_info" should "return owner info name when fields includes name" in
+  "WorkflowResource /owner_name" should "return owner name as plain text" in
     withOwnerInfoFixture { (wid, _) =>
       val resource = new WorkflowResource
-      val owner = resource.getOwnerInfo(wid, util.Arrays.asList("name"))
-      assert(owner.getName == "test_user")
-    }
-
-  it should "default owner info fields to name when fields is missing" in
-    withOwnerInfoFixture { (wid, _) =>
-      val resource = new WorkflowResource
-      val owner = resource.getOwnerInfo(wid, null)
-      assert(owner.getName == "test_user")
-    }
-
-  it should "reject unsupported owner info fields" in
-    withOwnerInfoFixture { (wid, _) =>
-      val resource = new WorkflowResource
-      assertThrows[NotAcceptableException] {
-        resource.getOwnerInfo(wid, util.Arrays.asList("password"))
-      }
+      val ownerName = resource.getOwnerName(wid)
+      assert(ownerName == "test_user")
     }
 }
