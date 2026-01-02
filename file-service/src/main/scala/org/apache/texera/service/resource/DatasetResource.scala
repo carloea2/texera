@@ -1424,15 +1424,15 @@ class DatasetResource {
   }
 
   private def validateFilePathOrThrow(filePath: String): String = {
-    val p = Option(filePath).getOrElse("")
-    val s = p.replace("\\", "/")
+    val path = Option(filePath).getOrElse("")
+    val tmpPath = path.replace("\\", "/")
     if (
-      p.isEmpty ||
-      s.startsWith("/") ||
-      s.split("/").exists(seg => seg == "." || seg == "..") ||
-      s.exists(ch => ch == 0.toChar || ch < 0x20.toChar || ch == 0x7f.toChar)
+      path.isEmpty ||
+      tmpPath.startsWith("/") ||
+      tmpPath.split("/").exists(seg => seg == "." || seg == "..") ||
+      tmpPath.exists(ch => ch == 0.toChar || ch < 0x20.toChar || ch == 0x7f.toChar)
     ) throw new BadRequestException("Invalid filePath")
-    p
+    path
   }
 
   private def initMultipartUpload(
@@ -1519,8 +1519,8 @@ class DatasetResource {
         // Pre-create part rows 1..numPartsValue with empty ETag.
         // This makes per-part locking cheap and deterministic.
 
-        val gs = DSL.generateSeries(1, numPartsValue).asTable("gs", "pn")
-        val PN = gs.field("pn", classOf[Integer])
+        val partNumberSeries = DSL.generateSeries(1, numPartsValue).asTable("gs", "pn")
+        val partNumberField = partNumberSeries.field("pn", classOf[Integer])
 
         ctx
           .insertInto(
@@ -1533,10 +1533,10 @@ class DatasetResource {
             ctx
               .select(
                 inl(uploadIdStr),
-                PN,
+                partNumberField,
                 inl("") // placeholder empty etag
               )
-              .from(gs)
+              .from(partNumberSeries)
           )
           .execute()
 
@@ -1630,14 +1630,14 @@ class DatasetResource {
       val totalCnt = agg.get("total", classOf[java.lang.Integer]).intValue()
       val doneCnt = agg.get("done", classOf[java.lang.Integer]).intValue()
 
-      if (totalCnt != expectedParts.toLong) {
+      if (totalCnt != expectedParts) {
         throw new WebApplicationException(
-          s"Part table mismatch: expected $expectedParts rows but found $total. Re-init the upload.",
+          s"Part table mismatch: expected $expectedParts rows but found $totalCnt. Re-init the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
 
-      if (doneCnt != expectedParts.toLong) {
+      if (doneCnt != expectedParts) {
         val missing = ctx
           .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER)
           .from(DATASET_UPLOAD_SESSION_PART)
