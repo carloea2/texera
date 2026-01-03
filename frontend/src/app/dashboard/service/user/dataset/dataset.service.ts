@@ -52,9 +52,9 @@ export interface MultipartUploadProgress {
   filePath: string;
   percentage: number;
   status: "initializing" | "uploading" | "finished" | "aborted";
-  uploadSpeed?: number;               // bytes per second
-  estimatedTimeRemaining?: number;    // seconds
-  totalTime?: number;                 // total seconds taken
+  uploadSpeed?: number; // bytes per second
+  estimatedTimeRemaining?: number; // seconds
+  totalTime?: number; // total seconds taken
 }
 
 @Injectable({
@@ -198,10 +198,7 @@ export class DatasetService {
         if (speedSamples.length > 5) {
           speedSamples.shift();
         }
-        const avgSpeed =
-          speedSamples.length > 0
-            ? speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length
-            : 0;
+        const avgSpeed = speedSamples.length > 0 ? speedSamples.reduce((a, b) => a + b, 0) / speedSamples.length : 0;
 
         const remaining = file.size - totalUploaded;
         let eta = avgSpeed > 0 ? remaining / avgSpeed : 0;
@@ -257,96 +254,91 @@ export class DatasetService {
 
             // 2. Upload each part to /multipart-upload/part using XMLHttpRequest
             return from(Array.from({ length: partCount }, (_, i) => i)).pipe(
-              mergeMap(
-                index => {
-                  const partNumber = index + 1;
-                  const start = index * partSize;
-                  const end = Math.min(start + partSize, file.size);
-                  const chunk = file.slice(start, end);
+              mergeMap(index => {
+                const partNumber = index + 1;
+                const start = index * partSize;
+                const end = Math.min(start + partSize, file.size);
+                const chunk = file.slice(start, end);
 
-                  return new Observable<void>(partObserver => {
-                    const xhr = new XMLHttpRequest();
+                return new Observable<void>(partObserver => {
+                  const xhr = new XMLHttpRequest();
 
-                    xhr.upload.addEventListener("progress", event => {
-                      if (event.lengthComputable) {
-                        partProgress.set(partNumber, event.loaded);
+                  xhr.upload.addEventListener("progress", event => {
+                    if (event.lengthComputable) {
+                      partProgress.set(partNumber, event.loaded);
 
-                        let totalUploaded = 0;
-                        partProgress.forEach(bytes => {
-                          totalUploaded += bytes;
-                        });
+                      let totalUploaded = 0;
+                      partProgress.forEach(bytes => {
+                        totalUploaded += bytes;
+                      });
 
-                        const percentage = Math.round((totalUploaded / file.size) * 100);
-                        const stats = calculateStats(totalUploaded);
+                      const percentage = Math.round((totalUploaded / file.size) * 100);
+                      const stats = calculateStats(totalUploaded);
 
-                        observer.next({
-                          filePath,
-                          percentage: Math.min(percentage, 99),
-                          status: "uploading",
-                          ...stats,
-                        });
-                      }
-                    });
-
-                    xhr.addEventListener("load", () => {
-                      if (xhr.status === 200 || xhr.status === 204) {
-                        // Mark part as fully uploaded
-                        partProgress.set(partNumber, chunk.size);
-
-                        let totalUploaded = 0;
-                        partProgress.forEach(bytes => {
-                          totalUploaded += bytes;
-                        });
-
-                        // Force stats recompute on completion
-                        lastUpdateTime = 0;
-                        const percentage = Math.round((totalUploaded / file.size) * 100);
-                        const stats = calculateStats(totalUploaded);
-
-                        observer.next({
-                          filePath,
-                          percentage: Math.min(percentage, 99),
-                          status: "uploading",
-                          ...stats,
-                        });
-
-                        partObserver.complete();
-                      } else {
-                        partObserver.error(
-                          new Error(`Failed to upload part ${partNumber} (HTTP ${xhr.status})`)
-                        );
-                      }
-                    });
-
-                    xhr.addEventListener("error", () => {
-                      // Remove failed part from progress
-                      partProgress.delete(partNumber);
-                      partObserver.error(new Error(`Failed to upload part ${partNumber}`));
-                    });
-
-                    const partUrl =
-                      `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload/part` +
-                      `?ownerEmail=${encodeURIComponent(ownerEmail)}` +
-                      `&datasetName=${encodeURIComponent(datasetName)}` +
-                      `&filePath=${encodeURIComponent(filePath)}` +
-                      `&partNumber=${partNumber}`;
-
-                    xhr.open("POST", partUrl);
-                    xhr.setRequestHeader("Content-Type", "application/octet-stream");
-                    const token = AuthService.getAccessToken();
-                    if (token) {
-                      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+                      observer.next({
+                        filePath,
+                        percentage: Math.min(percentage, 99),
+                        status: "uploading",
+                        ...stats,
+                      });
                     }
-                    xhr.send(chunk);
-                    return () => {
-                      try {
-                        xhr.abort();
-                      } catch {}
-                    };
                   });
-                },
-                concurrencyLimit
-              ),
+
+                  xhr.addEventListener("load", () => {
+                    if (xhr.status === 200 || xhr.status === 204) {
+                      // Mark part as fully uploaded
+                      partProgress.set(partNumber, chunk.size);
+
+                      let totalUploaded = 0;
+                      partProgress.forEach(bytes => {
+                        totalUploaded += bytes;
+                      });
+
+                      // Force stats recompute on completion
+                      lastUpdateTime = 0;
+                      const percentage = Math.round((totalUploaded / file.size) * 100);
+                      const stats = calculateStats(totalUploaded);
+
+                      observer.next({
+                        filePath,
+                        percentage: Math.min(percentage, 99),
+                        status: "uploading",
+                        ...stats,
+                      });
+
+                      partObserver.complete();
+                    } else {
+                      partObserver.error(new Error(`Failed to upload part ${partNumber} (HTTP ${xhr.status})`));
+                    }
+                  });
+
+                  xhr.addEventListener("error", () => {
+                    // Remove failed part from progress
+                    partProgress.delete(partNumber);
+                    partObserver.error(new Error(`Failed to upload part ${partNumber}`));
+                  });
+
+                  const partUrl =
+                    `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload/part` +
+                    `?ownerEmail=${encodeURIComponent(ownerEmail)}` +
+                    `&datasetName=${encodeURIComponent(datasetName)}` +
+                    `&filePath=${encodeURIComponent(filePath)}` +
+                    `&partNumber=${partNumber}`;
+
+                  xhr.open("POST", partUrl);
+                  xhr.setRequestHeader("Content-Type", "application/octet-stream");
+                  const token = AuthService.getAccessToken();
+                  if (token) {
+                    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+                  }
+                  xhr.send(chunk);
+                  return () => {
+                    try {
+                      xhr.abort();
+                    } catch {}
+                  };
+                });
+              }, concurrencyLimit),
               toArray(), // wait for all parts
               // 3. FINISH: notify backend that all parts are done
               switchMap(() => {
@@ -374,14 +366,13 @@ export class DatasetService {
                 });
                 observer.complete();
               }),
-              catchError(error => {
+              catchError((error: unknown) => {
                 // On error, compute best-effort percentage from bytes we've seen
                 let totalUploaded = 0;
                 partProgress.forEach(bytes => {
                   totalUploaded += bytes;
                 });
-                const percentage =
-                  file.size > 0 ? Math.round((totalUploaded / file.size) * 100) : 0;
+                const percentage = file.size > 0 ? Math.round((totalUploaded / file.size) * 100) : 0;
 
                 observer.next({
                   filePath,
@@ -414,7 +405,7 @@ export class DatasetService {
           })
         )
         .subscribe({
-          error: err => observer.error(err),
+          error: (err: unknown) => observer.error(err),
         });
 
       return () => subscription.unsubscribe();
