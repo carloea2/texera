@@ -664,8 +664,8 @@ class DatasetResource {
 
   @POST
   @RolesAllowed(Array("REGULAR", "ADMIN"))
-  @Path("/multipart-upload/part")
   @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
+  @Path("/multipart-upload/part")
   def uploadPart(
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
@@ -785,7 +785,7 @@ class DatasetResource {
       if (existing.isEmpty) {
         // Stream to S3 while holding the part lock (prevents concurrent streams for same part)
         val response: UploadPartResponse =
-          S3StorageClient.uploadPart(
+          S3StorageClient.uploadPartWithRequest(
             bucket = bucket,
             key = key,
             uploadId = uploadId,

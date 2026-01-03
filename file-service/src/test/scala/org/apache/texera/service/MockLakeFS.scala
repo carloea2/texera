@@ -104,12 +104,12 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
   // ---- Clients (lazy so they initialize after containers are started) ----
 
   lazy val lakefsApiClient: ApiClient = {
-    val c = new ApiClient()
-    c.setBasePath(lakefsApiBasePath)
+    val apiClient = new ApiClient()
+    apiClient.setBasePath(lakefsApiBasePath)
     // basic-auth for lakeFS API uses accessKey as username, secretKey as password
-    c.setUsername(lakefsAccessKeyID)
-    c.setPassword(lakefsSecretAccessKey)
-    c
+    apiClient.setUsername(lakefsAccessKeyID)
+    apiClient.setPassword(lakefsSecretAccessKey)
+    apiClient
   }
 
   lazy val repositoriesApi: RepositoriesApi = new RepositoriesApi(lakefsApiClient)
