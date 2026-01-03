@@ -667,7 +667,7 @@ class DatasetResource {
   @Consumes(Array(MediaType.APPLICATION_OCTET_STREAM))
   @Path("/multipart-upload/part")
   def uploadPart(
-      @QueryParam("ownerEmail") ownerEmail: String,
+      @QueryParam("ownerEmail") datasetOwnerEmail: String,
       @QueryParam("datasetName") datasetName: String,
       @QueryParam("filePath") encodedFilePath: String,
       @QueryParam("partNumber") partNumber: Int,
@@ -677,7 +677,7 @@ class DatasetResource {
   ): Response = {
 
     val uid = user.getUid
-    val dataset: Dataset = getDatasetBy(ownerEmail, datasetName)
+    val dataset: Dataset = getDatasetBy(datasetOwnerEmail, datasetName)
     val did = dataset.getDid
 
     if (encodedFilePath == null || encodedFilePath.isEmpty)
