@@ -104,8 +104,8 @@ export class DatasetDetailComponent implements OnInit {
   //  List of upload tasks – each task tracked by its filePath
   public uploadTasks: Array<
     MultipartUploadProgress & {
-    filePath: string;
-  }
+      filePath: string;
+    }
   > = [];
 
   @Output() userMakeChanges = new EventEmitter<void>();
@@ -551,10 +551,7 @@ export class DatasetDetailComponent implements OnInit {
     }, 5000);
   }
 
-  onClickAbortUploadProgress(
-    task: MultipartUploadProgress & { filePath: string },
-    onAborted?: () => void
-  ) {
+  onClickAbortUploadProgress(task: MultipartUploadProgress & { filePath: string }, onAborted?: () => void) {
     const subscription = this.uploadSubscriptions.get(task.filePath);
     if (subscription) {
       subscription.unsubscribe();
