@@ -18,7 +18,7 @@
  */
 
 import { Injectable } from "@angular/core";
-import { HttpClient, HttpParams } from "@angular/common/http";
+import { HttpClient, HttpErrorResponse, HttpParams } from "@angular/common/http";
 import { catchError, map, mergeMap, switchMap, tap, toArray } from "rxjs/operators";
 import { Dataset, DatasetVersion } from "../../../../common/type/dataset";
 import { AppSettings } from "../../../../common/app-setting";
@@ -239,7 +239,23 @@ export class DatasetService {
         { params: initParams }
       );
 
-      const subscription = init$
+      const initWithAbortRetry$ = init$.pipe(
+        catchError((res: unknown) => {
+          const err = res as HttpErrorResponse;
+          if (err.status !== 409) {
+            return throwError(() => err);
+          }
+
+          // Init failed because a session already exists. Abort it and retry init once.
+          return this.finalizeMultipartUpload(ownerEmail, datasetName, filePath, true).pipe(
+            // best-effort abort; if abort itself fails, let the re-init decide
+            catchError(() => EMPTY),
+            switchMap(() => init$)
+          );
+        })
+      );
+
+      const subscription = initWithAbortRetry$
         .pipe(
           switchMap(initResp => {
             // Notify UI that upload is starting
