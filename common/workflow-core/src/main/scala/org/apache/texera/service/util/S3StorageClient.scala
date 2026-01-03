@@ -288,7 +288,7 @@ object S3StorageClient {
     * @return              The {@link software.amazon.awssdk.services.s3.model.UploadPartResponse},
     *                      including the part ETag used for completing the multipart upload.
     */
-  def uploadPart(
+  def uploadPartWithRequest(
       bucket: String,
       key: String,
       uploadId: String,
@@ -296,7 +296,7 @@ object S3StorageClient {
       inputStream: InputStream,
       contentLength: Option[Long]
   ): UploadPartResponse = {
-    val body: RequestBody = contentLength match {
+    val requestBody: RequestBody = contentLength match {
       case Some(len) => RequestBody.fromInputStream(inputStream, len)
       case None =>
         val bytes = inputStream.readAllBytes()
@@ -311,7 +311,7 @@ object S3StorageClient {
       .partNumber(partNumber)
       .build()
 
-    s3Client.uploadPart(req, body)
+    s3Client.uploadPart(req, requestBody)
   }
 
 }

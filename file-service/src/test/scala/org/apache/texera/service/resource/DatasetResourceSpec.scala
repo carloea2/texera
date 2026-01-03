@@ -98,12 +98,12 @@ class DatasetResourceSpec
 
   // REGULAR user used specifically for multipart "no WRITE access" tests.
   private val multipartNoWriteUser: User = {
-    val u = new User
-    u.setName("multipart_user2")
-    u.setPassword("123")
-    u.setEmail("multipart_user2@test.com")
-    u.setRole(UserRoleEnum.REGULAR)
-    u
+    val user = new User
+    user.setName("multipart_user2")
+    user.setPassword("123")
+    user.setEmail("multipart_user2@test.com")
+    user.setRole(UserRoleEnum.REGULAR)
+    user
   }
 
   private val baseDataset: Dataset = {
@@ -123,13 +123,13 @@ class DatasetResourceSpec
     s"multipart-ds-${System.nanoTime()}-${Random.alphanumeric.take(6).mkString.toLowerCase}"
 
   private val multipartDataset: Dataset = {
-    val ds = new Dataset
-    ds.setName("multipart-ds")
-    ds.setRepositoryName(multipartRepoName)
-    ds.setIsPublic(true)
-    ds.setIsDownloadable(true)
-    ds.setDescription("dataset for multipart upload tests")
-    ds
+    val dataset = new Dataset
+    dataset.setName("multipart-ds")
+    dataset.setRepositoryName(multipartRepoName)
+    dataset.setIsPublic(true)
+    dataset.setIsDownloadable(true)
+    dataset.setDescription("dataset for multipart upload tests")
+    dataset
   }
 
   // ---------- DAOs / resource ----------
@@ -301,36 +301,36 @@ class DatasetResourceSpec
 
   // ---------- SHA-256 Utils ----------
   private def sha256OfChunks(chunks: Seq[Array[Byte]]): Array[Byte] = {
-    val md = MessageDigest.getInstance("SHA-256")
-    chunks.foreach(md.update)
-    md.digest()
+    val messageDigest = MessageDigest.getInstance("SHA-256")
+    chunks.foreach(messageDigest.update)
+    messageDigest.digest()
   }
 
   private def sha256OfFile(path: java.nio.file.Path): Array[Byte] = {
-    val md = MessageDigest.getInstance("SHA-256")
-    val in = Files.newInputStream(path)
+    val messageDigest = MessageDigest.getInstance("SHA-256")
+    val inputStream = Files.newInputStream(path)
     try {
-      val buf = new Array[Byte](8192)
-      var n = in.read(buf)
-      while (n != -1) {
-        md.update(buf, 0, n)
-        n = in.read(buf)
+      val buffer = new Array[Byte](8192)
+      var bytesRead = inputStream.read(buffer)
+      while (bytesRead != -1) {
+        messageDigest.update(buffer, 0, bytesRead)
+        bytesRead = inputStream.read(buffer)
       }
-      md.digest()
-    } finally in.close()
+      messageDigest.digest()
+    } finally inputStream.close()
   }
 
   // ---------- helpers ----------
-  private def enc(s: String): String =
-    URLEncoder.encode(s, StandardCharsets.UTF_8.name())
+  private def urlEnc(raw: String): String =
+    URLEncoder.encode(raw, StandardCharsets.UTF_8.name())
 
   /** Minimum part-size rule (S3-style): every part except the LAST must be >= 5 MiB. */
   private val MinNonFinalPartBytes: Int = 5 * 1024 * 1024
-  private def minPartBytes(b: Byte): Array[Byte] =
-    Array.fill[Byte](MinNonFinalPartBytes)(b)
+  private def minPartBytes(fillByte: Byte): Array[Byte] =
+    Array.fill[Byte](MinNonFinalPartBytes)(fillByte)
 
-  private def tinyBytes(b: Byte, n: Int = 1): Array[Byte] =
-    Array.fill[Byte](n)(b)
+  private def tinyBytes(fillByte: Byte, n: Int = 1): Array[Byte] =
+    Array.fill[Byte](n)(fillByte)
 
   /** InputStream that behaves like a mid-flight network drop after N bytes. */
   private def flakyStream(
@@ -343,9 +343,9 @@ class DatasetResourceSpec
       override def read(): Int = {
         if (pos >= failAfterBytes) throw new IOException(msg)
         if (pos >= payload.length) return -1
-        val b = payload(pos) & 0xff
+        val nextByte = payload(pos) & 0xff
         pos += 1
-        b
+        nextByte
       }
     }
 
@@ -396,7 +396,7 @@ class DatasetResourceSpec
       "init",
       ownerUser.getEmail,
       multipartDataset.getName,
-      enc(filePath),
+      urlEnc(filePath),
       Optional.of(numParts),
       user
     )
@@ -409,7 +409,7 @@ class DatasetResourceSpec
       "finish",
       ownerUser.getEmail,
       multipartDataset.getName,
-      enc(filePath),
+      urlEnc(filePath),
       Optional.empty(),
       user
     )
@@ -422,7 +422,7 @@ class DatasetResourceSpec
       "abort",
       ownerUser.getEmail,
       multipartDataset.getName,
-      enc(filePath),
+      urlEnc(filePath),
       Optional.empty(),
       user
     )
@@ -442,7 +442,7 @@ class DatasetResourceSpec
     datasetResource.uploadPart(
       ownerUser.getEmail,
       multipartDataset.getName,
-      enc(filePath),
+      urlEnc(filePath),
       partNumber,
       new ByteArrayInputStream(bytes),
       hdrs,
@@ -460,7 +460,7 @@ class DatasetResourceSpec
     datasetResource.uploadPart(
       ownerUser.getEmail,
       multipartDataset.getName,
-      enc(filePath),
+      urlEnc(filePath),
       partNumber,
       stream,
       mkHeaders(contentLength),
@@ -487,9 +487,9 @@ class DatasetResourceSpec
       .toList
 
   private def fetchUploadIdOrFail(filePath: String): String = {
-    val s = fetchSession(filePath)
-    s should not be null
-    s.getUploadId
+    val sessionRecord = fetchSession(filePath)
+    sessionRecord should not be null
+    sessionRecord.getUploadId
   }
 
   private def assertPlaceholdersCreated(uploadId: String, expectedParts: Int): Unit = {
@@ -515,13 +515,13 @@ class DatasetResourceSpec
 
     resp.getStatus shouldEqual 200
 
-    val s = fetchSession(filePath)
-    s should not be null
-    s.getNumPartsRequested shouldEqual 3
-    s.getUploadId should not be null
-    s.getPhysicalAddress should not be null
+    val sessionRecord = fetchSession(filePath)
+    sessionRecord should not be null
+    sessionRecord.getNumPartsRequested shouldEqual 3
+    sessionRecord.getUploadId should not be null
+    sessionRecord.getPhysicalAddress should not be null
 
-    assertPlaceholdersCreated(s.getUploadId, expectedParts = 3)
+    assertPlaceholdersCreated(sessionRecord.getUploadId, expectedParts = 3)
   }
 
   it should "reject missing numParts" in {
@@ -531,7 +531,7 @@ class DatasetResourceSpec
         "init",
         ownerUser.getEmail,
         multipartDataset.getName,
-        enc(filePath),
+        urlEnc(filePath),
         Optional.empty(),
         multipartOwnerSessionUser
       )
@@ -569,7 +569,7 @@ class DatasetResourceSpec
         "not-a-real-type",
         ownerUser.getEmail,
         multipartDataset.getName,
-        enc(filePath),
+        urlEnc(filePath),
         Optional.empty(),
         multipartOwnerSessionUser
       )
@@ -597,9 +597,9 @@ class DatasetResourceSpec
         case t: Throwable => Left(t)
       }
 
-    val f1 = Future(callInit())
-    val f2 = Future(callInit())
-    val results = Await.result(Future.sequence(Seq(f1, f2)), 30.seconds)
+    val future1 = Future(callInit())
+    val future2 = Future(callInit())
+    val results = Await.result(Future.sequence(Seq(future1, future2)), 30.seconds)
 
     val oks = results.collect { case Right(r) if r.getStatus == 200 => r }
     val fails = results.collect { case Left(t) => t }
@@ -615,9 +615,9 @@ class DatasetResourceSpec
         )
     }
 
-    val s = fetchSession(filePath)
-    s should not be null
-    assertPlaceholdersCreated(s.getUploadId, expectedParts = 2)
+    val sessionRecord = fetchSession(filePath)
+    sessionRecord should not be null
+    assertPlaceholdersCreated(sessionRecord.getUploadId, expectedParts = 2)
   }
 
   it should "reject sequential double init with 409 CONFLICT" in {
@@ -681,7 +681,7 @@ class DatasetResourceSpec
   }
 
   it should "reject null/empty filePath param early without depending on error text" in {
-    val hdrs = mkHeaders(1L)
+    val httpHeaders = mkHeaders(1L)
 
     val ex1 = intercept[BadRequestException] {
       datasetResource.uploadPart(
@@ -690,7 +690,7 @@ class DatasetResourceSpec
         null,
         1,
         new ByteArrayInputStream(Array.emptyByteArray),
-        hdrs,
+        httpHeaders,
         multipartOwnerSessionUser
       )
     }
@@ -703,7 +703,7 @@ class DatasetResourceSpec
         "",
         1,
         new ByteArrayInputStream(Array.emptyByteArray),
-        hdrs,
+        httpHeaders,
         multipartOwnerSessionUser
       )
     }
@@ -774,12 +774,12 @@ class DatasetResourceSpec
     initUpload(filePath, numParts = 2)
     val uploadId = fetchUploadIdOrFail(filePath)
 
-    val cp = getDSLContext.configuration().connectionProvider()
-    val conn = cp.acquire()
-    conn.setAutoCommit(false)
+    val connectionProvider = getDSLContext.configuration().connectionProvider()
+    val connection = connectionProvider.acquire()
+    connection.setAutoCommit(false)
 
     try {
-      val locking = DSL.using(conn, SQLDialect.POSTGRES)
+      val locking = DSL.using(connection, SQLDialect.POSTGRES)
       locking
         .selectFrom(DATASET_UPLOAD_SESSION_PART)
         .where(
@@ -795,8 +795,8 @@ class DatasetResourceSpec
       }
       assertStatus(ex, 409)
     } finally {
-      conn.rollback()
-      cp.release(conn)
+      connection.rollback()
+      connectionProvider.release(connection)
     }
 
     uploadPart(filePath, 1, minPartBytes(3.toByte)).getStatus shouldEqual 200
@@ -807,12 +807,12 @@ class DatasetResourceSpec
     initUpload(filePath, numParts = 2)
     val uploadId = fetchUploadIdOrFail(filePath)
 
-    val cp = getDSLContext.configuration().connectionProvider()
-    val conn = cp.acquire()
-    conn.setAutoCommit(false)
+    val connectionProvider = getDSLContext.configuration().connectionProvider()
+    val connection = connectionProvider.acquire()
+    connection.setAutoCommit(false)
 
     try {
-      val locking = DSL.using(conn, SQLDialect.POSTGRES)
+      val locking = DSL.using(connection, SQLDialect.POSTGRES)
       locking
         .selectFrom(DATASET_UPLOAD_SESSION_PART)
         .where(
@@ -825,8 +825,8 @@ class DatasetResourceSpec
 
       uploadPart(filePath, 2, tinyBytes(9.toByte)).getStatus shouldEqual 200
     } finally {
-      conn.rollback()
-      cp.release(conn)
+      connection.rollback()
+      connectionProvider.release(connection)
     }
   }
 
@@ -880,8 +880,8 @@ class DatasetResourceSpec
     uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
     uploadPart(filePath, 2, tinyBytes(2.toByte)).getStatus shouldEqual 200
 
-    val s = fetchSession(filePath)
-    val uploadId = s.getUploadId
+    val sessionRecord = fetchSession(filePath)
+    val uploadId = sessionRecord.getUploadId
 
     getDSLContext
       .insertInto(DATASET_UPLOAD_SESSION_PART)
@@ -941,12 +941,12 @@ class DatasetResourceSpec
     initUpload(filePath, numParts = 1)
     uploadPart(filePath, 1, tinyBytes(1.toByte)).getStatus shouldEqual 200
 
-    val cp = getDSLContext.configuration().connectionProvider()
-    val conn = cp.acquire()
-    conn.setAutoCommit(false)
+    val connectionProvider = getDSLContext.configuration().connectionProvider()
+    val connection = connectionProvider.acquire()
+    connection.setAutoCommit(false)
 
     try {
-      val locking = DSL.using(conn, SQLDialect.POSTGRES)
+      val locking = DSL.using(connection, SQLDialect.POSTGRES)
       locking
         .selectFrom(DATASET_UPLOAD_SESSION)
         .where(
@@ -961,8 +961,8 @@ class DatasetResourceSpec
       val ex = intercept[WebApplicationException] { finishUpload(filePath) }
       assertStatus(ex, 409)
     } finally {
-      conn.rollback()
-      cp.release(conn)
+      connection.rollback()
+      connectionProvider.release(connection)
     }
   }
 
@@ -1002,12 +1002,12 @@ class DatasetResourceSpec
     val filePath = uniqueFilePath("abort-lock-race")
     initUpload(filePath, numParts = 1)
 
-    val cp = getDSLContext.configuration().connectionProvider()
-    val conn = cp.acquire()
-    conn.setAutoCommit(false)
+    val connectionProvider = getDSLContext.configuration().connectionProvider()
+    val connection = connectionProvider.acquire()
+    connection.setAutoCommit(false)
 
     try {
-      val locking = DSL.using(conn, SQLDialect.POSTGRES)
+      val locking = DSL.using(connection, SQLDialect.POSTGRES)
       locking
         .selectFrom(DATASET_UPLOAD_SESSION)
         .where(
@@ -1022,8 +1022,8 @@ class DatasetResourceSpec
       val ex = intercept[WebApplicationException] { abortUpload(filePath) }
       assertStatus(ex, 409)
     } finally {
-      conn.rollback()
-      cp.release(conn)
+      connection.rollback()
+      connectionProvider.release(connection)
     }
   }
 
@@ -1106,13 +1106,13 @@ class DatasetResourceSpec
 
     uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
 
-    val p2 = Array.fill[Byte](1024 * 1024)(2.toByte)
+    val bytesPart2 = Array.fill[Byte](1024 * 1024)(2.toByte)
     intercept[Throwable] {
       uploadPartWithStream(
         filePath,
         partNumber = 2,
-        stream = flakyStream(p2, failAfterBytes = 4096),
-        contentLength = p2.length.toLong
+        stream = flakyStream(bytesPart2, failAfterBytes = 4096),
+        contentLength = bytesPart2.length.toLong
       )
     }
 
@@ -1169,13 +1169,13 @@ class DatasetResourceSpec
       val uploadId = fetchUploadIdOrFail(filePath)
 
       uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
-      val p2 = Array.fill[Byte](1024 * 1024)(2.toByte)
+      val bytesPart2 = Array.fill[Byte](1024 * 1024)(2.toByte)
       intercept[Throwable] {
         uploadPartWithStream(
           filePath,
           partNumber = 2,
-          stream = flakyStream(p2, failAfterBytes = 4096),
-          contentLength = p2.length.toLong
+          stream = flakyStream(bytesPart2, failAfterBytes = 4096),
+          contentLength = bytesPart2.length.toLong
         )
       }
 
@@ -1217,17 +1217,17 @@ class DatasetResourceSpec
     val filePath = uniqueFilePath("sha256-positive")
     initUpload(filePath, numParts = 3).getStatus shouldEqual 200
 
-    val p1 = minPartBytes(1.toByte)
-    val p2 = minPartBytes(2.toByte)
-    val p3 = Array.fill[Byte](123)(3.toByte)
+    val part1 = minPartBytes(1.toByte)
+    val part2 = minPartBytes(2.toByte)
+    val part3 = Array.fill[Byte](123)(3.toByte)
 
-    uploadPart(filePath, 1, p1).getStatus shouldEqual 200
-    uploadPart(filePath, 2, p2).getStatus shouldEqual 200
-    uploadPart(filePath, 3, p3).getStatus shouldEqual 200
+    uploadPart(filePath, 1, part1).getStatus shouldEqual 200
+    uploadPart(filePath, 2, part2).getStatus shouldEqual 200
+    uploadPart(filePath, 3, part3).getStatus shouldEqual 200
 
     finishUpload(filePath).getStatus shouldEqual 200
 
-    val expected = sha256OfChunks(Seq(p1, p2, p3))
+    val expected = sha256OfChunks(Seq(part1, part2, part3))
 
     val repoName = multipartDataset.getRepositoryName
     val ref = "main"
@@ -1241,18 +1241,18 @@ class DatasetResourceSpec
     val filePath = uniqueFilePath("sha256-negative")
     initUpload(filePath, numParts = 3).getStatus shouldEqual 200
 
-    val p1 = minPartBytes(1.toByte)
-    val p2 = minPartBytes(2.toByte)
-    val p3 = Array.fill[Byte](123)(3.toByte)
+    val part1 = minPartBytes(1.toByte)
+    val part2 = minPartBytes(2.toByte)
+    val part3 = Array.fill[Byte](123)(3.toByte)
 
-    val intendedHash = sha256OfChunks(Seq(p1, p2, p3))
+    val intendedHash = sha256OfChunks(Seq(part1, part2, part3))
 
-    val p2Corrupt = p2.clone()
-    p2Corrupt(0) = (p2Corrupt(0) ^ 0x01).toByte
+    val part2corrupt = part2.clone()
+    part2corrupt(0) = (part2corrupt(0) ^ 0x01).toByte
 
-    uploadPart(filePath, 1, p1).getStatus shouldEqual 200
-    uploadPart(filePath, 2, p2Corrupt).getStatus shouldEqual 200
-    uploadPart(filePath, 3, p3).getStatus shouldEqual 200
+    uploadPart(filePath, 1, part1).getStatus shouldEqual 200
+    uploadPart(filePath, 2, part2corrupt).getStatus shouldEqual 200
+    uploadPart(filePath, 3, part3).getStatus shouldEqual 200
 
     finishUpload(filePath).getStatus shouldEqual 200
 
@@ -1263,7 +1263,7 @@ class DatasetResourceSpec
     val gotHash = sha256OfFile(Paths.get(downloaded.toURI))
     gotHash.toSeq should not equal intendedHash.toSeq
 
-    val corruptHash = sha256OfChunks(Seq(p1, p2Corrupt, p3))
+    val corruptHash = sha256OfChunks(Seq(part1, part2corrupt, part3))
     gotHash.toSeq shouldEqual corruptHash.toSeq
   }
 
@@ -1282,12 +1282,12 @@ class DatasetResourceSpec
         initUpload(filePath, numParts).getStatus shouldEqual 200
 
         val sharedMin = minPartBytes((i % 127).toByte)
-        val partFuts = (1 to numParts).map { pn =>
+        val partFuts = (1 to numParts).map { partN =>
           Future {
             val bytes =
-              if (pn < numParts) sharedMin
-              else tinyBytes((pn % 127).toByte, n = 1024)
-            uploadPart(filePath, pn, bytes).getStatus shouldEqual 200
+              if (partN < numParts) sharedMin
+              else tinyBytes((partN % 127).toByte, n = 1024)
+            uploadPart(filePath, partN, bytes).getStatus shouldEqual 200
           }
         }
 
