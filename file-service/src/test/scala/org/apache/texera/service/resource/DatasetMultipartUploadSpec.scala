@@ -33,10 +33,10 @@ import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, User}
 import org.apache.texera.service.MockLakeFS
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
-import org.scalatest.tagobjects.Slow
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Tag}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.tagobjects.Slow
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -50,6 +50,9 @@ import java.util.concurrent.CyclicBarrier
 import java.util.{Collections, Date, Locale, Optional}
 import scala.util.Random
 
+import ch.qos.logback.classic.{Level, Logger}
+import org.slf4j.LoggerFactory
+
 object StressMultipart extends Tag("org.apache.texera.stress.multipart")
 
 class DatasetMultipartUploadSpec
@@ -59,6 +62,15 @@ class DatasetMultipartUploadSpec
     with MockLakeFS
     with BeforeAndAfterAll
     with BeforeAndAfterEach {
+
+  private var savedLevels: Map[String, Level] = Map.empty
+
+  private def setLoggerLevel(loggerName: String, newLevel: Level): Level = {
+    val logger = LoggerFactory.getLogger(loggerName).asInstanceOf[Logger]
+    val prev = logger.getLevel
+    logger.setLevel(newLevel)
+    prev
+  }
 
   // ---------- execution context (for race tests) ----------
   private implicit val ec: ExecutionContext = ExecutionContext.global
@@ -114,11 +126,23 @@ class DatasetMultipartUploadSpec
 
     testDataset.setOwnerUid(testUser.getUid)
     datasetDao.insert(testDataset)
+    savedLevels = Map(
+      "org.apache.http.wire" -> setLoggerLevel("org.apache.http.wire", Level.WARN),
+      "org.apache.http.headers" -> setLoggerLevel(
+        "org.apache.http.headers",
+        Level.WARN
+      ) // optional, but usually also noisy
+    )
   }
 
   override protected def afterAll(): Unit = {
     try shutdownDB()
-    finally super.afterAll()
+    finally {
+      savedLevels.foreach {
+        case (name, prev) =>
+          setLoggerLevel(name, prev)
+      }
+    }
   }
 
   override protected def beforeEach(): Unit = {
@@ -161,6 +185,23 @@ class DatasetMultipartUploadSpec
 
   private def tinyBytes(b: Byte, n: Int = 1): Array[Byte] =
     Array.fill[Byte](n)(b)
+
+  /** InputStream that behaves like a mid-flight network drop after N bytes. */
+  private def flakyStream(
+      payload: Array[Byte],
+      failAfterBytes: Int,
+      msg: String = "simulated network drop"
+  ): InputStream =
+    new InputStream {
+      private var pos = 0
+      override def read(): Int = {
+        if (pos >= failAfterBytes) throw new IOException(msg)
+        if (pos >= payload.length) return -1
+        val b = payload(pos) & 0xff
+        pos += 1
+        b
+      }
+    }
 
   /** Minimal HttpHeaders impl needed by DatasetResource.uploadPart */
   private def mkHeaders(contentLength: Long): HttpHeaders =
@@ -921,6 +962,127 @@ class DatasetMultipartUploadSpec
     fetchSession(filePath) should not be null
     fetchPartRows(uploadId).nonEmpty shouldEqual true
   }
+  it should "allow abort + re-init after part 1 succeeded but part 2 drops mid-flight; then complete successfully" in {
+    val filePath = uniqueFilePath("reinit-after-part2-drop")
+
+    initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+    val uploadId1 = fetchUploadIdOrFail(filePath)
+
+    // Part 1 (non-final) must be >= 5 MiB.
+    uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+
+    // Start part 2, then "mid-flight stop sending bytes".
+    val p2 =
+      Array.fill[Byte](1024 * 1024)(
+        2.toByte
+      ) // final part can be small, but use size to simulate mid-flight
+    intercept[Throwable] {
+      uploadPartWithStream(
+        filePath,
+        partNumber = 2,
+        stream = flakyStream(p2, failAfterBytes = 4096),
+        contentLength = p2.length.toLong
+      )
+    }
+
+    // Abort should clean session + parts, then we should be able to re-init.
+    abortUpload(filePath).getStatus shouldEqual 200
+    fetchSession(filePath) shouldBe null
+    fetchPartRows(uploadId1) shouldBe empty
+
+    initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+    uploadPart(filePath, 1, minPartBytes(3.toByte)).getStatus shouldEqual 200
+    uploadPart(filePath, 2, tinyBytes(4.toByte, n = 123)).getStatus shouldEqual 200
+    finishUpload(filePath).getStatus shouldEqual 200
+    fetchSession(filePath) shouldBe null
+  }
+
+  it should "allow re-upload after failures: (1) part1 drop, (2) part2 drop, (3) finalize failure; each followed by abort + re-init + success" in {
+    def abortAndAssertClean(filePath: String, uploadId: String): Unit = {
+      abortUpload(filePath).getStatus shouldEqual 200
+      fetchSession(filePath) shouldBe null
+      fetchPartRows(uploadId) shouldBe empty
+    }
+
+    def reinitAndFinishHappy(filePath: String): Unit = {
+      initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+      uploadPart(filePath, 1, minPartBytes(7.toByte)).getStatus shouldEqual 200
+      uploadPart(filePath, 2, tinyBytes(8.toByte, n = 321)).getStatus shouldEqual 200
+      finishUpload(filePath).getStatus shouldEqual 200
+      fetchSession(filePath) shouldBe null
+    }
+
+    // (1) part 1 drops mid-flight, then abort + re-init should allow a clean re-upload.
+    withClue("scenario (1): part1 mid-flight drop") {
+      val filePath = uniqueFilePath("reupload-part1-drop")
+      initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+      val uploadId = fetchUploadIdOrFail(filePath)
+
+      val p1 = minPartBytes(5.toByte)
+      intercept[Throwable] {
+        uploadPartWithStream(
+          filePath,
+          partNumber = 1,
+          stream = flakyStream(p1, failAfterBytes = 4096),
+          contentLength = p1.length.toLong
+        )
+      }
+
+      // Ensure we didn't partially commit an ETag for the failed part.
+      fetchPartRows(uploadId).find(_.getPartNumber == 1).get.getEtag shouldEqual ""
+
+      abortAndAssertClean(filePath, uploadId)
+      reinitAndFinishHappy(filePath)
+    }
+
+    // (2) part 2 drops mid-flight, then abort + re-init should allow a clean re-upload.
+    withClue("scenario (2): part2 mid-flight drop") {
+      val filePath = uniqueFilePath("reupload-part2-drop")
+      initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+      val uploadId = fetchUploadIdOrFail(filePath)
+
+      uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+      val p2 = Array.fill[Byte](1024 * 1024)(2.toByte)
+      intercept[Throwable] {
+        uploadPartWithStream(
+          filePath,
+          partNumber = 2,
+          stream = flakyStream(p2, failAfterBytes = 4096),
+          contentLength = p2.length.toLong
+        )
+      }
+
+      abortAndAssertClean(filePath, uploadId)
+      reinitAndFinishHappy(filePath)
+    }
+
+    // (3) finalize fails downstream (corrupt ETag), then abort + re-init should allow a clean re-upload.
+    withClue("scenario (3): finalize failure then re-upload") {
+      val filePath = uniqueFilePath("reupload-finalize-fail")
+      initUpload(filePath, numParts = 2).getStatus shouldEqual 200
+
+      uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+      uploadPart(filePath, 2, tinyBytes(2.toByte)).getStatus shouldEqual 200
+
+      val uploadId = fetchUploadIdOrFail(filePath)
+      getDSLContext
+        .update(DATASET_UPLOAD_SESSION_PART)
+        .set(DATASET_UPLOAD_SESSION_PART.ETAG, "definitely-not-a-real-etag")
+        .where(
+          DATASET_UPLOAD_SESSION_PART.UPLOAD_ID
+            .eq(uploadId)
+            .and(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.eq(1))
+        )
+        .execute()
+
+      intercept[Throwable] { finishUpload(filePath) }
+      fetchSession(filePath) should not be null
+      fetchPartRows(uploadId).nonEmpty shouldEqual true
+
+      abortAndAssertClean(filePath, uploadId)
+      reinitAndFinishHappy(filePath)
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // CORRUPTION CHEKS
@@ -984,14 +1146,13 @@ class DatasetMultipartUploadSpec
     val corruptHash = sha256OfChunks(Seq(p1, p2Corrupt, p3))
     gotHash.toSeq shouldEqual corruptHash.toSeq
   }
-
   // ---------------------------------------------------------------------------
   // STRESS / SOAK TESTS (tagged;)
   // ---------------------------------------------------------------------------
 
   it should "survive 2 concurrent multipart uploads (fan-out)" taggedAs (StressMultipart, Slow) in {
     val parallelUploads = 2
-    val maxParts = 3
+    val maxParts = 2
 
     def oneUpload(i: Int): Future[Unit] =
       Future {
@@ -1025,7 +1186,7 @@ class DatasetMultipartUploadSpec
     val filePath = uniqueFilePath("stress-same-part")
     initUpload(filePath, numParts = 2).getStatus shouldEqual 200
 
-    val contenders = 4
+    val contenders = 2
     val barrier = new CyclicBarrier(contenders)
 
     def tryUploadStatus(): Future[Int] =

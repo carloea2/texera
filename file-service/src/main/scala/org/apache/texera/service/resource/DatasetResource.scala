@@ -685,7 +685,7 @@ class DatasetResource {
     if (partNumber < 1)
       throw new BadRequestException("partNumber must be >= 1")
 
-    val filePath = validateFilePathOrThrow(
+    val filePath = validateAndNormalizeFilePathOrThrow(
       URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
     )
 
@@ -738,7 +738,15 @@ class DatasetResource {
       }
 
       val uploadId = session.getUploadId
-      val (bucket, key) = LakeFSStorageClient.parsePhysicalAddress(physicalAddr)
+      val (bucket, key) =
+        try LakeFSStorageClient.parsePhysicalAddress(physicalAddr)
+        catch {
+          case e: IllegalArgumentException =>
+            throw new WebApplicationException(
+              s"Upload session has invalid physicalAddress. Re-init the upload. (${e.getMessage})",
+              Response.Status.INTERNAL_SERVER_ERROR
+            )
+        }
 
       // Per-part lock: if another request is streaming the same part, fail fast.
       val partRow =
@@ -1377,14 +1385,13 @@ class DatasetResource {
     dataset
   }
 
-  private def validateFilePathOrThrow(filePath: String): String = {
-    val path = Option(filePath).getOrElse("")
-    val tmpPath = path.replace("\\", "/")
+  private def validateAndNormalizeFilePathOrThrow(filePath: String): String = {
+    val path = Option(filePath).getOrElse("").replace("\\", "/")
     if (
       path.isEmpty ||
-      tmpPath.startsWith("/") ||
-      tmpPath.split("/").exists(seg => seg == "." || seg == "..") ||
-      tmpPath.exists(ch => ch == 0.toChar || ch < 0x20.toChar || ch == 0x7f.toChar)
+      path.startsWith("/") ||
+      path.split("/").exists(seg => seg == "." || seg == "..") ||
+      path.exists(ch => ch == 0.toChar || ch < 0x20.toChar || ch == 0x7f.toChar)
     ) throw new BadRequestException("Invalid filePath")
     path
   }
@@ -1405,7 +1412,9 @@ class DatasetResource {
       val repositoryName = dataset.getRepositoryName
 
       val filePath =
-        validateFilePathOrThrow(URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name()))
+        validateAndNormalizeFilePathOrThrow(
+          URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
+        )
 
       val numPartsValue = numParts.toScala.getOrElse {
         throw new BadRequestException("numParts is required for initialization")
@@ -1517,7 +1526,7 @@ class DatasetResource {
       uid: Int
   ): Response = {
 
-    val filePath = validateFilePathOrThrow(
+    val filePath = validateAndNormalizeFilePathOrThrow(
       URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
     )
 
@@ -1665,7 +1674,7 @@ class DatasetResource {
       uid: Int
   ): Response = {
 
-    val filePath = validateFilePathOrThrow(
+    val filePath = validateAndNormalizeFilePathOrThrow(
       URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
     )
 
