@@ -115,7 +115,7 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
   lazy val repositoriesApi: RepositoriesApi = new RepositoriesApi(lakefsApiClient)
 
   /**
-    * S3 client pointed at MinIO.
+    * S3 client instance for testing pointed at MinIO.
     *
     * Notes:
     * - Region can be any value for MinIO, but MUST match what your signing expects.
@@ -123,11 +123,12 @@ trait MockLakeFS extends ForAllTestContainer with BeforeAndAfterAll { self: Suit
     * - Path-style is important: http://host:port/bucket/key
     */
   lazy val s3Client: S3Client = {
+    //Temporal credentials for testing purposes only
     val creds = AwsBasicCredentials.create("texera_minio", "password")
     S3Client
       .builder()
       .endpointOverride(URI.create(StorageConfig.s3Endpoint)) // set in afterStart()
-      .region(Region.US_WEST_2)
+      .region(Region.US_WEST_2) // Required for `.build()`; not important in this test config.
       .credentialsProvider(StaticCredentialsProvider.create(creds))
       .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
       .build()
