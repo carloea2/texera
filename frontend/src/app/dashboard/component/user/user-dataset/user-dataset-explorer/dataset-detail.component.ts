@@ -39,12 +39,14 @@ import { FileUploadItem } from "../../../../type/dashboard-file.interface";
 import { DatasetStagedObject } from "../../../../../common/type/dataset-staged-object";
 import { NzModalService } from "ng-zorro-antd/modal";
 import { AdminSettingsService } from "../../../../service/admin/settings/admin-settings.service";
-import { HttpErrorResponse } from "@angular/common/http";
+import { HttpErrorResponse, HttpStatusCode } from "@angular/common/http";
 import { Subscription } from "rxjs";
 import { formatSpeed, formatTime } from "src/app/common/util/format.util";
 import { format } from "date-fns";
 
 export const THROTTLE_TIME_MS = 1000;
+export const ABORT_RETRY_MAX_ATTEMPTS = 10;
+export const ABORT_RETRY_BACKOFF_BASE_MS = 100;
 
 @UntilDestroy()
 @Component({
@@ -597,8 +599,8 @@ export class DatasetDetailComponent implements OnInit {
             }
 
             // Backend is still finalizing/aborting; retry with a tiny backoff
-            if (err.status === 409 && attempt < 10) {
-              setTimeout(() => abortWithRetry(attempt + 1), 100 * (attempt + 1));
+            if (err.status === HttpStatusCode.Conflict && attempt < ABORT_RETRY_MAX_ATTEMPTS) {
+              setTimeout(() => abortWithRetry(attempt + 1), ABORT_RETRY_BACKOFF_BASE_MS * (attempt + 1));
               return;
             }
 
