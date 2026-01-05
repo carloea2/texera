@@ -203,7 +203,9 @@ class AggregateOpSpec extends AnyFunSuite {
     assert(result == 250L)
   }
 
-  test("MIN aggregation (DOUBLE) is solid: empty/null/NaN, infinities, signed zero, and lots of values") {
+  test(
+    "MIN aggregation (DOUBLE) is solid: empty/null/NaN, infinities, signed zero, and many values"
+  ) {
     val schema = makeSchema("temperature" -> AttributeType.DOUBLE)
 
     val operation = makeAggregationOp(AggregationFunction.MIN, "temperature", "min_temp")
@@ -236,7 +238,7 @@ class AggregateOpSpec extends AnyFunSuite {
       makeTuple(schema, 10.25),
       makeTuple(schema, -2.5),
       makeTuple(schema, 5.0),
-      makeTuple(schema, -2.5000000001),   // slightly smaller than -2.5
+      makeTuple(schema, -2.5000000001), // slightly smaller than -2.5
       makeTuple(schema, 1.0e-12)
     )
 
@@ -302,12 +304,12 @@ class AggregateOpSpec extends AnyFunSuite {
     val values: Seq[java.lang.Double] =
       (1 to 10000).map { index =>
         index % 250 match {
-          case 0  => null
-          case 1  => Double.NaN
-          case 2  => Double.PositiveInfinity
-          case 3  => Double.NegativeInfinity
-          case 4  => -0.0
-          case _  =>
+          case 0 => null
+          case 1 => Double.NaN
+          case 2 => Double.PositiveInfinity
+          case 3 => Double.NegativeInfinity
+          case 4 => -0.0
+          case _ =>
             // wide-ish range with some tiny magnitudes too
             val sign = if (rng.nextBoolean()) 1.0 else -1.0
             sign * (rng.nextDouble() * 1.0e6) / (if (rng.nextInt(20) == 0) 1.0e12 else 1.0)
@@ -321,8 +323,7 @@ class AggregateOpSpec extends AnyFunSuite {
         if (x != null && !java.lang.Double.isNaN(x)) {
           if (!found) {
             currentMin = x; found = true
-          }
-          else if (java.lang.Double.compare(x, currentMin) < 0) currentMin = x
+          } else if (java.lang.Double.compare(x, currentMin) < 0) currentMin = x
         }
       }
       if (!found) null else currentMin
@@ -337,9 +338,16 @@ class AggregateOpSpec extends AnyFunSuite {
     } else {
       val got = gotAny.asInstanceOf[Number].doubleValue()
       // exact match: should be one of the seen inputs, no tolerance needed
-      if (expected == 0.0 && java.lang.Double.doubleToRawLongBits(expected) != java.lang.Double.doubleToRawLongBits(got)) {
+      if (
+        expected == 0.0 && java.lang.Double.doubleToRawLongBits(expected) != java.lang.Double
+          .doubleToRawLongBits(got)
+      ) {
         // If expected is -0.0, enforce it
-        assert(java.lang.Double.doubleToRawLongBits(got) == java.lang.Double.doubleToRawLongBits(expected))
+        assert(
+          java.lang.Double.doubleToRawLongBits(got) == java.lang.Double.doubleToRawLongBits(
+            expected
+          )
+        )
       } else {
         assert(got == expected)
       }
