@@ -81,12 +81,12 @@ object DatasetResource {
     .createDSLContext()
 
   private def singleFileUploadMaxBytes(ctx: DSLContext, defaultMiB: Long = 20L): Long = {
-    val v = ctx
+    val limit = ctx
       .select(DSL.field("value", classOf[String]))
       .from(DSL.table(DSL.name("texera_db", "site_settings")))
       .where(DSL.field("key", classOf[String]).eq("single_file_upload_max_size_mib"))
       .fetchOneInto(classOf[String])
-    Try(Option(v).getOrElse(defaultMiB.toString).trim.toLong).getOrElse(defaultMiB) * 1024L * 1024L
+    Try(Option(limit).getOrElse(defaultMiB.toString).trim.toLong).getOrElse(defaultMiB) * 1024L * 1024L
   }
 
   /**
