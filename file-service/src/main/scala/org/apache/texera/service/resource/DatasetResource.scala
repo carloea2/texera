@@ -32,6 +32,8 @@ import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
 import org.apache.texera.dao.jooq.generated.tables.Dataset.DATASET
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
@@ -53,25 +55,23 @@ import org.apache.texera.service.util.S3StorageClient.{
   MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
   MINIMUM_NUM_OF_MULTIPART_S3_PART
 }
-import org.jooq.{DSLContext, EnumType}
+import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
+import org.jooq.{DSLContext, EnumType}
+import software.amazon.awssdk.services.s3.model.UploadPartResponse
+
 import java.io.{InputStream, OutputStream}
 import java.net.{HttpURLConnection, URL, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.sql.SQLException
 import java.util
 import java.util.Optional
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
-import org.jooq.exception.DataAccessException
-import software.amazon.awssdk.services.s3.model.UploadPartResponse
-
-import java.sql.SQLException
 import scala.util.Try
 
 object DatasetResource {
@@ -79,6 +79,15 @@ object DatasetResource {
   private val context = SqlServer
     .getInstance()
     .createDSLContext()
+
+  private def singleFileUploadMaxBytes(ctx: DSLContext, defaultMiB: Long = 20L): Long = {
+    val v = ctx
+      .select(DSL.field("value", classOf[String]))
+      .from(DSL.table(DSL.name("texera_db", "site_settings")))
+      .where(DSL.field("key", classOf[String]).eq("single_file_upload_max_size_mib"))
+      .fetchOneInto(classOf[String])
+    Try(Option(v).getOrElse(defaultMiB.toString).trim.toLong).getOrElse(defaultMiB) * 1024L * 1024L
+  }
 
   /**
     * Helper function to get the dataset from DB using did
@@ -647,14 +656,16 @@ class DatasetResource {
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
       @QueryParam("filePath") filePath: String,
-      @QueryParam("numParts") numParts: Optional[Integer],
+      @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
+      @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
     val dataset: Dataset = getDatasetBy(ownerEmail, datasetName)
 
     operationType.toLowerCase match {
-      case "init"   => initMultipartUpload(dataset.getDid, filePath, numParts, uid)
+      case "init" =>
+        initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, uid)
       case "finish" => finishMultipartUpload(dataset.getDid, filePath, uid)
       case "abort"  => abortMultipartUpload(dataset.getDid, filePath, uid)
       case _ =>
@@ -715,7 +726,55 @@ class DatasetResource {
       if (session == null)
         throw new NotFoundException("Upload session not found. Call type=init first.")
 
-      val expectedParts = session.getNumPartsRequested
+      val expectedParts: Int = session.getNumPartsRequested
+      val fileSizeBytesValue: Long = session.getFileSizeBytes
+      val partSizeBytesValue: Long = session.getPartSizeBytes
+
+      if (fileSizeBytesValue <= 0L) {
+        throw new WebApplicationException(
+          "Upload session has invalid file_size_bytes. Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+      if (partSizeBytesValue <= 0L) {
+        throw new WebApplicationException(
+          "Upload session has invalid part size bytes value. Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+
+      // lastPartSize = fileSize - partSize*(expectedParts-1)
+      val nMinus1: Long = expectedParts.toLong - 1L
+      if (nMinus1 < 0L) {
+        throw new WebApplicationException(
+          "Upload session has invalid num_parts_requested. Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+      if (nMinus1 > 0L && partSizeBytesValue > Long.MaxValue / nMinus1) {
+        throw new WebApplicationException(
+          "Overflow while computing last part size",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+      val prefixBytes: Long = partSizeBytesValue * nMinus1
+      if (prefixBytes > fileSizeBytesValue) {
+        throw new WebApplicationException(
+          "Upload session is inconsistent (prefixBytes > fileSizeBytes). Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+      val lastPartSize: Long = fileSizeBytesValue - prefixBytes
+      if (lastPartSize <= 0L || lastPartSize > partSizeBytesValue) {
+        throw new WebApplicationException(
+          "Upload session is inconsistent (invalid lastPartSize). Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+
+      val allowedSize: Long =
+        if (partNumber < expectedParts) partSizeBytesValue else lastPartSize
+
       if (partNumber > expectedParts) {
         throw new BadRequestException(
           s"$partNumber exceeds the requested parts on init: $expectedParts"
@@ -726,6 +785,13 @@ class DatasetResource {
         throw new BadRequestException(
           s"Part $partNumber is too small ($contentLength bytes). " +
             s"All non-final parts must be >= $MINIMUM_NUM_OF_MULTIPART_S3_PART bytes."
+        )
+      }
+
+      if (contentLength != allowedSize) {
+        throw new BadRequestException(
+          s"Invalid part size for partNumber=$partNumber. " +
+            s"Expected Content-Length=$allowedSize, got $contentLength."
         )
       }
 
@@ -1399,7 +1465,8 @@ class DatasetResource {
   private def initMultipartUpload(
       did: Integer,
       encodedFilePath: String,
-      numParts: Optional[Integer],
+      fileSizeBytes: Optional[java.lang.Long],
+      partSizeBytes: Optional[java.lang.Long],
       uid: Integer
   ): Response = {
 
@@ -1416,12 +1483,63 @@ class DatasetResource {
           URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
         )
 
-      val numPartsValue = numParts.toScala.getOrElse {
-        throw new BadRequestException("numParts is required for initialization")
+      val fileSizeBytesValue: Long = fileSizeBytes.toScala
+        .getOrElse {
+          throw new BadRequestException("fileSizeBytes is required for initialization")
+        }
+        .longValue()
+
+      if (fileSizeBytesValue <= 0L) {
+        throw new BadRequestException("fileSizeBytes must be > 0")
       }
-      if (numPartsValue < 1 || numPartsValue > MAXIMUM_NUM_OF_MULTIPART_S3_PARTS) {
+
+      val partSizeBytesValue: Long = partSizeBytes.toScala
+        .getOrElse {
+          throw new BadRequestException("partSizeBytes is required for initialization")
+        }
+        .longValue()
+
+      if (partSizeBytesValue <= 0L) {
+        throw new BadRequestException("partSizeBytes must be > 0")
+      }
+
+      // singleFileUploadMaxBytes applies to TOTAL bytes (sum of all parts == file size)
+      val totalMaxBytes: Long = singleFileUploadMaxBytes(ctx)
+      if (totalMaxBytes <= 0L) {
+        throw new WebApplicationException(
+          "singleFileUploadMaxBytes must be > 0",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+      if (fileSizeBytesValue > totalMaxBytes) {
         throw new BadRequestException(
-          "numParts must be between 1 and " + MAXIMUM_NUM_OF_MULTIPART_S3_PARTS
+          s"fileSizeBytes=$fileSizeBytesValue exceeds singleFileUploadMaxBytes=$totalMaxBytes"
+        )
+      }
+
+      // Compute numParts = ceil(fileSize / partSize) = (fileSize + partSize - 1) / partSize
+      val addend: Long = partSizeBytesValue - 1L
+      if (addend < 0L || fileSizeBytesValue > Long.MaxValue - addend) {
+        throw new WebApplicationException(
+          "Overflow while computing numParts",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+
+      val numPartsLong: Long = (fileSizeBytesValue + addend) / partSizeBytesValue
+      if (numPartsLong < 1L || numPartsLong > MAXIMUM_NUM_OF_MULTIPART_S3_PARTS.toLong) {
+        throw new BadRequestException(
+          s"Computed numParts=$numPartsLong is out of range 1..$MAXIMUM_NUM_OF_MULTIPART_S3_PARTS"
+        )
+      }
+      val numPartsValue: Int = numPartsLong.toInt
+
+      // S3 multipart constraint: all non-final parts must be >= 5MiB.
+      // If we have >1 parts, then partSizeBytesValue is the non-final part size.
+      if (numPartsValue > 1 && partSizeBytesValue < MINIMUM_NUM_OF_MULTIPART_S3_PART) {
+        throw new BadRequestException(
+          s"partSizeBytes=$partSizeBytesValue is too small. " +
+            s"All non-final parts must be >= $MINIMUM_NUM_OF_MULTIPART_S3_PART bytes."
         )
       }
 
@@ -1453,7 +1571,6 @@ class DatasetResource {
       val uploadIdStr = presign.getUploadId
       val physicalAddr = presign.getPhysicalAddress
 
-      // If anything fails after this point, abort LakeFS multipart
       try {
         val rowsInserted = ctx
           .insertInto(DATASET_UPLOAD_SESSION)
@@ -1462,7 +1579,9 @@ class DatasetResource {
           .set(DATASET_UPLOAD_SESSION.UID, uid)
           .set(DATASET_UPLOAD_SESSION.UPLOAD_ID, uploadIdStr)
           .set(DATASET_UPLOAD_SESSION.PHYSICAL_ADDRESS, physicalAddr)
-          .set(DATASET_UPLOAD_SESSION.NUM_PARTS_REQUESTED, numPartsValue)
+          .set(DATASET_UPLOAD_SESSION.NUM_PARTS_REQUESTED, Integer.valueOf(numPartsValue))
+          .set(DATASET_UPLOAD_SESSION.FILE_SIZE_BYTES, java.lang.Long.valueOf(fileSizeBytesValue))
+          .set(DATASET_UPLOAD_SESSION.PART_SIZE_BYTES, java.lang.Long.valueOf(partSizeBytesValue))
           .onDuplicateKeyIgnore()
           .execute()
 
@@ -1506,7 +1625,6 @@ class DatasetResource {
         Response.ok().build()
       } catch {
         case e: Exception =>
-          // rollback will remove session + parts rows; we still must abort LakeFS
           try {
             LakeFSStorageClient.abortPresignedMultipartUploads(
               repositoryName,
@@ -1645,6 +1763,28 @@ class DatasetResource {
         partsList,
         physicalAddr
       )
+
+      // FINAL SERVER-SIDE SIZE CHECK (do not rely on init)
+      val actualSizeBytes =
+        Option(objectStats.getSizeBytes).map(_.longValue()).getOrElse(-1L)
+
+      if (actualSizeBytes <= 0L) {
+        // If sizeBytes can be missing in your environment, you can stat here instead (see note below).
+        throw new WebApplicationException(
+          "lakeFS did not return sizeBytes for completed multipart upload",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+
+      val maxBytes = singleFileUploadMaxBytes(ctx)
+      if (actualSizeBytes > maxBytes) {
+        // Roll back the uncommitted object on the branch
+        try {
+          LakeFSStorageClient.resetObjectUploadOrDeletion(dataset.getRepositoryName, filePath)
+        } catch {
+          case _: Throwable => () // consider logging; still fail the request
+        }
+      }
 
       // Cleanup: delete the session; parts are removed by ON DELETE CASCADE
       ctx
