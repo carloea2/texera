@@ -83,7 +83,7 @@ object DatasetResource {
   private def singleFileUploadMaxBytes(ctx: DSLContext, defaultMiB: Long = 20L): Long = {
     val v = ctx
       .select(DSL.field("value", classOf[String]))
-      .from(DSL.table("site_settings"))
+      .from(DSL.table(DSL.name("texera_db", "site_settings")))
       .where(DSL.field("key", classOf[String]).eq("single_file_upload_max_size_mib"))
       .fetchOneInto(classOf[String])
     Try(Option(v).getOrElse(defaultMiB.toString).trim.toLong).getOrElse(defaultMiB) * 1024L * 1024L
@@ -728,7 +728,7 @@ class DatasetResource {
 
       val expectedParts: Int = session.getNumPartsRequested
       val fileSizeBytesValue: Long = session.getFileSizeBytes
-      val partSizeBytesValue: Long = session.getMaxPartSize
+      val partSizeBytesValue: Long = session.getPartSizeBytes
 
       if (fileSizeBytesValue <= 0L) {
         throw new WebApplicationException(
@@ -738,7 +738,7 @@ class DatasetResource {
       }
       if (partSizeBytesValue <= 0L) {
         throw new WebApplicationException(
-          "Upload session has invalid max_part_size. Re-init the upload.",
+          "Upload session has invalid part size bytes value. Re-init the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -1581,7 +1581,7 @@ class DatasetResource {
           .set(DATASET_UPLOAD_SESSION.PHYSICAL_ADDRESS, physicalAddr)
           .set(DATASET_UPLOAD_SESSION.NUM_PARTS_REQUESTED, Integer.valueOf(numPartsValue))
           .set(DATASET_UPLOAD_SESSION.FILE_SIZE_BYTES, java.lang.Long.valueOf(fileSizeBytesValue))
-          .set(DATASET_UPLOAD_SESSION.MAX_PART_SIZE, java.lang.Long.valueOf(partSizeBytesValue))
+          .set(DATASET_UPLOAD_SESSION.PART_SIZE_BYTES, java.lang.Long.valueOf(partSizeBytesValue))
           .onDuplicateKeyIgnore()
           .execute()
 

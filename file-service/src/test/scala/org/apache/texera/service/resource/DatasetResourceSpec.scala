@@ -22,7 +22,14 @@ package org.apache.texera.service.resource
 import ch.qos.logback.classic.{Level, Logger}
 import io.lakefs.clients.sdk.ApiException
 import jakarta.ws.rs._
-import jakarta.ws.rs.core.{Cookie, HttpHeaders, MediaType, MultivaluedHashMap, Response}
+import jakarta.ws.rs.core.{
+  Cookie,
+  HttpHeaders,
+  MediaType,
+  MultivaluedHashMap,
+  MultivaluedMap,
+  Response
+}
 import org.apache.texera.amber.core.storage.util.LakeFSStorageClient
 import org.apache.texera.auth.SessionUser
 import org.apache.texera.dao.MockTexeraDB
@@ -55,7 +62,7 @@ import scala.util.Random
 object StressMultipart extends Tag("org.apache.texera.stress.multipart")
 
 class DatasetResourceSpec
-  extends AnyFlatSpec
+    extends AnyFlatSpec
     with Matchers
     with MockTexeraDB
     with MockLakeFS
@@ -336,10 +343,10 @@ class DatasetResourceSpec
 
   /** InputStream that behaves like a mid-flight network drop after N bytes. */
   private def flakyStream(
-                           payload: Array[Byte],
-                           failAfterBytes: Int,
-                           msg: String = "simulated network drop"
-                         ): InputStream =
+      payload: Array[Byte],
+      failAfterBytes: Int,
+      msg: String = "simulated network drop"
+  ): InputStream =
     new InputStream {
       private var pos = 0
       override def read(): Int = {
@@ -385,7 +392,29 @@ class DatasetResourceSpec
       override def getDate: Date = null
       override def getLength: Int = -1
     }
+  private def mkHeadersRawContentLength(raw: String): HttpHeaders =
+    new HttpHeaders {
+      override def getRequestHeader(name: String): java.util.List[String] =
+        if (HttpHeaders.CONTENT_LENGTH.equalsIgnoreCase(name)) Collections.singletonList(raw)
+        else Collections.emptyList()
 
+      override def getHeaderString(name: String): String =
+        if (HttpHeaders.CONTENT_LENGTH.equalsIgnoreCase(name)) raw else null
+      override def getRequestHeaders: MultivaluedMap[String, String] = {
+        val map = new MultivaluedHashMap[String, String]()
+        map.putSingle(HttpHeaders.CONTENT_LENGTH, raw)
+        map
+      }
+      override def getAcceptableMediaTypes: java.util.List[MediaType] = Collections.emptyList()
+      override def getAcceptableLanguages: java.util.List[Locale] = Collections.emptyList()
+      override def getMediaType: MediaType = null
+      override def getLanguage: Locale = null
+      override def getCookies: java.util.Map[String, Cookie] = Collections.emptyMap()
+      // Not used by the resource (it reads getHeaderString), but keep it safe.
+      override def getLength: Int = -1
+
+      override def getDate: Date = ???
+    }
   private def uniqueFilePath(prefix: String): String =
     s"$prefix/${System.nanoTime()}-${Random.alphanumeric.take(8).mkString}.bin"
 
@@ -393,7 +422,7 @@ class DatasetResourceSpec
   private val MaxUploadKey = "single_file_upload_max_size_mib"
 
   private def upsertSiteSetting(key: String, value: String): Unit = {
-    val t = DSL.table(DSL.name("site_settings"))
+    val t = DSL.table(DSL.name("texera_db", "site_settings"))
     val keyF = DSL.field(DSL.name("key"), classOf[String])
     val valF = DSL.field(DSL.name("value"), classOf[String])
 
@@ -403,33 +432,37 @@ class DatasetResourceSpec
     ctx.insertInto(t).columns(keyF, valF).values(key, value).execute()
   }
 
-  private def deleteSiteSetting(key: String): Unit = {
-    val t = DSL.table(DSL.name("site_settings"))
+  private def deleteSiteSetting(key: String): Boolean = {
+    val t = DSL.table(DSL.name("texera_db", "site_settings"))
     val keyF = DSL.field(DSL.name("key"), classOf[String])
-    getDSLContext.deleteFrom(t).where(keyF.eq(key)).execute()
+    getDSLContext.deleteFrom(t).where(keyF.eq(key)).execute() > 0
   }
 
   private def setMaxUploadMiB(mib: Long): Unit = upsertSiteSetting(MaxUploadKey, mib.toString)
   private def clearMaxUploadMiB(): Unit = deleteSiteSetting(MaxUploadKey)
 
   /**
-   * Convenience helper that adapts legacy "numParts" tests to the new init API:
-   * init now takes (fileSizeBytes, partSizeBytes) and computes numParts internally.
-   *
-   * - Non-final parts are exactly partSizeBytes.
-   * - Final part is exactly lastPartBytes.
-   */
+    * Convenience helper that adapts legacy "numParts" tests to the new init API:
+    * init now takes (fileSizeBytes, partSizeBytes) and computes numParts internally.
+    *
+    * - Non-final parts are exactly partSizeBytes.
+    * - Final part is exactly lastPartBytes.
+    */
   private def initUpload(
-                          filePath: String,
-                          numParts: Int,
-                          lastPartBytes: Int = 1,
-                          partSizeBytes: Int = MinNonFinalPartBytes,
-                          user: SessionUser = multipartOwnerSessionUser
-                        ): Response = {
+      filePath: String,
+      numParts: Int,
+      lastPartBytes: Int = 1,
+      partSizeBytes: Int = MinNonFinalPartBytes,
+      user: SessionUser = multipartOwnerSessionUser
+  ): Response = {
     require(numParts >= 1, "numParts must be >= 1")
     require(lastPartBytes > 0, "lastPartBytes must be > 0")
     require(partSizeBytes > 0, "partSizeBytes must be > 0")
-    if (numParts > 1) require(lastPartBytes <= partSizeBytes, "lastPartBytes must be <= partSizeBytes for multipart")
+    if (numParts > 1)
+      require(
+        lastPartBytes <= partSizeBytes,
+        "lastPartBytes must be <= partSizeBytes for multipart"
+      )
 
     val fileSizeBytes: Long =
       if (numParts == 1) lastPartBytes.toLong
@@ -451,9 +484,9 @@ class DatasetResourceSpec
   }
 
   private def finishUpload(
-                            filePath: String,
-                            user: SessionUser = multipartOwnerSessionUser
-                          ): Response =
+      filePath: String,
+      user: SessionUser = multipartOwnerSessionUser
+  ): Response =
     datasetResource.multipartUpload(
       "finish",
       ownerUser.getEmail,
@@ -465,9 +498,9 @@ class DatasetResourceSpec
     )
 
   private def abortUpload(
-                           filePath: String,
-                           user: SessionUser = multipartOwnerSessionUser
-                         ): Response =
+      filePath: String,
+      user: SessionUser = multipartOwnerSessionUser
+  ): Response =
     datasetResource.multipartUpload(
       "abort",
       ownerUser.getEmail,
@@ -479,16 +512,19 @@ class DatasetResourceSpec
     )
 
   private def uploadPart(
-                          filePath: String,
-                          partNumber: Int,
-                          bytes: Array[Byte],
-                          user: SessionUser = multipartOwnerSessionUser,
-                          contentLengthOverride: Option[Long] = None,
-                          missingContentLength: Boolean = false
-                        ): Response = {
-    val hdrs =
+      filePath: String,
+      partNumber: Int,
+      bytes: Array[Byte],
+      user: SessionUser = multipartOwnerSessionUser,
+      contentLengthOverride: Option[Long] = None,
+      missingContentLength: Boolean = false,
+      rawContentLengthOverride: Option[String] = None
+  ): Response = {
+    val contentLength = contentLengthOverride.getOrElse(bytes.length.toLong)
+    val headers =
       if (missingContentLength) mkHeadersMissingContentLength
-      else mkHeaders(contentLengthOverride.getOrElse(bytes.length.toLong))
+      else
+        rawContentLengthOverride.map(mkHeadersRawContentLength).getOrElse(mkHeaders(contentLength))
 
     datasetResource.uploadPart(
       ownerUser.getEmail,
@@ -496,27 +532,31 @@ class DatasetResourceSpec
       urlEnc(filePath),
       partNumber,
       new ByteArrayInputStream(bytes),
-      hdrs,
+      headers,
       user
     )
   }
 
   private def uploadPartWithStream(
-                                    filePath: String,
-                                    partNumber: Int,
-                                    stream: InputStream,
-                                    contentLength: Long,
-                                    user: SessionUser = multipartOwnerSessionUser
-                                  ): Response =
+      filePath: String,
+      partNumber: Int,
+      stream: InputStream,
+      contentLength: Long,
+      user: SessionUser = multipartOwnerSessionUser,
+      rawContentLengthOverride: Option[String] = None
+  ): Response = {
+    val headers =
+      rawContentLengthOverride.map(mkHeadersRawContentLength).getOrElse(mkHeaders(contentLength))
     datasetResource.uploadPart(
       ownerUser.getEmail,
       multipartDataset.getName,
       urlEnc(filePath),
       partNumber,
       stream,
-      mkHeaders(contentLength),
+      headers,
       user
     )
+  }
 
   private def fetchSession(filePath: String) =
     getDSLContext
@@ -715,6 +755,27 @@ class DatasetResourceSpec
     )
   }
 
+  it should "reject init when fileSizeBytes/partSizeBytes would overflow numParts computation (malicious huge inputs)" in {
+    // Make max big enough to get past the max-size gate without overflowing maxBytes itself.
+    val maxMiB: Long = Long.MaxValue / (1024L * 1024L)
+    setMaxUploadMiB(maxMiB)
+    val totalMaxBytes: Long = maxMiB * 1024L * 1024L
+    val filePath = uniqueFilePath("init-overflow-numParts")
+
+    val ex = intercept[WebApplicationException] {
+      datasetResource.multipartUpload(
+        "init",
+        ownerUser.getEmail,
+        multipartDataset.getName,
+        urlEnc(filePath),
+        Optional.of(java.lang.Long.valueOf(totalMaxBytes)),
+        Optional.of(java.lang.Long.valueOf(MinNonFinalPartBytes.toLong)),
+        multipartOwnerSessionUser
+      )
+    }
+    assertStatus(ex, 500)
+  }
+
   it should "reject invalid filePath (empty, absolute, '.', '..', control chars)" in {
     assertStatus(intercept[BadRequestException] { initUpload("./nope.bin", 2) }, 400)
     assertStatus(intercept[BadRequestException] { initUpload("/absolute.bin", 2) }, 400)
@@ -848,6 +909,76 @@ class DatasetResourceSpec
       },
       400
     )
+  }
+  it should "reject non-numeric Content-Length (header poisoning)" in {
+    val filePath = uniqueFilePath("part-cl-nonnumeric")
+    initUpload(filePath, numParts = 1)
+    val ex = intercept[BadRequestException] {
+      uploadPart(
+        filePath,
+        partNumber = 1,
+        bytes = tinyBytes(1.toByte),
+        rawContentLengthOverride = Some("not-a-number")
+      )
+    }
+    assertStatus(ex, 400)
+  }
+  it should "reject Content-Length that overflows Long (header poisoning)" in {
+    val filePath = uniqueFilePath("part-cl-overflow")
+    initUpload(filePath, numParts = 1)
+    val ex = intercept[BadRequestException] {
+      uploadPart(
+        filePath,
+        partNumber = 1,
+        bytes = tinyBytes(1.toByte),
+        rawContentLengthOverride = Some("999999999999999999999999999999999999999")
+      )
+    }
+    assertStatus(ex, 400)
+  }
+  it should "reject when Content-Length does not equal the expected part size (attempted size-bypass)" in {
+    val filePath = uniqueFilePath("part-cl-mismatch-expected")
+    initUpload(filePath, numParts = 2)
+    val uploadId = fetchUploadIdOrFail(filePath)
+    val bytes = minPartBytes(1.toByte) // exactly MinNonFinalPartBytes
+    val ex = intercept[BadRequestException] {
+      uploadPart(
+        filePath,
+        partNumber = 1,
+        bytes = bytes,
+        contentLengthOverride = Some(bytes.length.toLong - 1L) // lie by 1 byte
+      )
+    }
+    assertStatus(ex, 400)
+    // Ensure we didn't accidentally persist an ETag for a rejected upload.
+    fetchPartRows(uploadId).find(_.getPartNumber == 1).get.getEtag shouldEqual ""
+  }
+
+  it should "not store more bytes than declared Content-Length (send 2x bytes, claim x)" in {
+    val filePath = uniqueFilePath("part-body-gt-cl")
+    val declared: Int = 1024
+    initUpload(filePath, numParts = 1, lastPartBytes = declared, partSizeBytes = declared)
+
+    val first = Array.fill[Byte](declared)(1.toByte)
+    val extra = Array.fill[Byte](declared)(2.toByte)
+    val sent = first ++ extra // 2x bytes sent
+
+    uploadPart(
+      filePath,
+      partNumber = 1,
+      bytes = sent,
+      contentLengthOverride = Some(declared.toLong) // claim only x
+    ).getStatus shouldEqual 200
+
+    finishUpload(filePath).getStatus shouldEqual 200
+    // If anything "accepted" the extra bytes, the committed object would exceed declared size.
+    val repoName = multipartDataset.getRepositoryName
+    val downloaded = LakeFSStorageClient.getFileFromRepo(repoName, "main", filePath)
+    Files.size(Paths.get(downloaded.toURI)) shouldEqual declared.toLong
+
+    val expected = sha256OfChunks(Seq(first))
+    val got = sha256OfFile(Paths.get(downloaded.toURI))
+    got.toSeq shouldEqual expected
   }
 
   it should "reject null/empty filePath param early without depending on error text" in {
@@ -1018,7 +1149,37 @@ class DatasetResourceSpec
     val ex = intercept[NotFoundException] { finishUpload(filePath) }
     assertStatus(ex, 404)
   }
+  it should "not commit an oversized upload if the max upload size is tightened before finish (server-side rollback)" in {
+    val filePath = uniqueFilePath("finish-max-tightened")
+    val twoMiB: Long = 2L * 1024L * 1024L
 
+    // Allow init + part upload under a higher limit.
+    setMaxUploadMiB(3) // 3 MiB
+    datasetResource
+      .multipartUpload(
+        "init",
+        ownerUser.getEmail,
+        multipartDataset.getName,
+        urlEnc(filePath),
+        Optional.of(java.lang.Long.valueOf(twoMiB)),
+        Optional.of(java.lang.Long.valueOf(twoMiB)),
+        multipartOwnerSessionUser
+      )
+      .getStatus shouldEqual 200
+    uploadPart(filePath, 1, Array.fill[Byte](twoMiB.toInt)(7.toByte)).getStatus shouldEqual 200
+
+    // Tighten the limit just before finish.
+    setMaxUploadMiB(1) // 1 MiB
+    finishUpload(filePath).getStatus shouldEqual 200
+    // Regardless of HTTP status, oversized objects must not remain accessible after finish.
+    val repoName = multipartDataset.getRepositoryName
+    val notFound = intercept[ApiException] {
+      LakeFSStorageClient.getFileFromRepo(repoName, "main", filePath)
+    }
+    notFound.getCode shouldEqual 404
+    // Session should be cleaned up too.
+    fetchSession(filePath) shouldBe null
+  }
   it should "reject finish when no parts were uploaded (all placeholders empty) without checking messages" in {
     val filePath = uniqueFilePath("finish-no-parts")
     initUpload(filePath, numParts = 2)
