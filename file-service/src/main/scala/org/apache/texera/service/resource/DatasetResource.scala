@@ -86,7 +86,8 @@ object DatasetResource {
       .from(DSL.table(DSL.name("texera_db", "site_settings")))
       .where(DSL.field("key", classOf[String]).eq("single_file_upload_max_size_mib"))
       .fetchOneInto(classOf[String])
-    Try(Option(limit).getOrElse(defaultMiB.toString).trim.toLong).getOrElse(defaultMiB) * 1024L * 1024L
+    Try(Option(limit).getOrElse(defaultMiB.toString).trim.toLong)
+      .getOrElse(defaultMiB) * 1024L * 1024L
   }
 
   /**
@@ -1769,7 +1770,6 @@ class DatasetResource {
         Option(objectStats.getSizeBytes).map(_.longValue()).getOrElse(-1L)
 
       if (actualSizeBytes <= 0L) {
-        // If sizeBytes can be missing in your environment, you can stat here instead (see note below).
         throw new WebApplicationException(
           "lakeFS did not return sizeBytes for completed multipart upload",
           Response.Status.INTERNAL_SERVER_ERROR
@@ -1777,16 +1777,17 @@ class DatasetResource {
       }
 
       val maxBytes = singleFileUploadMaxBytes(ctx)
-      if (actualSizeBytes > maxBytes) {
-        // Roll back the uncommitted object on the branch
+      val tooLarge = actualSizeBytes > maxBytes
+
+      if (tooLarge) {
         try {
           LakeFSStorageClient.resetObjectUploadOrDeletion(dataset.getRepositoryName, filePath)
         } catch {
-          case _: Throwable => () // consider logging; still fail the request
+          case _: Throwable => ()
         }
       }
 
-      // Cleanup: delete the session; parts are removed by ON DELETE CASCADE
+      // always cleanup session
       ctx
         .deleteFrom(DATASET_UPLOAD_SESSION)
         .where(
@@ -1796,6 +1797,13 @@ class DatasetResource {
             .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
         )
         .execute()
+
+      if (tooLarge) {
+        throw new WebApplicationException(
+          s"Upload exceeded max size: actualSizeBytes=$actualSizeBytes maxBytes=$maxBytes",
+          Response.Status.REQUEST_ENTITY_TOO_LARGE
+        )
+      }
 
       Response
         .ok(

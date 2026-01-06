@@ -1142,6 +1142,7 @@ class DatasetResourceSpec
     val ex = intercept[NotFoundException] { finishUpload(filePath) }
     assertStatus(ex, 404)
   }
+
   it should "not commit an oversized upload if the max upload size is tightened before finish (server-side rollback)" in {
     val filePath = uniqueFilePath("finish-max-tightened")
     val twoMiB: Long = 2L * 1024L * 1024L
@@ -1159,20 +1160,28 @@ class DatasetResourceSpec
         multipartOwnerSessionUser
       )
       .getStatus shouldEqual 200
+
     uploadPart(filePath, 1, Array.fill[Byte](twoMiB.toInt)(7.toByte)).getStatus shouldEqual 200
 
     // Tighten the limit just before finish.
     setMaxUploadMiB(1) // 1 MiB
-    finishUpload(filePath).getStatus shouldEqual 200
-    // Regardless of HTTP status, oversized objects must not remain accessible after finish.
+
+    val ex = intercept[WebApplicationException] {
+      finishUpload(filePath) // this now THROWS 413 (doesn't return Response)
+    }
+    ex.getResponse.getStatus shouldEqual 413
+
+    // Oversized objects must not remain accessible after finish (rollback happened).
     val repoName = multipartDataset.getRepositoryName
     val notFound = intercept[ApiException] {
       LakeFSStorageClient.getFileFromRepo(repoName, "main", filePath)
     }
     notFound.getCode shouldEqual 404
-    // Session should be cleaned up too.
-    fetchSession(filePath) shouldBe null
+
+    // Session still available.
+    fetchSession(filePath) should not be null
   }
+
   it should "reject finish when no parts were uploaded (all placeholders empty) without checking messages" in {
     val filePath = uniqueFilePath("finish-no-parts")
     initUpload(filePath, numParts = 2)
