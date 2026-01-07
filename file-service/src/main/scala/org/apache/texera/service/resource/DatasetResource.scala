@@ -657,8 +657,8 @@ class DatasetResource {
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
       @QueryParam("filePath") filePath: String,
-      @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
-      @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
+      @QueryParam("fileSizeBytes") fileSizeBytes: Optional[Long],
+      @QueryParam("partSizeBytes") partSizeBytes: Optional[Long],
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -733,13 +733,13 @@ class DatasetResource {
 
       if (fileSizeBytesValue <= 0L) {
         throw new WebApplicationException(
-          "Upload session has invalid file_size_bytes. Re-init the upload.",
+          s"Upload session has an invalid file size of $fileSizeBytesValue. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
       if (partSizeBytesValue <= 0L) {
         throw new WebApplicationException(
-          "Upload session has invalid part size bytes value. Re-init the upload.",
+          s"Upload session has an invalid part size of $partSizeBytesValue. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -748,7 +748,7 @@ class DatasetResource {
       val nMinus1: Long = expectedParts.toLong - 1L
       if (nMinus1 < 0L) {
         throw new WebApplicationException(
-          "Upload session has invalid num_parts_requested. Re-init the upload.",
+          s"Upload session has an invalid number of requested parts of $expectedParts. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -761,14 +761,14 @@ class DatasetResource {
       val prefixBytes: Long = partSizeBytesValue * nMinus1
       if (prefixBytes > fileSizeBytesValue) {
         throw new WebApplicationException(
-          "Upload session is inconsistent (prefixBytes > fileSizeBytes). Re-init the upload.",
+          s"Upload session is invalid: computed bytes before last part ($prefixBytes) exceed declared file size ($fileSizeBytesValue). Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
       val lastPartSize: Long = fileSizeBytesValue - prefixBytes
       if (lastPartSize <= 0L || lastPartSize > partSizeBytesValue) {
         throw new WebApplicationException(
-          "Upload session is inconsistent (invalid lastPartSize). Re-init the upload.",
+          s"Upload session is invalid: computed last part size ($lastPartSize bytes) must be within 1..$partSizeBytesValue bytes. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -799,7 +799,7 @@ class DatasetResource {
       val physicalAddr = Option(session.getPhysicalAddress).map(_.trim).getOrElse("")
       if (physicalAddr.isEmpty) {
         throw new WebApplicationException(
-          "Upload session is missing physicalAddress. Re-init the upload.",
+          "Upload session is missing physicalAddress. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -810,7 +810,7 @@ class DatasetResource {
         catch {
           case e: IllegalArgumentException =>
             throw new WebApplicationException(
-              s"Upload session has invalid physicalAddress. Re-init the upload. (${e.getMessage})",
+              s"Upload session has invalid physicalAddress. Restart the upload. (${e.getMessage})",
               Response.Status.INTERNAL_SERVER_ERROR
             )
         }
@@ -842,7 +842,7 @@ class DatasetResource {
       if (partRow == null) {
         // Should not happen if init pre-created rows
         throw new WebApplicationException(
-          s"Part row not initialized for part $partNumber. Re-init the upload.",
+          s"Part row not initialized for part $partNumber. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -1466,8 +1466,8 @@ class DatasetResource {
   private def initMultipartUpload(
       did: Integer,
       encodedFilePath: String,
-      fileSizeBytes: Optional[java.lang.Long],
-      partSizeBytes: Optional[java.lang.Long],
+      fileSizeBytes: Optional[Long],
+      partSizeBytes: Optional[Long],
       uid: Integer
   ): Response = {
 
@@ -1484,21 +1484,21 @@ class DatasetResource {
           URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
         )
 
-      val fileSizeBytesValue: Long = fileSizeBytes.toScala
-        .getOrElse {
-          throw new BadRequestException("fileSizeBytes is required for initialization")
-        }
-        .longValue()
+      val fileSizeBytesValue: Long =
+        fileSizeBytes
+          .orElseThrow(() =>
+            new BadRequestException("fileSizeBytes is required for initialization")
+          )
 
       if (fileSizeBytesValue <= 0L) {
         throw new BadRequestException("fileSizeBytes must be > 0")
       }
 
-      val partSizeBytesValue: Long = partSizeBytes.toScala
-        .getOrElse {
-          throw new BadRequestException("partSizeBytes is required for initialization")
-        }
-        .longValue()
+      val partSizeBytesValue: Long =
+        partSizeBytes
+          .orElseThrow(() =>
+            new BadRequestException("partSizeBytes is required for initialization")
+          )
 
       if (partSizeBytesValue <= 0L) {
         throw new BadRequestException("partSizeBytes must be > 0")
@@ -1691,7 +1691,7 @@ class DatasetResource {
       val physicalAddr = Option(session.getPhysicalAddress).map(_.trim).getOrElse("")
       if (physicalAddr.isEmpty) {
         throw new WebApplicationException(
-          "Upload session is missing physicalAddress. Re-init the upload.",
+          "Upload session is missing physicalAddress. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -1714,7 +1714,7 @@ class DatasetResource {
 
       if (totalCnt != expectedParts) {
         throw new WebApplicationException(
-          s"Part table mismatch: expected $expectedParts rows but found $totalCnt. Re-init the upload.",
+          s"Part table mismatch: expected $expectedParts rows but found $totalCnt. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
@@ -1864,7 +1864,7 @@ class DatasetResource {
       val physicalAddr = Option(session.getPhysicalAddress).map(_.trim).getOrElse("")
       if (physicalAddr.isEmpty) {
         throw new WebApplicationException(
-          "Upload session is missing physicalAddress. Re-init the upload.",
+          "Upload session is missing physicalAddress. Restart the upload.",
           Response.Status.INTERNAL_SERVER_ERROR
         )
       }
