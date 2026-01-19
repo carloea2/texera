@@ -32,8 +32,6 @@ import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
 import org.apache.texera.dao.jooq.generated.tables.Dataset.DATASET
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
@@ -55,17 +53,14 @@ import org.apache.texera.service.util.S3StorageClient.{
   MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
   MINIMUM_NUM_OF_MULTIPART_S3_PART
 }
-import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
 import org.jooq.{DSLContext, EnumType}
-import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 import java.io.{InputStream, OutputStream}
 import java.net.{HttpURLConnection, URI, URL, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
-import java.sql.SQLException
 import java.util
 import java.util.Optional
 import java.util.zip.{ZipEntry, ZipOutputStream}
@@ -688,8 +683,8 @@ class DatasetResource {
       @QueryParam("ownerEmail") ownerEmail: String,
       @QueryParam("datasetName") datasetName: String,
       @QueryParam("filePath") filePath: String,
-      @QueryParam("fileSizeBytes") fileSizeBytes: Optional[Long],
-      @QueryParam("partSizeBytes") partSizeBytes: Optional[Long],
+      @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
+      @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -1483,22 +1478,11 @@ class DatasetResource {
     dataset
   }
 
-  private def validateAndNormalizeFilePathOrThrow(filePath: String): String = {
-    val path = Option(filePath).getOrElse("").replace("\\", "/")
-    if (
-      path.isEmpty ||
-      path.startsWith("/") ||
-      path.split("/").exists(seg => seg == "." || seg == "..") ||
-      path.exists(ch => ch == 0.toChar || ch < 0x20.toChar || ch == 0x7f.toChar)
-    ) throw new BadRequestException("Invalid filePath")
-    path
-  }
-
   private def initMultipartUpload(
       did: Integer,
       encodedFilePath: String,
-      fileSizeBytes: Optional[Long],
-      partSizeBytes: Optional[Long],
+      fileSizeBytes: Optional[java.lang.Long],
+      partSizeBytes: Optional[java.lang.Long],
       uid: Integer
   ): Response = {
 

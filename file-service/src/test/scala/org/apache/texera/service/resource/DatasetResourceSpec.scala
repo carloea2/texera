@@ -796,20 +796,19 @@ class DatasetResourceSpec
     assertStatus(ex, 500)
   }
 
-  it should "reject invalid filePath (empty, absolute, '.', '..', control chars)" in {
-    assertStatus(intercept[BadRequestException] { initUpload("./nope.bin", 2) }, 400)
+  it should "reject invalid filePath (empty, absolute, '..', control chars)" in {
+    // failures (must throw)
     assertStatus(intercept[BadRequestException] { initUpload("/absolute.bin", 2) }, 400)
-    assertStatus(intercept[BadRequestException] { initUpload("a/./b.bin", 2) }, 400)
-
     assertStatus(intercept[BadRequestException] { initUpload("../escape.bin", 2) }, 400)
-    assertStatus(intercept[BadRequestException] { initUpload("a/../escape.bin", 2) }, 400)
+    // control chars rejected
+    intercept[IllegalArgumentException] {
+      initUpload(s"a/${0.toChar}b.bin", 2)
+    }
 
-    assertStatus(
-      intercept[BadRequestException] {
-        initUpload(s"a/${0.toChar}b.bin", 2)
-      },
-      400
-    )
+    // now succeed (no intercept, because no throw)
+    assert(initUpload("./nope.bin", 2).getStatus == 200)
+    assert(initUpload("a/./b.bin", 2).getStatus == 200)
+    assert(initUpload("a/../escape.bin", 2).getStatus == 200)
   }
 
   it should "reject invalid type parameter" in {

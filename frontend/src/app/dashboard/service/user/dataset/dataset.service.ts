@@ -232,7 +232,7 @@ export class DatasetService {
         .set("datasetName", datasetName)
         .set("filePath", encodeURIComponent(filePath))
         .set("fileSizeBytes", file.size.toString())
-        .set("partSizeBytes", partSize);
+        .set("partSizeBytes", partSize.toString());
 
       const init$ = this.http.post<{}>(
         `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload`,
