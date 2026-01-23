@@ -94,6 +94,7 @@ export class DatasetDetailComponent implements OnInit {
   maxConcurrentChunks: number = 10;
   private uploadSubscriptions = new Map<string, Subscription>();
   uploadTimeMap = new Map<string, number>();
+  private resumedToastShown = new Set<string>();
 
   // Cap number of concurrent files uploads
   maxConcurrentFiles: number = 3;
@@ -435,6 +436,12 @@ export class DatasetDetailComponent implements OnInit {
                   const taskIndex = this.uploadTasks.findIndex(t => t.filePath === file.name);
 
                   if (taskIndex !== -1) {
+                    // Toast once when backend session is resumed
+                    if (progress.resumed && !this.resumedToastShown.has(file.name)) {
+                      this.resumedToastShown.add(file.name);
+                      this.notificationService.info(`Upload resumed for "${file.name}".`);
+                    }
+
                     // Update the task with new progress info
                     this.uploadTasks[taskIndex] = {
                       ...this.uploadTasks[taskIndex],
@@ -452,16 +459,16 @@ export class DatasetDetailComponent implements OnInit {
                     }
                   }
                 },
-                error: () => {
-                  // Handle upload error
+                error: (err) => {
                   const taskIndex = this.uploadTasks.findIndex(t => t.filePath === file.name);
 
                   if (taskIndex !== -1) {
                     this.uploadTasks[taskIndex] = {
                       ...this.uploadTasks[taskIndex],
-                      percentage: 100,
-                      status: "aborted",
+                      percentage: this.uploadTasks[taskIndex].percentage ?? 0,
+                      status: "failed",
                     };
+                    this.notificationService.error(`Upload failed for "${file.name}". Check network/server and retry.`);
                     this.scheduleHide(taskIndex);
                   }
                   this.onUploadComplete();
@@ -490,24 +497,49 @@ export class DatasetDetailComponent implements OnInit {
         };
 
         // Check if currently uploading
-        this.cancelExistingUpload(file.name, continueWithUpload);
+        this.handleUploadDrop(file, continueWithUpload);
       });
     }
   }
 
-  cancelExistingUpload(fileName: string, onCanceled?: () => void): void {
+  private handleUploadDrop(file: FileUploadItem, startIfAllowed: () => void): void {
+    const existingTask = this.uploadTasks.find(t => t.filePath === file.name);
+
+    // Case 1: already uploading in THIS UI -> do NOT abort, just notify user.
+    if (existingTask && (existingTask.status === "uploading" || existingTask.status === "initializing")) {
+      this.notificationService.info(
+        `Upload in progress for "${file.name}". Cancel it first if you want a fresh start.`
+      );
+      return;
+    }
+
+    if (this.pendingQueue.some(q => q.fileName === file.name)) {
+      this.notificationService.info(`"${file.name}" is already queued.`);
+      return;
+    }
+
+    // Otherwise proceed normally (this may create or resume server session)
+    startIfAllowed();
+  }
+
+  public cancelExistingUpload(fileName: string): void {
+    // 1) If it's queued, just remove from queue
+    const wasQueued = this.pendingQueue.some(q => q.fileName === fileName);
+    if (wasQueued) {
+      this.pendingQueue = this.pendingQueue.filter(q => q.fileName !== fileName);
+      this.notificationService.info(`Removed "${fileName}" from the upload queue.`);
+      return;
+    }
+
+    // 2) If it's active in this UI, abort it (user-cancel)
     const task = this.uploadTasks.find(t => t.filePath === fileName);
-    if (task) {
-      if (task.status === "uploading" || task.status === "initializing") {
-        this.onClickAbortUploadProgress(task, onCanceled);
-        return;
-      }
+    if (task && (task.status === "uploading" || task.status === "initializing")) {
+      this.onClickAbortUploadProgress(task);
+      return;
     }
-    // Remove from pending queue if present
-    this.pendingQueue = this.pendingQueue.filter(item => item.fileName !== fileName);
-    if (onCanceled) {
-      onCanceled();
-    }
+
+    // 3) Otherwise, nothing to cancel
+    this.notificationService.info(`No active or queued upload found for "${fileName}".`);
   }
 
   private processNextQueuedUpload(): void {
@@ -548,6 +580,7 @@ export class DatasetDetailComponent implements OnInit {
     }
     const key = this.uploadTasks[idx].filePath;
     this.uploadSubscriptions.delete(key);
+    this.resumedToastShown.delete(key);
     setTimeout(() => {
       this.uploadTasks = this.uploadTasks.filter(t => t.filePath !== key);
     }, 5000);
@@ -613,15 +646,20 @@ export class DatasetDetailComponent implements OnInit {
     abortWithRetry(0);
 
     this.uploadTasks = this.uploadTasks.filter(t => t.filePath !== task.filePath);
+    this.resumedToastShown.delete(task.filePath);
+
   }
 
-  getUploadStatus(status: "initializing" | "uploading" | "finished" | "aborted"): "active" | "exception" | "success" {
+  getUploadStatus(
+    status: "initializing" | "uploading" | "finished" | "aborted" | "failed"
+  ): "active" | "exception" | "success" {
     return status === "uploading" || status === "initializing"
       ? "active"
-      : status === "aborted"
-        ? "exception"
-        : "success";
+      : (status === "failed" ? "exception"
+        : status === "aborted" ? "exception"
+          : "success");
   }
+
 
   onPreviouslyUploadedFileDeleted(node: DatasetFileNode) {
     if (this.did) {

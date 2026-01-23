@@ -75,6 +75,7 @@ import org.apache.commons.io.FilenameUtils
 
 import java.sql.SQLException
 import scala.util.Try
+import scala.util.hashing.MurmurHash3
 
 object DatasetResource {
 
@@ -210,6 +211,12 @@ object DatasetResource {
   )
 
   case class CoverImageRequest(coverImage: String)
+
+  case class MultipartUploadStatus(
+      numPartsRequested: Int,
+      percentage: Int,
+      parts: List[Int]
+  )
 }
 
 @Produces(Array(MediaType.APPLICATION_JSON, "image/jpeg", "application/pdf"))
@@ -685,6 +692,8 @@ class DatasetResource {
       @QueryParam("filePath") filePath: String,
       @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
       @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
+      @QueryParam("browserId") browserId: Optional[String],
+      @QueryParam("limit") limit: Optional[Integer],
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -693,10 +702,13 @@ class DatasetResource {
     operationType.toLowerCase match {
       case "init" =>
         initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, uid)
+      case "status" => statusMultipartUpload(dataset.getDid, filePath, uid, browserId, limit)
       case "finish" => finishMultipartUpload(dataset.getDid, filePath, uid)
       case "abort"  => abortMultipartUpload(dataset.getDid, filePath, uid)
       case _ =>
-        throw new BadRequestException("Invalid type parameter. Use 'init', 'finish', or 'abort'.")
+        throw new BadRequestException(
+          "Invalid type parameter. Use 'init', 'status', 'finish', or 'abort'."
+        )
     }
   }
 
@@ -1651,6 +1663,140 @@ class DatasetResource {
           } catch { case _: Throwable => () }
           throw e
       }
+    }
+  }
+
+  private def statusMultipartUpload(
+      did: Integer,
+      encodedFilePath: String,
+      uid: Int,
+      browserId: Optional[String],
+      limit: Optional[Integer]
+  ): Response = {
+
+    val filePath = validateAndNormalizeFilePathOrThrow(
+      URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
+    )
+
+    withTransaction(context) { ctx =>
+      if (!userHasWriteAccess(ctx, did, uid)) {
+        throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+      }
+
+      // Lock the session to avoid races with abort/finish
+      val session =
+        try {
+          ctx
+            .selectFrom(DATASET_UPLOAD_SESSION)
+            .where(
+              DATASET_UPLOAD_SESSION.UID
+                .eq(uid)
+                .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+                .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+            )
+            .forUpdate()
+            .noWait()
+            .fetchOne()
+        } catch {
+          case e: DataAccessException
+              if Option(e.getCause)
+                .collect { case s: SQLException => s.getSQLState }
+                .contains("55P03") =>
+            throw new WebApplicationException(
+              "Upload is already being finalized/aborted",
+              Response.Status.CONFLICT
+            )
+        }
+
+      if (session == null) {
+        throw new NotFoundException("Upload session not found or already finalized")
+      }
+
+      val uploadId = session.getUploadId
+      val expectedParts = session.getNumPartsRequested
+
+      val total = DSL.count()
+      val done =
+        DSL
+          .count()
+          .filterWhere(DATASET_UPLOAD_SESSION_PART.ETAG.ne(""))
+          .as("done")
+
+      val agg = ctx
+        .select(total.as("total"), done)
+        .from(DATASET_UPLOAD_SESSION_PART)
+        .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(uploadId))
+        .fetchOne()
+
+      val totalCnt = agg.get("total", classOf[java.lang.Integer]).intValue()
+      val doneCnt = agg.get("done", classOf[java.lang.Integer]).intValue()
+
+      if (totalCnt != expectedParts) {
+        throw new WebApplicationException(
+          s"Part table mismatch: expected $expectedParts rows but found $totalCnt. Re-init the upload.",
+          Response.Status.INTERNAL_SERVER_ERROR
+        )
+      }
+
+      val percentage =
+        if (expectedParts <= 0) 0 else Math.min(100, (doneCnt * 100) / expectedParts)
+
+      // Choose a deterministic "start part" based on browserId to shard work across clients.
+      val bid = browserId.toScala.map(_.trim).filter(_.nonEmpty).getOrElse("")
+      val startPart =
+        if (bid.isEmpty) 1
+        else (Math.abs(MurmurHash3.stringHash(bid)) % expectedParts) + 1
+
+      val reqLimit = limit.toScala.map(_.intValue()).getOrElse(200)
+      val safeLimit = Math.max(1, Math.min(1000, reqLimit))
+
+      // Fetch a batch of missing parts, biased by startPart; lock rows so concurrent status calls don't hand out the same ones.
+      val firstBatch =
+        ctx
+          .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER)
+          .from(DATASET_UPLOAD_SESSION_PART)
+          .where(
+            DATASET_UPLOAD_SESSION_PART.UPLOAD_ID
+              .eq(uploadId)
+              .and(DATASET_UPLOAD_SESSION_PART.ETAG.eq(""))
+              .and(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.ge(startPart))
+          )
+          .orderBy(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.asc())
+          .limit(safeLimit)
+          .forUpdate()
+          .skipLocked()
+          .fetch(DATASET_UPLOAD_SESSION_PART.PART_NUMBER)
+          .asScala
+          .map(_.intValue())
+          .toList
+
+      val remaining = safeLimit - firstBatch.size
+      val secondBatch =
+        if (remaining <= 0) Nil
+        else
+          ctx
+            .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER)
+            .from(DATASET_UPLOAD_SESSION_PART)
+            .where(
+              DATASET_UPLOAD_SESSION_PART.UPLOAD_ID
+                .eq(uploadId)
+                .and(DATASET_UPLOAD_SESSION_PART.ETAG.eq(""))
+                .and(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.lt(startPart))
+            )
+            .orderBy(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.asc())
+            .limit(remaining)
+            .forUpdate()
+            .skipLocked()
+            .fetch(DATASET_UPLOAD_SESSION_PART.PART_NUMBER)
+            .asScala
+            .map(_.intValue())
+            .toList
+
+      val parts = firstBatch ++ secondBatch
+
+      Response
+        .ok(MultipartUploadStatus(expectedParts, percentage, parts))
+        .build()
     }
   }
 
