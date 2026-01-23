@@ -180,10 +180,9 @@ export class DatasetService {
    * Handles multipart upload for large files.
    *
    * Improvements:
-   * - 409 (part busy) => SKIP (do not treat as success, do not retry immediately)
-   * - Maintain failedParts map with attempts + cooldown; after X tries, give up on that part (locally)
-   * - Do not try the same part twice sequentially when alternatives exist
-   * - Status batch limit scales with number of parts (and concurrency) to boost throughput
+   * - Reduce status call volume: remove fixed 1s poller, add shared throttle + backoff + jitter
+   * - Status is called on demand (queue low/empty), and on busy/retryable only when we need more work
+   * - Stall detection uses "any progress" (local part completion OR backend percentage advance)
    */
   public multipartUpload(
     ownerEmail: string,
@@ -197,7 +196,6 @@ export class DatasetService {
 
     // Tuning knobs
     const MAX_PART_TRIES = 6; // X tries before giving up on a part (locally)
-    const STATUS_POLL_MS = 1000;
     const QUEUE_LOW_WATER = Math.max(4, concurrencyLimit * 2);
 
     // Status limit depends on number of parts (and concurrency), clamped to server max (1000)
@@ -205,6 +203,11 @@ export class DatasetService {
       50,
       Math.min(1000, Math.min(partCount, Math.max(200, concurrencyLimit * 50)))
     );
+
+    // Adaptive status polling (shared across workers)
+    const MIN_STATUS_INTERVAL_MS = Math.max(1500, Math.min(5000, 250 * concurrencyLimit));
+    const MAX_STATUS_INTERVAL_MS = 20_000;
+    const STATUS_JITTER_MS = 250;
 
     const STALL_GUARD_MS = 60_000; // if we can’t make progress for this long, fail
 
@@ -262,9 +265,12 @@ export class DatasetService {
         inFlightBytes -= prev;
       };
 
+      let lastProgressMs = Date.now(); // backend OR local progress
+
       const finalizePart = (pn: number, size: number) => {
         clearInFlight(pn);
         completedBytes += size;
+        lastProgressMs = Date.now();
       };
 
       // State for smarter scheduling
@@ -284,7 +290,6 @@ export class DatasetService {
 
       let backendPercentage = 0;
       let displayedPercentage = 0;
-      let lastBackendAdvanceMs = Date.now();
 
       let lastTriedPart: number | null = null;
 
@@ -508,11 +513,22 @@ export class DatasetService {
         });
       };
 
-      // Smarter status fetch: larger batch, filter locally, keep queue stocked
+      // Shared throttled status fetch (one in-flight at a time across workers)
       let statusInFlight: Promise<void> | null = null;
 
-      const fetchStatusAndRefill = async () => {
+      let nextStatusAllowedAt = 0;
+      let statusCooldownMs = MIN_STATUS_INTERVAL_MS;
+
+      const scheduleNextStatus = (extraMs: number = 0) => {
+        const jitter = Math.floor(Math.random() * STATUS_JITTER_MS);
+        nextStatusAllowedAt = Date.now() + statusCooldownMs + extraMs + jitter;
+      };
+
+      const fetchStatusAndRefill = async (force: boolean = false) => {
         if (statusInFlight) return statusInFlight;
+
+        const now = Date.now();
+        if (!force && now < nextStatusAllowedAt) return;
 
         statusInFlight = (async () => {
           try {
@@ -523,28 +539,47 @@ export class DatasetService {
             const pct = Math.max(0, Math.min(100, status.percentage || 0));
             if (pct > backendPercentage) {
               backendPercentage = pct;
-              lastBackendAdvanceMs = Date.now();
+              lastProgressMs = Date.now();
             }
 
             enqueueParts(status.parts || []);
             emitProgress("uploading");
+
+            // Success: reset cooldown, but if we have plenty queued, delay more
+            statusCooldownMs = MIN_STATUS_INTERVAL_MS;
+            const extra = queue.length > QUEUE_LOW_WATER * 3 ? statusCooldownMs : 0;
+            scheduleNextStatus(extra);
           } catch (e: unknown) {
             const err = e as HttpErrorResponse;
 
+            // If another request is finalizing/aborting, do not hammer
             if (err.status === 409) {
-              await sleep(500);
+              statusCooldownMs = Math.min(
+                MAX_STATUS_INTERVAL_MS,
+                Math.max(statusCooldownMs, MIN_STATUS_INTERVAL_MS) * 2
+              );
+              scheduleNextStatus();
               return;
             }
+
+            // Session gone => treat as done signal
             if (err.status === 404) {
               backendPercentage = Math.max(backendPercentage, 100);
               emitProgress("uploading");
               return;
             }
+
+            // network/5xx => back off
             if (err.status === 0 || err.status >= 500) {
-              await sleep(1000);
+              statusCooldownMs = Math.min(
+                MAX_STATUS_INTERVAL_MS,
+                Math.max(statusCooldownMs, MIN_STATUS_INTERVAL_MS) * 2
+              );
+              scheduleNextStatus();
               return;
             }
 
+            // Other client errors => bubble
             throw err;
           } finally {
             statusInFlight = null;
@@ -599,14 +634,14 @@ export class DatasetService {
         while (!manualCancelled) {
           if (backendPercentage >= 100) return;
 
-          // Keep queue topped up
+          // Keep queue topped up (force only when totally empty)
           if (queue.length < QUEUE_LOW_WATER) {
-            await fetchStatusAndRefill();
+            await fetchStatusAndRefill(queue.length === 0);
           }
 
           const pn = pickNextPart();
           if (pn === undefined) {
-            const stalled = Date.now() - lastBackendAdvanceMs > STALL_GUARD_MS;
+            const stalled = Date.now() - lastProgressMs > STALL_GUARD_MS;
 
             if (stalled && blacklistedParts.size > 0) {
               throw new Error(
@@ -633,14 +668,13 @@ export class DatasetService {
             // busy or retryable: do NOT count bytes, do NOT immediately retry
             if (res === "busy") {
               markFail(pn, "busy", 409);
-              // ask for more parts to keep throughput high
-              await fetchStatusAndRefill();
+              if (queue.length < QUEUE_LOW_WATER) await fetchStatusAndRefill(queue.length === 0);
               continue;
             }
 
             // retryable
             markFail(pn, "retryable", 0);
-            await fetchStatusAndRefill();
+            if (queue.length < QUEUE_LOW_WATER) await fetchStatusAndRefill(queue.length === 0);
           } finally {
             inProgress.delete(pn);
           }
@@ -663,7 +697,7 @@ export class DatasetService {
           queue.length = 0;
           lastTriedPart = null;
           startTime = null;
-          lastBackendAdvanceMs = Date.now();
+          lastProgressMs = Date.now();
 
           observer.next({
             filePath,
@@ -687,19 +721,12 @@ export class DatasetService {
             totalTime: 0,
           });
 
-          // Start polling status in background
-          const poller = setInterval(() => {
-            void fetchStatusAndRefill();
-          }, STATUS_POLL_MS);
-
           // Initial fill
-          await fetchStatusAndRefill();
+          await fetchStatusAndRefill(true);
 
           // Run workers
           const workers = Array.from({ length: Math.max(1, concurrencyLimit) }, () => workerLoop());
           await Promise.all(workers);
-
-          clearInterval(poller);
 
           // Finish
           await finishUpload();
