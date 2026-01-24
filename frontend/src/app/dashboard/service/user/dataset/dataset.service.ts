@@ -166,7 +166,6 @@ export class DatasetService {
       let lastETA = 0;
       let lastUpdateTime = 0;
       let inFlight = 0;
-      let wsId: string | null = null;
       let concurrency = concurrencyLimit;
       let completedParts = 0;
       let finishRequested = false;
@@ -252,20 +251,16 @@ export class DatasetService {
       };
 
       const websocketBaseUrl = getWebsocketUrl("wsapi/dataset-upload", "");
-      const token = AuthService.getAccessToken();
-      const websocketUrl = token ? `${websocketBaseUrl}?access-token=${token}` : websocketBaseUrl;
-      const websocket = new WebSocket(websocketUrl);
+      const websocket = new WebSocket(websocketBaseUrl);
+      const accessToken = AuthService.getAccessToken();
 
-      const sendMessage = (type: string, data: Record<string, unknown>, includeIds = true) => {
+      const sendMessage = (type: string, data: Record<string, unknown>) => {
         const payload: Record<string, unknown> = {
           type,
           v: 1,
           ts: Date.now(),
           data,
         };
-        if (includeIds && wsId) {
-          payload.wsId = wsId;
-        }
         if (websocket.readyState === WebSocket.OPEN) {
           websocket.send(JSON.stringify(payload));
         }
@@ -284,10 +279,10 @@ export class DatasetService {
       };
 
       const requestParts = () => {
-        if (!wsId || closed) return;
+        if (closed) return;
         const freeSlots = concurrency - inFlight;
         if (freeSlots > 0) {
-          sendMessage("request_parts", { limit: freeSlots });
+          sendMessage("request_parts", { limit: freeSlots, ownerEmail, datasetName, filePath });
         }
       };
 
@@ -309,8 +304,8 @@ export class DatasetService {
       const handleError = (error: Error) => {
         if (closed) return;
         emitProgress("aborted");
-        if (wsId) {
-          sendMessage("abort", { reason: "error" });
+        if (!closed) {
+          sendMessage("abort", { reason: "error", ownerEmail, datasetName, filePath });
         }
         observer.error(error);
         cleanup(false);
@@ -391,8 +386,8 @@ export class DatasetService {
             xhr.abort();
           } catch {}
         });
-        if (sendAbort && wsId && websocket.readyState === WebSocket.OPEN) {
-          sendMessage("abort", { reason: "client" });
+        if (sendAbort && websocket.readyState === WebSocket.OPEN) {
+          sendMessage("abort", { reason: "client", ownerEmail, datasetName, filePath });
         }
         if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
           websocket.close();
@@ -400,24 +395,20 @@ export class DatasetService {
       };
 
       websocket.onopen = () => {
-        sendMessage(
-          "init",
-          {
-            ownerEmail,
-            datasetName,
-            filePath,
-            fileSizeBytes: file.size,
-            partSizeBytes: partSize,
-          },
-          false
-        );
+        sendMessage("init", {
+          ownerEmail,
+          datasetName,
+          filePath,
+          fileSizeBytes: file.size,
+          partSizeBytes: partSize,
+          accessToken: accessToken ?? undefined,
+        });
       };
 
       websocket.onmessage = event => {
         const message = JSON.parse(event.data);
         switch (message.type) {
           case "init_ack": {
-            wsId = message.wsId;
             completedParts = message.data?.completedParts ?? 0;
             concurrency = concurrencyLimit;
             observer.next({
