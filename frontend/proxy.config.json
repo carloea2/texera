@@ -44,6 +44,12 @@
     "secure": false,
     "changeOrigin": false
   },
+  "/wsapi/dataset-upload": {
+    "target": "http://localhost:9092",
+    "secure": false,
+    "changeOrigin": false,
+    "ws": true
+  },
   "/wsapi": {
     "target": "http://localhost:8085",
     "secure": false,

@@ -52,6 +52,7 @@ Compile / scalacOptions ++= Seq(
 /////////////////////////////////////////////////////////////////////////////
 
 val dropwizardVersion = "4.0.7"
+val jettyVersion = "11.0.20"
 val mockitoVersion = "5.4.0"
 val assertjVersion = "3.24.2"
 val testcontainersVersion = "0.43.0"
@@ -80,6 +81,9 @@ libraryDependencies ++= Seq(
 libraryDependencies ++= Seq(
   "io.dropwizard" % "dropwizard-core" % dropwizardVersion,
   "io.dropwizard" % "dropwizard-auth" % dropwizardVersion, // Dropwizard Authentication module
+  "org.eclipse.jetty.websocket" % "websocket-jakarta-server" % jettyVersion,
+  "org.eclipse.jetty.websocket" % "websocket-jetty-server" % jettyVersion,
+  "org.eclipse.jetty.websocket" % "websocket-servlet" % jettyVersion,
   "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2",
   "jakarta.ws.rs" % "jakarta.ws.rs-api" % "3.1.0", // Ensure Jakarta JAX-RS API is available
   "org.bitbucket.b_c" % "jose4j" % "0.9.6",
