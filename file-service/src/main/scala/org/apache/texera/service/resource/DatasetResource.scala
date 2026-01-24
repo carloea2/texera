@@ -48,6 +48,7 @@ import org.apache.texera.dao.jooq.generated.tables.pojos.{
 import org.apache.texera.service.`type`.DatasetFileNode
 import org.apache.texera.service.resource.DatasetAccessResource._
 import org.apache.texera.service.resource.DatasetResource.{context, _}
+import org.apache.texera.service.resource.DatasetUploadWebsocketManager
 import org.apache.texera.service.util.S3StorageClient
 import org.apache.texera.service.util.S3StorageClient.{
   MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
@@ -81,8 +82,10 @@ object DatasetResource {
   private val context = SqlServer
     .getInstance()
     .createDSLContext()
+  private val wsIdField = DSL.field("ws_id", classOf[String])
+  private val validUntilField = DSL.field("valid_until_ms", classOf[java.lang.Long])
 
-  private def singleFileUploadMaxBytes(ctx: DSLContext, defaultMiB: Long = 20L): Long = {
+  def singleFileUploadMaxBytes(ctx: DSLContext, defaultMiB: Long = 20L): Long = {
     val limit = ctx
       .select(DSL.field("value", classOf[String]))
       .from(DSL.table(DSL.name("texera_db", "site_settings")))
@@ -898,12 +901,15 @@ class DatasetResource {
         ctx
           .update(DATASET_UPLOAD_SESSION_PART)
           .set(DATASET_UPLOAD_SESSION_PART.ETAG, etagClean)
+          .set(wsIdField, null.asInstanceOf[String])
+          .set(validUntilField, null.asInstanceOf[java.lang.Long])
           .where(
             DATASET_UPLOAD_SESSION_PART.UPLOAD_ID
               .eq(uploadId)
               .and(DATASET_UPLOAD_SESSION_PART.PART_NUMBER.eq(partNumber))
           )
           .execute()
+        DatasetUploadWebsocketManager.notifyPartUploaded(uploadId, partNumber)
       }
       Response.ok().build()
     }
@@ -1820,6 +1826,13 @@ class DatasetResource {
         )
       }
 
+      DatasetUploadWebsocketManager.broadcastGoodbye(
+        uploadId,
+        "finished",
+        Some(actualSizeBytes),
+        Some(100)
+      )
+
       Response
         .ok(
           Map(
@@ -1901,6 +1914,13 @@ class DatasetResource {
             .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
         )
         .execute()
+
+      DatasetUploadWebsocketManager.broadcastGoodbye(
+        session.getUploadId,
+        "aborted",
+        None,
+        None
+      )
 
       Response.ok(Map("message" -> "Multipart upload aborted successfully")).build()
     }
