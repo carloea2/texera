@@ -452,15 +452,24 @@ export class DatasetDetailComponent implements OnInit {
                     }
                   }
                 },
-                error: () => {
+                error: (res: unknown) => {
+                  const err = res as HttpErrorResponse;
+
+                  if (err?.status === HttpStatusCode.Conflict) {
+                    this.notificationService.error(
+                      "Upload blocked (409). Another upload is likely in progress for this file (another tab/browser), or the server is finalizing a previous upload. Please retry in a moment."
+                    );
+                  } else {
+                    this.notificationService.error("Upload failed. Please retry.");
+                  }
                   // Handle upload error
                   const taskIndex = this.uploadTasks.findIndex(t => t.filePath === file.name);
 
                   if (taskIndex !== -1) {
                     this.uploadTasks[taskIndex] = {
                       ...this.uploadTasks[taskIndex],
-                      percentage: 100,
-                      status: "aborted",
+                      percentage: this.uploadTasks[taskIndex].percentage ?? 0, // was 100
+                      status: "failed",
                     };
                     this.scheduleHide(taskIndex);
                   }
@@ -612,13 +621,17 @@ export class DatasetDetailComponent implements OnInit {
 
     abortWithRetry(0);
 
-    this.uploadTasks = this.uploadTasks.filter(t => t.filePath !== task.filePath);
+    const idx = this.uploadTasks.findIndex(t => t.filePath === task.filePath);
+    if (idx !== -1) {
+      this.uploadTasks[idx] = { ...this.uploadTasks[idx], status: "aborted" };
+      this.scheduleHide(idx);
+    }
   }
 
-  getUploadStatus(status: "initializing" | "uploading" | "finished" | "aborted"): "active" | "exception" | "success" {
+  getUploadStatus(status: MultipartUploadProgress["status"]): "active" | "exception" | "success" {
     return status === "uploading" || status === "initializing"
       ? "active"
-      : status === "aborted"
+      : status === "aborted" || status === "failed"
         ? "exception"
         : "success";
   }
