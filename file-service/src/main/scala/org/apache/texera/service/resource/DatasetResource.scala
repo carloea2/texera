@@ -23,6 +23,7 @@ import io.dropwizard.auth.Auth
 import jakarta.annotation.security.RolesAllowed
 import jakarta.ws.rs._
 import jakarta.ws.rs.core._
+import org.apache.commons.io.FilenameUtils
 import org.apache.texera.amber.config.StorageConfig
 import org.apache.texera.amber.core.storage.model.OnDataset
 import org.apache.texera.amber.core.storage.util.LakeFSStorageClient
@@ -32,24 +33,41 @@ import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
 import org.apache.texera.dao.jooq.generated.tables.Dataset.DATASET
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
-import org.apache.texera.dao.jooq.generated.tables.daos.{DatasetDao, DatasetUserAccessDao, DatasetVersionDao}
-import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetUserAccess, DatasetVersion}
+import org.apache.texera.dao.jooq.generated.tables.daos.{
+  DatasetDao,
+  DatasetUserAccessDao,
+  DatasetVersionDao
+}
+import org.apache.texera.dao.jooq.generated.tables.pojos.{
+  Dataset,
+  DatasetUserAccess,
+  DatasetVersion
+}
+import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
 import org.apache.texera.service.`type`.DatasetFileNode
 import org.apache.texera.service.resource.DatasetAccessResource._
 import org.apache.texera.service.resource.DatasetResource.{context, _}
 import org.apache.texera.service.util.S3StorageClient
-import org.apache.texera.service.util.S3StorageClient.{MAXIMUM_NUM_OF_MULTIPART_S3_PARTS, MINIMUM_NUM_OF_MULTIPART_S3_PART}
+import org.apache.texera.service.util.S3StorageClient.{
+  MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
+  MINIMUM_NUM_OF_MULTIPART_S3_PART
+}
+import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
 import org.jooq.{DSLContext, EnumType, Record2, Result}
+import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 import java.io.{InputStream, OutputStream}
 import java.net.{HttpURLConnection, URI, URL, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.sql.SQLException
 import java.util
 import java.util.Optional
 import java.util.zip.{ZipEntry, ZipOutputStream}
@@ -61,9 +79,17 @@ import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATA
 import org.jooq.exception.DataAccessException
 import software.amazon.awssdk.services.s3.model.UploadPartResponse
 import org.apache.commons.io.FilenameUtils
+import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
+import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
+import org.jooq.exception.DataAccessException
+import software.amazon.awssdk.services.s3.model.UploadPartResponse
+import org.apache.commons.io.FilenameUtils
 import org.apache.texera.service.util.LakeFSExceptionHandler.withLakeFSErrorHandling
 import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
 
+import java.sql.SQLException
+import scala.util.Try
 import java.sql.SQLException
 import scala.util.Try
 
@@ -683,7 +709,6 @@ class DatasetResource {
       @QueryParam("filePath") filePath: String,
       @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
       @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
-      @QueryParam("clientId") clientId: String,
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -692,7 +717,7 @@ class DatasetResource {
     operationType.toLowerCase match {
       case "list" => listMultipartUploads(dataset.getDid, uid)
       case "init" =>
-        initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, uid, clientId)
+        initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, uid)
       case "finish" => finishMultipartUpload(dataset.getDid, filePath, uid)
       case "abort"  => abortMultipartUpload(dataset.getDid, filePath, uid)
       case _ =>
@@ -1480,8 +1505,6 @@ class DatasetResource {
     dataset
   }
 
-  import scala.util.hashing.MurmurHash3
-
   private def listMultipartUploads(did: Integer, requesterUid: Int): Response = {
     withTransaction(context) { ctx =>
       if (!userHasWriteAccess(ctx, did, requesterUid)) {
@@ -1513,8 +1536,7 @@ class DatasetResource {
       encodedFilePath: String,
       fileSizeBytes: Optional[java.lang.Long],
       partSizeBytes: Optional[java.lang.Long],
-      uid: Integer,
-      clientId: String
+      uid: Integer
   ): Response = {
 
     withTransaction(context) { ctx =>
@@ -1529,12 +1551,6 @@ class DatasetResource {
         validateAndNormalizeFilePathOrThrow(
           URLDecoder.decode(encodedFilePath, StandardCharsets.UTF_8.name())
         )
-
-      val clientKeyOpt = Option(clientId).map(_.trim).filter(_.nonEmpty)
-      if (clientKeyOpt.isEmpty) {
-        throw new BadRequestException("clientId is required and cannot be blank")
-      }
-      val clientKey = clientKeyOpt.get
 
       if (fileSizeBytes == null || !fileSizeBytes.isPresent)
         throw new BadRequestException("fileSizeBytes is required for initialization")
@@ -1629,6 +1645,8 @@ class DatasetResource {
                 session.getPhysicalAddress
               )
             } catch { case _: Throwable => () }
+            session = null
+            rows = null
           }
         }
       } catch {
@@ -1744,19 +1762,6 @@ class DatasetResource {
       val uploadId = session.getUploadId
       val nParts = dbNumParts
 
-      val startOffset = (MurmurHash3.stringHash(clientKey) & 0x7fffffff) % nParts
-      val startPartNumber = startOffset + 1
-
-      val partNumberField = DATASET_UPLOAD_SESSION_PART.PART_NUMBER.cast(classOf[Int])
-      val totalPartsValue = DSL.inline(nParts)
-      val startPartValue = DSL.inline(startPartNumber)
-
-      val circularDistanceExpr =
-        partNumberField
-          .minus(startPartValue)
-          .plus(totalPartsValue)
-          .mod(totalPartsValue)
-
       // CHANGED: lock rows with NOWAIT; if any row is locked by another uploader -> 409
       if (rows == null) {
         rows =
@@ -1765,7 +1770,6 @@ class DatasetResource {
               .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
               .from(DATASET_UPLOAD_SESSION_PART)
               .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(uploadId))
-              .orderBy(circularDistanceExpr.asc(), DATASET_UPLOAD_SESSION_PART.PART_NUMBER.asc())
               .forUpdate()
               .noWait()
               .fetch()

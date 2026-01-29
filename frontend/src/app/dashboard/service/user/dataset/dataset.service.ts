@@ -66,11 +66,6 @@ export class DatasetService {
     private config: GuiConfigService
   ) {}
 
-  private readonly clientId: string =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? (crypto as any).randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
   public createDataset(dataset: Dataset): Observable<DashboardDataset> {
     return this.http.post<DashboardDataset>(`${AppSettings.getApiEndpoint()}/${DATASET_CREATE_URL}`, {
       datasetName: dataset.name,
@@ -239,8 +234,7 @@ export class DatasetService {
         .set("datasetName", datasetName)
         .set("filePath", encodeURIComponent(filePath))
         .set("fileSizeBytes", file.size.toString())
-        .set("partSizeBytes", partSize.toString())
-        .set("clientId", this.clientId); // NEW
+        .set("partSizeBytes", partSize.toString());
 
       const init$ = this.http.post<{ missingParts: number[]; completedPartsCount: number }>(
         `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload`,
