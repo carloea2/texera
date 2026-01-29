@@ -38,18 +38,29 @@ import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATA
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
-import org.apache.texera.dao.jooq.generated.tables.daos.{DatasetDao, DatasetUserAccessDao, DatasetVersionDao}
-import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetUserAccess, DatasetVersion}
+import org.apache.texera.dao.jooq.generated.tables.daos.{
+  DatasetDao,
+  DatasetUserAccessDao,
+  DatasetVersionDao
+}
+import org.apache.texera.dao.jooq.generated.tables.pojos.{
+  Dataset,
+  DatasetUserAccess,
+  DatasetVersion
+}
 import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
 import org.apache.texera.service.`type`.DatasetFileNode
 import org.apache.texera.service.resource.DatasetAccessResource._
 import org.apache.texera.service.resource.DatasetResource.{context, _}
 import org.apache.texera.service.util.S3StorageClient
-import org.apache.texera.service.util.S3StorageClient.{MAXIMUM_NUM_OF_MULTIPART_S3_PARTS, MINIMUM_NUM_OF_MULTIPART_S3_PART}
+import org.apache.texera.service.util.S3StorageClient.{
+  MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
+  MINIMUM_NUM_OF_MULTIPART_S3_PART
+}
 import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
-import org.jooq.{DSLContext, DatePart, EnumType, Record2, Result}
+import org.jooq.{DSLContext, EnumType, Record2, Result}
 import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 import java.io.{InputStream, OutputStream}
@@ -1588,21 +1599,20 @@ class DatasetResource {
         )
       }
       var session: DatasetUploadSessionRecord = null
-      var rows:  Result[Record2[Integer, String]] = null
-      try{
-        session =
-          ctx
-            .selectFrom(DATASET_UPLOAD_SESSION)
-            .where(
-              DATASET_UPLOAD_SESSION.UID
-                .eq(uid)
-                .and(DATASET_UPLOAD_SESSION.DID.eq(did))
-                .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
-            )
-            .forUpdate()
-            .noWait()
-            .fetchOne()
-        if (session != null){
+      var rows: Result[Record2[Integer, String]] = null
+      try {
+        session = ctx
+          .selectFrom(DATASET_UPLOAD_SESSION)
+          .where(
+            DATASET_UPLOAD_SESSION.UID
+              .eq(uid)
+              .and(DATASET_UPLOAD_SESSION.DID.eq(did))
+              .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
+          )
+          .forUpdate()
+          .noWait()
+          .fetchOne()
+        if (session != null) {
           rows = ctx
             .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
             .from(DATASET_UPLOAD_SESSION_PART)
@@ -1611,13 +1621,14 @@ class DatasetResource {
             .noWait()
             .fetch()
         }
-        if (rows != null){
+        if (rows != null) {
 
           val dbFileSize = session.getFileSizeBytes
           val dbPartSize = session.getPartSizeBytes
           val dbNumParts = session.getNumPartsRequested
 
-          val conflictConfig = dbFileSize != fileSizeBytesValue || dbPartSize != partSizeBytesValue || dbNumParts != computedNumParts
+          val conflictConfig =
+            dbFileSize != fileSizeBytesValue || dbPartSize != partSizeBytesValue || dbNumParts != computedNumParts
 
           if (conflictConfig) {
             // Parts will be deleted automatically (ON DELETE CASCADE)
@@ -1640,9 +1651,9 @@ class DatasetResource {
         }
       } catch {
         case e: DataAccessException
-          if Option(e.getCause)
-            .collect { case s: SQLException => s.getSQLState }
-            .contains("55P03") =>
+            if Option(e.getCause)
+              .collect { case s: SQLException => s.getSQLState }
+              .contains("55P03") =>
           throw new WebApplicationException(
             "Another client is uploading this file",
             Response.Status.CONFLICT
@@ -1764,9 +1775,9 @@ class DatasetResource {
               .fetch()
           } catch {
             case e: DataAccessException
-              if Option(e.getCause)
-                .collect { case s: SQLException => s.getSQLState }
-                .contains("55P03") =>
+                if Option(e.getCause)
+                  .collect { case s: SQLException => s.getSQLState }
+                  .contains("55P03") =>
               throw new WebApplicationException(
                 "Another client is uploading parts for this file",
                 Response.Status.CONFLICT

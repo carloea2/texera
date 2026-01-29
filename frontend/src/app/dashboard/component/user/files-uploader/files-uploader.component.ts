@@ -28,7 +28,7 @@ import { NotificationService } from "../../../../common/service/notification/not
 import { AdminSettingsService } from "../../../service/admin/settings/admin-settings.service";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { DatasetService } from "../../../service/user/dataset/dataset.service";
-import {DatasetDetailComponent} from "../user-dataset/user-dataset-explorer/dataset-detail.component";
+import { DatasetDetailComponent } from "../user-dataset/user-dataset-explorer/dataset-detail.component";
 
 @UntilDestroy()
 @Component({

@@ -75,21 +75,23 @@ class DatasetResourceSpec
     }
   }
 
-  private def mapListOfInts(x: Any): List[Int] = x match {
-    case l: java.util.List[_] => l.asScala.map(_.toString.toInt).toList
-    case l: scala.collection.Seq[_] => l.map(_.toString.toInt).toList
-    case other => fail(s"Expected list, got: ${other.getClass}")
-  }
+  private def mapListOfInts(x: Any): List[Int] =
+    x match {
+      case l: java.util.List[_]       => l.asScala.map(_.toString.toInt).toList
+      case l: scala.collection.Seq[_] => l.map(_.toString.toInt).toList
+      case other                      => fail(s"Expected list, got: ${other.getClass}")
+    }
 
-  private def mapListOfStrings(x: Any): List[String] = x match {
-    case l: java.util.List[_] => l.asScala.map(_.toString).toList
-    case l: scala.collection.Seq[_] => l.map(_.toString).toList
-    case other => fail(s"Expected list, got: ${other.getClass}")
-  }
+  private def mapListOfStrings(x: Any): List[String] =
+    x match {
+      case l: java.util.List[_]       => l.asScala.map(_.toString).toList
+      case l: scala.collection.Seq[_] => l.map(_.toString).toList
+      case other                      => fail(s"Expected list, got: ${other.getClass}")
+    }
 
   private def listUploads(
-                           user: SessionUser = multipartOwnerSessionUser
-                         ): List[String] = {
+      user: SessionUser = multipartOwnerSessionUser
+  ): List[String] = {
     val resp = datasetResource.multipartUpload(
       "list",
       ownerUser.getEmail,
@@ -545,11 +547,11 @@ class DatasetResourceSpec
     )
   }
   private def initRaw(
-                       filePath: String,
-                       fileSizeBytes: Long,
-                       partSizeBytes: Long,
-                       user: SessionUser = multipartOwnerSessionUser
-                     ): Response = {
+      filePath: String,
+      fileSizeBytes: Long,
+      partSizeBytes: Long,
+      user: SessionUser = multipartOwnerSessionUser
+  ): Response = {
     datasetResource.multipartUpload(
       "init",
       ownerUser.getEmail,
@@ -722,7 +724,7 @@ class DatasetResourceSpec
 
     val listed = listUploads()
     listed shouldEqual listed.sorted
-    listed should contain (fpA)
+    listed should contain(fpA)
     listed should not contain fpB
   }
 
@@ -736,7 +738,7 @@ class DatasetResourceSpec
     val fp = uniqueFilePath("list-after-abort")
     initUpload(fp, numParts = 2).getStatus shouldEqual 200
 
-    listUploads() should contain (fp)
+    listUploads() should contain(fp)
 
     abortUpload(fp).getStatus shouldEqual 200
 
@@ -836,7 +838,8 @@ class DatasetResourceSpec
       locking
         .selectFrom(DATASET_UPLOAD_SESSION)
         .where(
-          DATASET_UPLOAD_SESSION.UID.eq(ownerUser.getUid)
+          DATASET_UPLOAD_SESSION.UID
+            .eq(ownerUser.getUid)
             .and(DATASET_UPLOAD_SESSION.DID.eq(multipartDataset.getDid))
             .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
         )
@@ -931,7 +934,7 @@ class DatasetResourceSpec
     val filePath = uniqueFilePath("init-conflict-numparts")
 
     val partSize = MinNonFinalPartBytes.toLong // 5 MiB
-    val fileSize = partSize * 2L + 123L        // => computedNumParts = 3
+    val fileSize = partSize * 2L + 123L // => computedNumParts = 3
 
     val r1 = initRaw(filePath, fileSizeBytes = fileSize, partSizeBytes = partSize)
     r1.getStatus shouldEqual 200
@@ -1214,7 +1217,8 @@ class DatasetResourceSpec
       locking
         .selectFrom(DATASET_UPLOAD_SESSION)
         .where(
-          DATASET_UPLOAD_SESSION.UID.eq(ownerUser.getUid)
+          DATASET_UPLOAD_SESSION.UID
+            .eq(ownerUser.getUid)
             .and(DATASET_UPLOAD_SESSION.DID.eq(multipartDataset.getDid))
             .and(DATASET_UPLOAD_SESSION.FILE_PATH.eq(filePath))
         )
@@ -1230,7 +1234,6 @@ class DatasetResourceSpec
       connectionProvider.release(connection)
     }
   }
-
 
   // ---------------------------------------------------------------------------
   // PART UPLOAD TESTS
@@ -1516,7 +1519,12 @@ class DatasetResourceSpec
 
   "multipart-upload/part" should "treat retries as idempotent once ETag is set (no overwrite on second call)" in {
     val filePath = uniqueFilePath("part-idempotent")
-    initUpload(filePath, numParts = 1, lastPartBytes = 16, partSizeBytes = 16).getStatus shouldEqual 200
+    initUpload(
+      filePath,
+      numParts = 1,
+      lastPartBytes = 16,
+      partSizeBytes = 16
+    ).getStatus shouldEqual 200
 
     val uploadId = fetchUploadIdOrFail(filePath)
 
