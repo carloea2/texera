@@ -87,14 +87,14 @@ export class FilesUploaderComponent {
   `,
         nzFooter: [
           {
-            label: "Resume",
+            label: "Recover",
             onClick: () => {
               resolve("resume");
               ref.destroy();
             },
           },
           {
-            label: "Resume For All",
+            label: "Recover For All",
             onClick: () => {
               resolve("resumeAll");
               ref.destroy();

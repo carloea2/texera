@@ -1661,11 +1661,13 @@ class DatasetResource {
       }
 
       if (session == null) {
-        val presign = withLakeFSErrorHandling {LakeFSStorageClient.initiatePresignedMultipartUploads(
-          repositoryName,
-          filePath,
-          computedNumParts
-        )}
+        val presign = withLakeFSErrorHandling {
+          LakeFSStorageClient.initiatePresignedMultipartUploads(
+            repositoryName,
+            filePath,
+            computedNumParts
+          )
+        }
 
         val uploadIdStr = presign.getUploadId
         val physicalAddr = presign.getPhysicalAddress
