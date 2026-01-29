@@ -103,6 +103,8 @@ export class DatasetDetailComponent implements OnInit {
   versionName: string = "";
   isCreatingVersion: boolean = false;
 
+  public activeMultipartFilePaths: string[] = [];
+
   //  List of upload tasks – each task tracked by its filePath
   public uploadTasks: Array<
     MultipartUploadProgress & {
@@ -600,7 +602,6 @@ export class DatasetDetailComponent implements OnInit {
           },
           error: (res: unknown) => {
             const err = res as HttpErrorResponse;
-
             // Already gone, treat as done
             if (err.status === 404) {
               done();

@@ -67,10 +67,9 @@ export class DatasetService {
   ) {}
 
   private readonly clientId: string =
-    (typeof crypto !== "undefined" && "randomUUID" in crypto)
+    typeof crypto !== "undefined" && "randomUUID" in crypto
       ? (crypto as any).randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
 
   public createDataset(dataset: Dataset): Observable<DashboardDataset> {
     return this.http.post<DashboardDataset>(`${AppSettings.getApiEndpoint()}/${DATASET_CREATE_URL}`, {
@@ -249,7 +248,8 @@ export class DatasetService {
         { params: initParams }
       );
 
-      const subscription = init$.pipe(
+      const subscription = init$
+        .pipe(
           switchMap(initResp => {
             const missingParts = (initResp?.missingParts ?? []).slice();
             const completedPartsCount = initResp?.completedPartsCount ?? 0;
@@ -412,6 +412,16 @@ export class DatasetService {
 
       return () => subscription.unsubscribe();
     });
+  }
+
+  public listMultipartUploads(ownerEmail: string, datasetName: string): Observable<string[]> {
+    const params = new HttpParams().set("type", "list").set("ownerEmail", ownerEmail).set("datasetName", datasetName);
+
+    return this.http
+      .post<{
+        filePaths: string[];
+      }>(`${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload`, {}, { params })
+      .pipe(map(res => res?.filePaths ?? []));
   }
 
   public finalizeMultipartUpload(
