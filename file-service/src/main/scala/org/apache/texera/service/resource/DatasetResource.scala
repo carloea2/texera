@@ -38,25 +38,14 @@ import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATA
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
-import org.apache.texera.dao.jooq.generated.tables.daos.{
-  DatasetDao,
-  DatasetUserAccessDao,
-  DatasetVersionDao
-}
-import org.apache.texera.dao.jooq.generated.tables.pojos.{
-  Dataset,
-  DatasetUserAccess,
-  DatasetVersion
-}
+import org.apache.texera.dao.jooq.generated.tables.daos.{DatasetDao, DatasetUserAccessDao, DatasetVersionDao}
+import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetUserAccess, DatasetVersion}
 import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
 import org.apache.texera.service.`type`.DatasetFileNode
 import org.apache.texera.service.resource.DatasetAccessResource._
 import org.apache.texera.service.resource.DatasetResource.{context, _}
 import org.apache.texera.service.util.S3StorageClient
-import org.apache.texera.service.util.S3StorageClient.{
-  MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
-  MINIMUM_NUM_OF_MULTIPART_S3_PART
-}
+import org.apache.texera.service.util.S3StorageClient.{MAXIMUM_NUM_OF_MULTIPART_S3_PARTS, MINIMUM_NUM_OF_MULTIPART_S3_PART, PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS}
 import org.jooq.exception.DataAccessException
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
@@ -91,6 +80,7 @@ import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionR
 import java.sql.SQLException
 import scala.util.Try
 import java.sql.SQLException
+import java.time.OffsetDateTime
 import scala.util.Try
 
 object DatasetResource {
@@ -234,7 +224,6 @@ object DatasetResource {
 class DatasetResource {
   private val ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE = "User has no access to this dataset"
   private val ERR_DATASET_VERSION_NOT_FOUND_MESSAGE = "The version of the dataset not found"
-  private val PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS = 6
   private val EXPIRATION_MINUTES = 5
 
   private val COVER_IMAGE_SIZE_LIMIT_BYTES: Long = 10 * 1024 * 1024 // 10 MB
@@ -709,6 +698,7 @@ class DatasetResource {
       @QueryParam("filePath") filePath: String,
       @QueryParam("fileSizeBytes") fileSizeBytes: Optional[java.lang.Long],
       @QueryParam("partSizeBytes") partSizeBytes: Optional[java.lang.Long],
+      @QueryParam("restart") restart: Optional[java.lang.Boolean],
       @Auth user: SessionUser
   ): Response = {
     val uid = user.getUid
@@ -717,7 +707,7 @@ class DatasetResource {
     operationType.toLowerCase match {
       case "list" => listMultipartUploads(dataset.getDid, uid)
       case "init" =>
-        initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, uid)
+        initMultipartUpload(dataset.getDid, filePath, fileSizeBytes, partSizeBytes, restart, uid)
       case "finish" => finishMultipartUpload(dataset.getDid, filePath, uid)
       case "abort"  => abortMultipartUpload(dataset.getDid, filePath, uid)
       case _ =>
@@ -1536,6 +1526,7 @@ class DatasetResource {
       encodedFilePath: String,
       fileSizeBytes: Optional[java.lang.Long],
       partSizeBytes: Optional[java.lang.Long],
+      restart: Optional[java.lang.Boolean],
       uid: Integer
   ): Response = {
 
@@ -1613,22 +1604,30 @@ class DatasetResource {
           .noWait()
           .fetchOne()
         if (session != null) {
-          rows = ctx
-            .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
-            .from(DATASET_UPLOAD_SESSION_PART)
-            .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(session.getUploadId))
-            .forUpdate()
-            .noWait()
-            .fetch()
-        }
-        if (rows != null) {
+        //Gain parts lock
+        rows = ctx
+          .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
+          .from(DATASET_UPLOAD_SESSION_PART)
+          .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(session.getUploadId))
+          .forUpdate()
+          .noWait()
+          .fetch()
+        val dbFileSize = session.getFileSizeBytes
+        val dbPartSize = session.getPartSizeBytes
+        val dbNumParts = session.getNumPartsRequested
+        val createdAt: OffsetDateTime = session.getCreatedAt
 
-          val dbFileSize = session.getFileSizeBytes
-          val dbPartSize = session.getPartSizeBytes
-          val dbNumParts = session.getNumPartsRequested
+        val isExpired =
+          createdAt
+            .plusHours(PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS.toLong)
+            .isBefore(OffsetDateTime.now(createdAt.getOffset)) // or OffsetDateTime.now()
 
-          val conflictConfig =
-            dbFileSize != fileSizeBytesValue || dbPartSize != partSizeBytesValue || dbNumParts != computedNumParts
+        val conflictConfig =
+          dbFileSize != fileSizeBytesValue ||
+            dbPartSize != partSizeBytesValue ||
+            dbNumParts != computedNumParts ||
+            isExpired ||
+            Option(restart).exists(_.orElse(false))
 
           if (conflictConfig) {
             // Parts will be deleted automatically (ON DELETE CASCADE)
@@ -1647,7 +1646,7 @@ class DatasetResource {
             } catch { case _: Throwable => () }
             session = null
             rows = null
-          }
+            }
         }
       } catch {
         case e: DataAccessException

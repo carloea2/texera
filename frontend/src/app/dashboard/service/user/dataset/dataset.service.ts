@@ -154,7 +154,8 @@ export class DatasetService {
     filePath: string,
     file: File,
     partSize: number,
-    concurrencyLimit: number
+    concurrencyLimit: number,
+    restart: boolean
   ): Observable<MultipartUploadProgress> {
     const partCount = Math.ceil(file.size / partSize);
 
@@ -234,7 +235,8 @@ export class DatasetService {
         .set("datasetName", datasetName)
         .set("filePath", encodeURIComponent(filePath))
         .set("fileSizeBytes", file.size.toString())
-        .set("partSizeBytes", partSize.toString());
+        .set("partSizeBytes", partSize.toString())
+        .set("restart", restart);
 
       const init$ = this.http.post<{ missingParts: number[]; completedPartsCount: number }>(
         `${AppSettings.getApiEndpoint()}/${DATASET_BASE_URL}/multipart-upload`,

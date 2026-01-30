@@ -32,6 +32,7 @@ import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATA
 import org.apache.texera.dao.jooq.generated.tables.daos.{DatasetDao, DatasetVersionDao, UserDao}
 import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetVersion, User}
 import org.apache.texera.service.MockLakeFS
+import org.apache.texera.service.util.S3StorageClient
 import org.jooq.SQLDialect
 import org.jooq.impl.DSL
 import org.scalatest.flatspec.AnyFlatSpec
@@ -97,6 +98,7 @@ class DatasetResourceSpec
       ownerUser.getEmail,
       multipartDataset.getName,
       urlEnc("ignored"),
+      Optional.empty(),
       Optional.empty(),
       Optional.empty(),
       user
@@ -517,7 +519,8 @@ class DatasetResourceSpec
       numParts: Int,
       lastPartBytes: Int = 1,
       partSizeBytes: Int = MinNonFinalPartBytes,
-      user: SessionUser = multipartOwnerSessionUser
+      user: SessionUser = multipartOwnerSessionUser,
+      restart: Optional[java.lang.Boolean] = Optional.empty()
   ): Response = {
     require(numParts >= 1, "numParts must be >= 1")
     require(lastPartBytes > 0, "lastPartBytes must be > 0")
@@ -543,6 +546,7 @@ class DatasetResourceSpec
       urlEnc(filePath),
       Optional.of(java.lang.Long.valueOf(fileSizeBytes)),
       Optional.of(java.lang.Long.valueOf(maxPartSizeBytes)),
+      restart,
       user
     )
   }
@@ -559,6 +563,7 @@ class DatasetResourceSpec
       urlEnc(filePath),
       Optional.of(java.lang.Long.valueOf(fileSizeBytes)),
       Optional.of(java.lang.Long.valueOf(partSizeBytes)),
+      Optional.empty(),
       user
     )
   }
@@ -574,6 +579,7 @@ class DatasetResourceSpec
       urlEnc(filePath),
       Optional.empty(),
       Optional.empty(),
+      Optional.empty(),
       user
     )
 
@@ -586,6 +592,7 @@ class DatasetResourceSpec
       ownerUser.getEmail,
       multipartDataset.getName,
       urlEnc(filePath),
+      Optional.empty(),
       Optional.empty(),
       Optional.empty(),
       user
@@ -762,6 +769,98 @@ class DatasetResourceSpec
 
     assertPlaceholdersCreated(sessionRecord.getUploadId, expectedParts = 3)
   }
+  it should "restart session when restart=true is explicitly requested (even if config is unchanged) and reset progress" in {
+    val filePath = uniqueFilePath("init-restart-true")
+
+    // Initial init
+    initUpload(filePath, numParts = 2, lastPartBytes = 123).getStatus shouldEqual 200
+    val oldUploadId = fetchUploadIdOrFail(filePath)
+
+    // Make progress in old session
+    uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+    fetchPartRows(oldUploadId).find(_.getPartNumber == 1).get.getEtag.trim should not be ""
+
+    // Re-init with same config but restart=true => must restart
+    val r2 = initUpload(
+      filePath,
+      numParts = 2,
+      lastPartBytes = 123,
+      restart = Optional.of(java.lang.Boolean.TRUE)
+    )
+    r2.getStatus shouldEqual 200
+
+    val newUploadId = fetchUploadIdOrFail(filePath)
+    newUploadId should not equal oldUploadId
+
+    // Old part rows gone, new placeholders empty
+    fetchPartRows(oldUploadId) shouldBe empty
+    assertPlaceholdersCreated(newUploadId, expectedParts = 2)
+
+    // Response should look like a fresh session
+    val m = entityAsScalaMap(r2)
+    mapListOfInts(m("missingParts")) shouldEqual List(1, 2)
+    m("completedPartsCount").toString.toInt shouldEqual 0
+  }
+
+  it should "not restart session when restart=false (same config) and preserve uploadId + progress" in {
+    val filePath = uniqueFilePath("init-restart-false")
+
+    initUpload(filePath, numParts = 3, lastPartBytes = 123).getStatus shouldEqual 200
+    val uploadId1 = fetchUploadIdOrFail(filePath)
+
+    uploadPart(filePath, 1, minPartBytes(7.toByte)).getStatus shouldEqual 200
+
+    val r2 = initUpload(
+      filePath,
+      numParts = 3,
+      lastPartBytes = 123,
+      restart = Optional.of(java.lang.Boolean.FALSE)
+    )
+    r2.getStatus shouldEqual 200
+
+    val uploadId2 = fetchUploadIdOrFail(filePath)
+    uploadId2 shouldEqual uploadId1
+
+    val m = entityAsScalaMap(r2)
+    mapListOfInts(m("missingParts")) shouldEqual List(2, 3)
+    m("completedPartsCount").toString.toInt shouldEqual 1
+  }
+
+  it should "restart even when all parts were already uploaded (restart=true makes missingParts full again)" in {
+    val filePath = uniqueFilePath("init-restart-after-all-parts")
+
+    initUpload(filePath, numParts = 2, lastPartBytes = 123).getStatus shouldEqual 200
+    val oldUploadId = fetchUploadIdOrFail(filePath)
+
+    // Upload everything (but don't finish)
+    uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+    uploadPart(filePath, 2, tinyBytes(2.toByte, n = 123)).getStatus shouldEqual 200
+
+    // Confirm "all done" without restart
+    val rNoRestart = initUpload(filePath, numParts = 2, lastPartBytes = 123)
+    rNoRestart.getStatus shouldEqual 200
+    val mNoRestart = entityAsScalaMap(rNoRestart)
+    mapListOfInts(mNoRestart("missingParts")) shouldEqual Nil
+    mNoRestart("completedPartsCount").toString.toInt shouldEqual 2
+
+    // Now force restart => must reset
+    val rRestart = initUpload(
+      filePath,
+      numParts = 2,
+      lastPartBytes = 123,
+      restart = Optional.of(java.lang.Boolean.TRUE)
+    )
+    rRestart.getStatus shouldEqual 200
+
+    val newUploadId = fetchUploadIdOrFail(filePath)
+    newUploadId should not equal oldUploadId
+    fetchPartRows(oldUploadId) shouldBe empty
+    assertPlaceholdersCreated(newUploadId, expectedParts = 2)
+
+    val m = entityAsScalaMap(rRestart)
+    mapListOfInts(m("missingParts")) shouldEqual List(1, 2)
+    m("completedPartsCount").toString.toInt shouldEqual 0
+  }
 
   "multipart-upload?type=init" should "restart session when init config changes (fileSize/partSize/numParts) and recreate placeholders" in {
     val filePath = uniqueFilePath("init-conflict-restart")
@@ -791,6 +890,54 @@ class DatasetResourceSpec
     mapListOfInts(m2("missingParts")) shouldEqual List(1, 2, 3)
     m2("completedPartsCount").toString.toInt shouldEqual 0
   }
+
+  it should "restart session when physicalAddress has expired (created_at too old), even if config is unchanged" in {
+    val filePath = uniqueFilePath("init-expired-restart")
+
+    // First init (2 parts)
+    val r1 = initUpload(filePath, numParts = 2, lastPartBytes = 123)
+    r1.getStatus shouldEqual 200
+
+    val oldUploadId = fetchUploadIdOrFail(filePath)
+    oldUploadId should not be null
+
+    // Optional: create some progress so we know it truly resets
+    uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
+    fetchPartRows(oldUploadId).find(_.getPartNumber == 1).get.getEtag.trim should not be ""
+
+    // Age the session so it is definitely expired (> PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS = 6)
+    val expireHrs = S3StorageClient.PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS
+
+    getDSLContext
+      .update(DATASET_UPLOAD_SESSION)
+      .set(
+        DATASET_UPLOAD_SESSION.CREATED_AT,
+        DSL
+          .field(s"current_timestamp - interval '${expireHrs + 1} hours'")
+          .cast(classOf[java.time.OffsetDateTime])
+      )
+      .where(DATASET_UPLOAD_SESSION.UPLOAD_ID.eq(oldUploadId))
+      .execute()
+
+    // Same init config again -> should restart because it's expired
+    val r2 = initUpload(filePath, numParts = 2, lastPartBytes = 123)
+    r2.getStatus shouldEqual 200
+
+    val newUploadId = fetchUploadIdOrFail(filePath)
+    newUploadId should not equal oldUploadId
+
+    // Old part rows should have been deleted (ON DELETE CASCADE)
+    fetchPartRows(oldUploadId) shouldBe empty
+
+    // New placeholders should exist, empty
+    assertPlaceholdersCreated(newUploadId, expectedParts = 2)
+
+    // Response should reflect a fresh session
+    val m2 = entityAsScalaMap(r2)
+    mapListOfInts(m2("missingParts")) shouldEqual List(1, 2)
+    m2("completedPartsCount").toString.toInt shouldEqual 0
+  }
+
   it should "be resumable: repeated init with same config keeps uploadId and returns missingParts + completedPartsCount" in {
     val filePath = uniqueFilePath("init-resume-same-config")
 
@@ -972,6 +1119,7 @@ class DatasetResourceSpec
         urlEnc(filePath1),
         Optional.empty(),
         Optional.of(java.lang.Long.valueOf(MinNonFinalPartBytes.toLong)),
+        Optional.empty(),
         multipartOwnerSessionUser
       )
     }
@@ -985,6 +1133,7 @@ class DatasetResourceSpec
         multipartDataset.getName,
         urlEnc(filePath2),
         Optional.of(java.lang.Long.valueOf(1L)),
+        Optional.empty(),
         Optional.empty(),
         multipartOwnerSessionUser
       )
@@ -1004,6 +1153,7 @@ class DatasetResourceSpec
           urlEnc(filePath),
           Optional.of(java.lang.Long.valueOf(0L)),
           Optional.of(java.lang.Long.valueOf(1L)),
+          Optional.empty(),
           multipartOwnerSessionUser
         )
       },
@@ -1019,6 +1169,7 @@ class DatasetResourceSpec
           urlEnc(filePath),
           Optional.of(java.lang.Long.valueOf(1L)),
           Optional.of(java.lang.Long.valueOf(0L)),
+          Optional.empty(),
           multipartOwnerSessionUser
         )
       },
@@ -1042,6 +1193,7 @@ class DatasetResourceSpec
           urlEnc(filePathOver),
           Optional.of(java.lang.Long.valueOf(oneMiB + 1L)),
           Optional.of(java.lang.Long.valueOf(oneMiB + 1L)), // single-part
+          Optional.empty(),
           multipartOwnerSessionUser
         )
       },
@@ -1057,6 +1209,7 @@ class DatasetResourceSpec
         urlEnc(filePathEq),
         Optional.of(java.lang.Long.valueOf(oneMiB)),
         Optional.of(java.lang.Long.valueOf(oneMiB)), // single-part
+        Optional.empty(),
         multipartOwnerSessionUser
       )
 
@@ -1079,6 +1232,7 @@ class DatasetResourceSpec
         urlEnc(filePathEq),
         Optional.of(java.lang.Long.valueOf(max6MiB)),
         Optional.of(java.lang.Long.valueOf(partSize)),
+        Optional.empty(),
         multipartOwnerSessionUser
       )
 
@@ -1095,6 +1249,7 @@ class DatasetResourceSpec
           urlEnc(filePathOver),
           Optional.of(java.lang.Long.valueOf(max6MiB + 1L)),
           Optional.of(java.lang.Long.valueOf(partSize)),
+          Optional.empty(),
           multipartOwnerSessionUser
         )
       },
@@ -1117,6 +1272,7 @@ class DatasetResourceSpec
         urlEnc(filePath),
         Optional.of(java.lang.Long.valueOf(totalMaxBytes)),
         Optional.of(java.lang.Long.valueOf(MinNonFinalPartBytes.toLong)),
+        Optional.empty(),
         multipartOwnerSessionUser
       )
     }
@@ -1146,6 +1302,7 @@ class DatasetResourceSpec
         ownerUser.getEmail,
         multipartDataset.getName,
         urlEnc(filePath),
+        Optional.empty(),
         Optional.empty(),
         Optional.empty(),
         multipartOwnerSessionUser
@@ -1572,6 +1729,7 @@ class DatasetResourceSpec
         urlEnc(filePath),
         Optional.of(java.lang.Long.valueOf(twoMiB)),
         Optional.of(java.lang.Long.valueOf(twoMiB)),
+        Optional.empty(),
         multipartOwnerSessionUser
       )
       .getStatus shouldEqual 200

@@ -68,7 +68,15 @@ export class FilesUploaderComponent {
     return `${Math.max(1, Math.round(n / 1024))} KiB`;
   }
 
-  private askResumeOrSkip(item: FileUploadItem): Promise<"resume" | "resumeAll" | "skip" | "skipAll"> {
+  private markForceRestart(item: FileUploadItem): void {
+    // uploader should call backend init with type=forceRestart when this is set
+    (item as any).restart = true;
+  }
+
+  private askResumeOrSkip(
+    item: FileUploadItem,
+    showForAll: boolean
+  ): Promise<"resume" | "resumeAll" | "restart" | "restartAll"> {
     return new Promise(resolve => {
       const fileName = item.name.split("/").pop() || item.name;
       const sizeStr = this.formatBytes(item.file.size);
@@ -86,31 +94,36 @@ export class FilesUploaderComponent {
 </div>
   `,
         nzFooter: [
+          ...(showForAll
+            ? [
+              {
+                label: "Restart For All",
+                onClick: () => {
+                  resolve("restartAll");
+                  ref.destroy();
+                },
+              },
+              {
+                label: "Resume For All",
+                onClick: () => {
+                  resolve("resumeAll");
+                  ref.destroy();
+                },
+              },
+            ]
+            : []),
           {
-            label: "Recover",
+            label: "Restart",
+            onClick: () => {
+              resolve("restart");
+              ref.destroy();
+            },
+          },
+          {
+            label: "Resume",
+            type: "primary",
             onClick: () => {
               resolve("resume");
-              ref.destroy();
-            },
-          },
-          {
-            label: "Recover For All",
-            onClick: () => {
-              resolve("resumeAll");
-              ref.destroy();
-            },
-          },
-          {
-            label: "Skip",
-            onClick: () => {
-              resolve("skip");
-              ref.destroy();
-            },
-          },
-          {
-            label: "Skip For All",
-            onClick: () => {
-              resolve("skipAll");
               ref.destroy();
             },
           },
@@ -123,31 +136,51 @@ export class FilesUploaderComponent {
     const active = new Set(activePaths ?? []);
     const isConflict = (p: string) => active.has(p) || active.has(encodeURIComponent(p));
 
-    let mode: "ask" | "resumeAll" | "skipAll" = "ask";
+    const showForAll = items.length > 1;
+
+    let mode: "ask" | "resumeAll" | "restartAll" = "ask";
     const out: FileUploadItem[] = [];
 
-    // Sequentially prompt (no async/await): chain promises in order
     await items.reduce<Promise<void>>(async (chain, item) => {
       await chain;
+
       if (!isConflict(item.name)) {
         out.push(item);
         return;
       }
+
       if (mode === "resumeAll") {
         out.push(item);
         return;
       }
-      if (mode === "skipAll") {
+
+      if (mode === "restartAll") {
+        this.markForceRestart(item);
+        out.push(item);
         return;
       }
-      const choice = await this.askResumeOrSkip(item);
+
+      const choice = await this.askResumeOrSkip(item, showForAll);
+
       if (choice === "resume") out.push(item);
+
       if (choice === "resumeAll") {
         mode = "resumeAll";
         out.push(item);
       }
-      if (choice === "skipAll") mode = "skipAll";
+
+      if (choice === "restart") {
+        this.markForceRestart(item);
+        out.push(item);
+      }
+
+      if (choice === "restartAll") {
+        mode = "restartAll";
+        this.markForceRestart(item);
+        out.push(item);
+      }
     }, Promise.resolve());
+
     return out;
   }
 

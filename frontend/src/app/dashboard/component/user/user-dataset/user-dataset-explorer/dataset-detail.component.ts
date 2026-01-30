@@ -428,7 +428,8 @@ export class DatasetDetailComponent implements OnInit {
                 file.name,
                 file.file,
                 this.chunkSizeMiB * 1024 * 1024,
-                this.maxConcurrentChunks
+                this.maxConcurrentChunks,
+                Boolean((file as any).restart)
               )
               .pipe(untilDestroyed(this))
               .subscribe({
