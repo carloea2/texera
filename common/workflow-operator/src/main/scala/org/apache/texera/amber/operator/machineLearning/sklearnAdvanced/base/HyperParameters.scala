@@ -2,7 +2,10 @@ package org.apache.texera.amber.operator.machineLearning.sklearnAdvanced.base
 
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations._
-import org.apache.texera.amber.operator.metadata.annotations.{CommonOpDescAnnotation, HideAnnotation}
+import org.apache.texera.amber.operator.metadata.annotations.{
+  CommonOpDescAnnotation,
+  HideAnnotation
+}
 
 class HyperParameters[T] {
 

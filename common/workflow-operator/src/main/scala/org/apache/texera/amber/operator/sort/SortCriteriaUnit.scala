@@ -24,12 +24,12 @@ import org.apache.texera.amber.operator.metadata.annotations.AutofillAttributeNa
 
 class SortCriteriaUnit {
 
-    @JsonProperty(value = "attribute", required = true)
-    @JsonPropertyDescription("Attribute name to sort by")
-    @AutofillAttributeName
-    var attributeName: String = _
+  @JsonProperty(value = "attribute", required = true)
+  @JsonPropertyDescription("Attribute name to sort by")
+  @AutofillAttributeName
+  var attributeName: String = _
 
-    @JsonProperty(value = "sortPreference", required = true)
-    @JsonPropertyDescription("Sort preference (ASC or DESC)")
-    var sortPreference: SortPreference = _
+  @JsonProperty(value = "sortPreference", required = true)
+  @JsonPropertyDescription("Sort preference (ASC or DESC)")
+  var sortPreference: SortPreference = _
 }
