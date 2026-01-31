@@ -19,17 +19,44 @@ import overrides
 import pandas
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Iterator, List, Mapping, Optional, Union, MutableMapping
+from typing import Iterator, List, Mapping, Optional, Union, MutableMapping, Protocol
 
 from . import Table, TableLike, Tuple, TupleLike, Batch, BatchLike
 from .state import State
 from .table import all_output_to_tuple
+
+import base64
 
 
 class Operator(ABC):
     """
     Abstract base class for all operators.
     """
+
+    class PythonTemplateDecoder:
+        class Decoder(Protocol):
+            """Pluggable base64 decoder interface."""
+
+            def to_str(self, data: Union[str, bytes]) -> str: ...
+
+        class StdlibBase64Decoder:
+            """Default decoder using Python's stdlib base64."""
+
+            def to_str(self, data: Union[str, bytes]) -> str:
+                b64_bytes = data.encode("ascii") if isinstance(data, str) else data
+                raw = base64.b64decode(b64_bytes, validate=False)
+                return raw.decode("utf-8", errors="strict")
+
+        def __init__(
+            self,
+            decoder: Optional["Operator.PythonTemplateDecoder.Decoder"] = None,
+        ) -> None:
+            self._decoder: "Operator.PythonTemplateDecoder.Decoder" = (
+                decoder or self.StdlibBase64Decoder()
+            )
+
+        def decode(self, data: Union[str, bytes]) -> str:
+            return self._decoder.to_str(data)
 
     __internal_is_source: bool = False
 

@@ -37,9 +37,23 @@ class HierarchyChartOpDescSpec extends AnyFlatSpec with BeforeAndAfter {
     attributes(2).attributeName = "column_c"
     opDesc.hierarchy = attributes.toList
     opDesc.hierarchyChartType = HierarchyChartType.TREEMAP
-    assert(opDesc.createPlotlyFigure().contains("['column_a','column_b','column_c']"))
+    assert(
+      opDesc
+        .createPlotlyFigure()
+        .plain
+        .contains(
+          "[self.B64.decode('Y29sdW1uX2E='),self.B64.decode('Y29sdW1uX2I='),self.B64.decode('Y29sdW1uX2M=')"
+        )
+    )
     opDesc.hierarchyChartType = HierarchyChartType.SUNBURSTCHART
-    assert(opDesc.createPlotlyFigure().contains("['column_a','column_b','column_c']"))
+    assert(
+      opDesc
+        .createPlotlyFigure()
+        .plain
+        .contains(
+          "[self.B64.decode('Y29sdW1uX2E='),self.B64.decode('Y29sdW1uX2I='),self.B64.decode('Y29sdW1uX2M=')"
+        )
+    )
   }
 
   it should "throw assertion error if hierarchy is empty" in {
