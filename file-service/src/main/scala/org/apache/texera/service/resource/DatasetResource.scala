@@ -23,7 +23,6 @@ import io.dropwizard.auth.Auth
 import jakarta.annotation.security.RolesAllowed
 import jakarta.ws.rs._
 import jakarta.ws.rs.core._
-import org.apache.commons.io.FilenameUtils
 import org.apache.texera.amber.config.StorageConfig
 import org.apache.texera.amber.core.storage.model.OnDataset
 import org.apache.texera.amber.core.storage.util.LakeFSStorageClient
@@ -33,30 +32,36 @@ import org.apache.texera.dao.SqlServer
 import org.apache.texera.dao.SqlServer.withTransaction
 import org.apache.texera.dao.jooq.generated.enums.PrivilegeEnum
 import org.apache.texera.dao.jooq.generated.tables.Dataset.DATASET
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
 import org.apache.texera.dao.jooq.generated.tables.DatasetUserAccess.DATASET_USER_ACCESS
 import org.apache.texera.dao.jooq.generated.tables.DatasetVersion.DATASET_VERSION
 import org.apache.texera.dao.jooq.generated.tables.User.USER
-import org.apache.texera.dao.jooq.generated.tables.daos.{DatasetDao, DatasetUserAccessDao, DatasetVersionDao}
-import org.apache.texera.dao.jooq.generated.tables.pojos.{Dataset, DatasetUserAccess, DatasetVersion}
-import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
+import org.apache.texera.dao.jooq.generated.tables.daos.{
+  DatasetDao,
+  DatasetUserAccessDao,
+  DatasetVersionDao
+}
+import org.apache.texera.dao.jooq.generated.tables.pojos.{
+  Dataset,
+  DatasetUserAccess,
+  DatasetVersion
+}
 import org.apache.texera.service.`type`.DatasetFileNode
 import org.apache.texera.service.resource.DatasetAccessResource._
 import org.apache.texera.service.resource.DatasetResource.{context, _}
 import org.apache.texera.service.util.S3StorageClient
-import org.apache.texera.service.util.S3StorageClient.{MAXIMUM_NUM_OF_MULTIPART_S3_PARTS, MINIMUM_NUM_OF_MULTIPART_S3_PART, PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS}
-import org.jooq.exception.DataAccessException
+import org.apache.texera.service.util.S3StorageClient.{
+  MAXIMUM_NUM_OF_MULTIPART_S3_PARTS,
+  MINIMUM_NUM_OF_MULTIPART_S3_PART,
+  PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS
+}
 import org.jooq.impl.DSL
 import org.jooq.impl.DSL.{inline => inl}
 import org.jooq.{DSLContext, EnumType, Record2, Result}
-import software.amazon.awssdk.services.s3.model.UploadPartResponse
 
 import java.io.{InputStream, OutputStream}
 import java.net.{HttpURLConnection, URI, URL, URLDecoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
-import java.sql.SQLException
 import java.util
 import java.util.Optional
 import java.util.zip.{ZipEntry, ZipOutputStream}
@@ -68,17 +73,9 @@ import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATA
 import org.jooq.exception.DataAccessException
 import software.amazon.awssdk.services.s3.model.UploadPartResponse
 import org.apache.commons.io.FilenameUtils
-import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSession.DATASET_UPLOAD_SESSION
-import org.apache.texera.dao.jooq.generated.tables.DatasetUploadSessionPart.DATASET_UPLOAD_SESSION_PART
-import org.jooq.exception.DataAccessException
-import software.amazon.awssdk.services.s3.model.UploadPartResponse
-import org.apache.commons.io.FilenameUtils
 import org.apache.texera.service.util.LakeFSExceptionHandler.withLakeFSErrorHandling
 import org.apache.texera.dao.jooq.generated.tables.records.DatasetUploadSessionRecord
 
-import java.sql.SQLException
-import scala.util.Try
 import java.sql.SQLException
 import java.time.OffsetDateTime
 import scala.util.Try
@@ -1604,30 +1601,30 @@ class DatasetResource {
           .noWait()
           .fetchOne()
         if (session != null) {
-        //Gain parts lock
-        rows = ctx
-          .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
-          .from(DATASET_UPLOAD_SESSION_PART)
-          .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(session.getUploadId))
-          .forUpdate()
-          .noWait()
-          .fetch()
-        val dbFileSize = session.getFileSizeBytes
-        val dbPartSize = session.getPartSizeBytes
-        val dbNumParts = session.getNumPartsRequested
-        val createdAt: OffsetDateTime = session.getCreatedAt
+          //Gain parts lock
+          rows = ctx
+            .select(DATASET_UPLOAD_SESSION_PART.PART_NUMBER, DATASET_UPLOAD_SESSION_PART.ETAG)
+            .from(DATASET_UPLOAD_SESSION_PART)
+            .where(DATASET_UPLOAD_SESSION_PART.UPLOAD_ID.eq(session.getUploadId))
+            .forUpdate()
+            .noWait()
+            .fetch()
+          val dbFileSize = session.getFileSizeBytes
+          val dbPartSize = session.getPartSizeBytes
+          val dbNumParts = session.getNumPartsRequested
+          val createdAt: OffsetDateTime = session.getCreatedAt
 
-        val isExpired =
-          createdAt
-            .plusHours(PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS.toLong)
-            .isBefore(OffsetDateTime.now(createdAt.getOffset)) // or OffsetDateTime.now()
+          val isExpired =
+            createdAt
+              .plusHours(PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS.toLong)
+              .isBefore(OffsetDateTime.now(createdAt.getOffset)) // or OffsetDateTime.now()
 
-        val conflictConfig =
-          dbFileSize != fileSizeBytesValue ||
-            dbPartSize != partSizeBytesValue ||
-            dbNumParts != computedNumParts ||
-            isExpired ||
-            Option(restart).exists(_.orElse(false))
+          val conflictConfig =
+            dbFileSize != fileSizeBytesValue ||
+              dbPartSize != partSizeBytesValue ||
+              dbNumParts != computedNumParts ||
+              isExpired ||
+              Option(restart).exists(_.orElse(false))
 
           if (conflictConfig) {
             // Parts will be deleted automatically (ON DELETE CASCADE)
@@ -1646,7 +1643,7 @@ class DatasetResource {
             } catch { case _: Throwable => () }
             session = null
             rows = null
-            }
+          }
         }
       } catch {
         case e: DataAccessException
@@ -1787,19 +1784,19 @@ class DatasetResource {
       }
 
       // CHANGED: compute missingParts + completedPartsCount from the SAME query result
-      val missingPartsSmartSorted = rows.asScala
+      val missingParts = rows.asScala
         .filter(r =>
           Option(r.get(DATASET_UPLOAD_SESSION_PART.ETAG)).map(_.trim).getOrElse("").isEmpty
         )
         .map(r => r.get(DATASET_UPLOAD_SESSION_PART.PART_NUMBER).intValue())
         .toList
 
-      val completedPartsCount = nParts - missingPartsSmartSorted.size
+      val completedPartsCount = nParts - missingParts.size
 
       Response
         .ok(
           Map(
-            "missingParts" -> missingPartsSmartSorted.asJava,
+            "missingParts" -> missingParts.asJava,
             "completedPartsCount" -> Integer.valueOf(completedPartsCount)
           )
         )

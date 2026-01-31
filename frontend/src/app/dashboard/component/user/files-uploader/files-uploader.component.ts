@@ -20,8 +20,7 @@
 import { Component, EventEmitter, Host, Input, Optional, Output } from "@angular/core";
 import { firstValueFrom } from "rxjs";
 import { NgxFileDropEntry } from "ngx-file-drop";
-import { NzModalService } from "ng-zorro-antd/modal";
-
+import { NzModalRef, NzModalService } from "ng-zorro-antd/modal";
 import { FileUploadItem } from "../../../type/dashboard-file.interface";
 import { DatasetFileNode } from "../../../../common/type/datasetVersionFileTree";
 import { NotificationService } from "../../../../common/service/notification/notification.service";
@@ -29,6 +28,11 @@ import { AdminSettingsService } from "../../../service/admin/settings/admin-sett
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
 import { DatasetService } from "../../../service/user/dataset/dataset.service";
 import { DatasetDetailComponent } from "../user-dataset/user-dataset-explorer/dataset-detail.component";
+import { formatSize } from "../../../../common/util/size-formatter.util";
+import {
+  ConflictingFileModalContentComponent,
+  ConflictingFileModalData,
+} from "./conflicting-file-modal-content/conflicting-file-modal-content.component";
 
 @UntilDestroy()
 @Component({
@@ -61,57 +65,48 @@ export class FilesUploaderComponent {
       .subscribe(value => (this.singleFileUploadMaxSizeMiB = parseInt(value)));
   }
 
-  private formatBytes(n: number): string {
-    const mib = n / (1024 * 1024);
-    if (mib >= 1024) return `${(mib / 1024).toFixed(2)} GiB`;
-    if (mib >= 1) return `${mib.toFixed(2)} MiB`;
-    return `${Math.max(1, Math.round(n / 1024))} KiB`;
-  }
-
   private markForceRestart(item: FileUploadItem): void {
     // uploader should call backend init with type=forceRestart when this is set
-    (item as any).restart = true;
+    item.restart = true;
   }
 
   private askResumeOrSkip(
-    item: FileUploadItem,
-    showForAll: boolean
+      item: FileUploadItem,
+      showForAll: boolean
   ): Promise<"resume" | "resumeAll" | "restart" | "restartAll"> {
     return new Promise(resolve => {
       const fileName = item.name.split("/").pop() || item.name;
-      const sizeStr = this.formatBytes(item.file.size);
+      const sizeStr = formatSize(item.file.size);
 
-      const ref = this.modal.create({
+      const ref: NzModalRef = this.modal.create<ConflictingFileModalContentComponent, ConflictingFileModalData>({
         nzTitle: "Conflicting File",
         nzMaskClosable: false,
         nzClosable: false,
-        nzContent: `
-<div>
-<div><b>File:</b> ${fileName}</div>
-<div><b>Path:</b> ${item.name}</div>
-<div><b>Size:</b> ${sizeStr}</div>
-<div style="margin-top:8px;">An upload session already exists for this path.</div>
-</div>
-  `,
+        nzContent: ConflictingFileModalContentComponent,
+        nzData: {
+          fileName,
+          path: item.name,
+          size: sizeStr,
+        },
         nzFooter: [
           ...(showForAll
-            ? [
-              {
-                label: "Restart For All",
-                onClick: () => {
-                  resolve("restartAll");
-                  ref.destroy();
+              ? [
+                {
+                  label: "Restart For All",
+                  onClick: () => {
+                    resolve("restartAll");
+                    ref.destroy();
+                  },
                 },
-              },
-              {
-                label: "Resume For All",
-                onClick: () => {
-                  resolve("resumeAll");
-                  ref.destroy();
+                {
+                  label: "Resume For All",
+                  onClick: () => {
+                    resolve("resumeAll");
+                    ref.destroy();
+                  },
                 },
-              },
-            ]
-            : []),
+              ]
+              : []),
           {
             label: "Restart",
             onClick: () => {
@@ -222,6 +217,7 @@ export class FilesUploaderComponent {
                 description: "",
                 uploadProgress: 0,
                 isUploadingFlag: false,
+                restart: false,
               });
             },
             err => reject(err)
