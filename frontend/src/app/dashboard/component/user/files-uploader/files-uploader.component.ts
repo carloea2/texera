@@ -71,8 +71,8 @@ export class FilesUploaderComponent {
   }
 
   private askResumeOrSkip(
-      item: FileUploadItem,
-      showForAll: boolean
+    item: FileUploadItem,
+    showForAll: boolean
   ): Promise<"resume" | "resumeAll" | "restart" | "restartAll"> {
     return new Promise(resolve => {
       const fileName = item.name.split("/").pop() || item.name;
@@ -90,7 +90,7 @@ export class FilesUploaderComponent {
         },
         nzFooter: [
           ...(showForAll
-              ? [
+            ? [
                 {
                   label: "Restart For All",
                   onClick: () => {
@@ -106,7 +106,7 @@ export class FilesUploaderComponent {
                   },
                 },
               ]
-              : []),
+            : []),
           {
             label: "Restart",
             onClick: () => {
