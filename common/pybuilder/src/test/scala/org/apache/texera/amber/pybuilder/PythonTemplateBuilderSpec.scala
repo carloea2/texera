@@ -576,7 +576,7 @@ class PythonTemplateBuilderSpec extends AnyFunSuite {
 
     val builder = pyb""""$workflowParam".format($portParam)"""
     assert(builder.plain == "\"wf\".format(P)")
-    assert(builder.encode.contains("self.B64.decode("))
+    assert(builder.encode.contains("self.decode_python_template("))
   }
 
   test("format(): nested PythonTemplateBuilder containing UI is allowed (no runtime false positive)") {
@@ -585,7 +585,7 @@ class PythonTemplateBuilderSpec extends AnyFunSuite {
 
     val builder = pyb""""$workflowParam".format($portParam)"""
     assert(builder.plain.contains("format(int (\\.),"))
-    assert(builder.encode.contains("self.B64.decode("))
+    assert(builder.encode.contains("self.decode_python_template("))
   }
 
   test("still rejects nested UI builder inside Python quotes at runtime") {

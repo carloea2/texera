@@ -129,7 +129,7 @@ object PyStringTypes {
  * Two concrete renderers are provided:
  *
  *  - `EncodableStringRenderer`: pre-encodes `stringValue` as base64 (UTF-8) once, and in `Encode` mode produces a Python
- *    expression like `self.B64.decode('<b64>')`.
+ *    expression like `self.decode_python_template('<b64>')` given by [[wrapWithPythonDecoderExpr]].
  *  - `PyLiteralStringRenderer`: always emits the raw string value unchanged.
  *
  * Builders can be concatenated with `+` (builder + builder), which merges adjacent `Text` chunks for compactness.

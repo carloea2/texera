@@ -49,7 +49,7 @@ final class BoundaryValidator[C <: blackbox.Context](val c: C) {
 
     case object RuntimeHint extends RendererHint {
       override val text: String =
-        "EncodableString renders as a Python expression (self.B64.decode(...))"
+        "EncodableString renders as a Python expression (self...decode(...))"
     }
 
     private def prefix(argNum1Based: Int): String =
