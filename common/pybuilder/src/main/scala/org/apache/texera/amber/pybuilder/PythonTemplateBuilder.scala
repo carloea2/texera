@@ -33,7 +33,7 @@ import scala.reflect.macros.blackbox
  *   - Some strings are “UI-provided” and must be rendered as a Python expression that decodes base64 at runtime.
  *   - Other strings are regular Python source fragments and should be spliced in as-is.
  *
- * The macro distinguishes Encodable strings via a TYPE_USE annotation (`String @EncodableStringAnn`).
+ * The macro distinguishes Encodable strings via a TYPE_USE annotation (`String @EncodableStringAnnotation`).
  */
 object PyStringTypes {
 
@@ -207,7 +207,7 @@ object PythonTemplateBuilder {
 
   // ===== render mode enum (no Ints) =====
   def wrapWithPythonDecoderExpr(text: String): String =
-    s"self.B64.decode('$text')"
+    s"self.decode_python_template('$text')"
 
   sealed trait RenderMode extends Product with Serializable
   object RenderMode {
