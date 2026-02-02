@@ -49,9 +49,9 @@ class Operator(ABC):
                 return raw.decode("utf-8", errors="strict")
 
         def __init__(
-                self,
-                decoder: Optional["Operator.PythonTemplateDecoder.Decoder"] = None,
-                cache_size: int = 256,
+            self,
+            decoder: Optional["Operator.PythonTemplateDecoder.Decoder"] = None,
+            cache_size: int = 256,
         ) -> None:
             self._decoder = decoder or self.StdlibBase64Decoder()
             self._decode_cached = self._build_cached_decoder(cache_size)
