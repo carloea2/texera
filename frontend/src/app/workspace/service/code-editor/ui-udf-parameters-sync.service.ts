@@ -1,0 +1,130 @@
+import { Injectable } from "@angular/core";
+import { isEqual } from "lodash-es";
+import { ReplaySubject } from "rxjs";
+import { Subject } from "rxjs";
+import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
+import { UiUdfParameter, UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import { isDefined } from "../../../common/util/predicate";
+import {
+  DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE,
+  PYTHON_UDF_SOURCE_V2_OP_TYPE,
+  PYTHON_UDF_V2_OP_TYPE,
+} from "../workflow-graph/model/workflow-graph";
+import { YType } from "../../types/shared-editing.interface";
+import { YText } from "yjs/dist/src/types/YText";
+
+@Injectable({ providedIn: "root" })
+export class UiUdfParametersSyncService {
+
+  private readonly uiParametersChangedSubject =
+    new ReplaySubject<{ operatorId: string; parameters: UiUdfParameter[] }>(1);
+
+
+  readonly uiParametersChanged$ =
+    this.uiParametersChangedSubject.asObservable();
+
+  constructor(
+    private workflowActionService: WorkflowActionService,
+    private uiUdfParametersParserService: UiUdfParametersParserService
+  ) {}
+
+  /**
+   * Attach directly to YText and sync whenever it changes
+   */
+  attachToYCode(operatorId: string, yCode: YText): () => void {
+    const handler = () => {
+      const latestCode = yCode.toString();
+      this.syncStructureFromCode(operatorId, latestCode);
+    };
+
+    yCode.observe(handler);
+
+    handler();
+
+    // return cleanup function
+    return () => yCode.unobserve(handler);
+  }
+
+  syncStructureFromCode(operatorId: string, codeFromEditor?: string): void {
+    const operator = this.workflowActionService
+      .getTexeraGraph()
+      .getOperator(operatorId);
+
+    if (!operator || !this.isSupportedPythonUdfType(operator.operatorType)) {
+      return;
+    }
+
+    const code = codeFromEditor ?? this.getSharedCode(operatorId);
+    if (!isDefined(code)) {
+      return;
+    }
+
+    const existingParameters = operator.operatorProperties?.uiParameters ?? [];
+    const mergedUiParameters =
+      this.buildParsedShapeWithPreservedValues(code, existingParameters);
+
+    if (isEqual(existingParameters, mergedUiParameters)) {
+      return;
+    }
+
+    // Emit event so UI updates
+    this.uiParametersChangedSubject.next({
+      operatorId,
+      parameters: mergedUiParameters,
+    });
+
+    // optionally persist here if desired
+    // this.workflowActionService.setOperatorProperty(...)
+  }
+
+  private buildParsedShapeWithPreservedValues(
+    code: string,
+    existingParameters: any[]
+  ): UiUdfParameter[] {
+    const parsedParameters =
+      this.uiUdfParametersParserService.parse(code);
+
+    const existingValues = new Map<string, string>();
+    existingParameters.forEach((parameter: any) => {
+      const parameterName =
+        parameter?.attribute?.attributeName ??
+        parameter?.attribute?.name;
+
+      if (isDefined(parameterName) && isDefined(parameter?.value)) {
+        existingValues.set(parameterName, parameter.value);
+      }
+    });
+
+    return parsedParameters.map(parameter => ({
+      ...parameter,
+      value:
+        existingValues.get(parameter.attribute.attributeName) ?? "",
+    }));
+  }
+
+  private getSharedCode(operatorId: string): string | undefined {
+    try {
+      const sharedOperatorType =
+        this.workflowActionService
+          .getTexeraGraph()
+          .getSharedOperatorType(operatorId);
+
+      const operatorProperties =
+        sharedOperatorType.get("operatorProperties") as
+          YType<Readonly<{ [key: string]: any }>>;
+
+      const yCode = operatorProperties.get("code") as YText;
+      return yCode?.toString();
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isSupportedPythonUdfType(operatorType: string): boolean {
+    return [
+      PYTHON_UDF_V2_OP_TYPE,
+      PYTHON_UDF_SOURCE_V2_OP_TYPE,
+      DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE,
+    ].includes(operatorType);
+  }
+}

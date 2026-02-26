@@ -67,7 +67,7 @@ import * as Y from "yjs";
 import { OperatorSchema } from "src/app/workspace/types/operator-schema.interface";
 import { AttributeType, PortSchema } from "../../../types/workflow-compiling.interface";
 import { GuiConfigService } from "../../../../common/service/gui-config.service";
-
+import { UiUdfParametersSyncService } from "../../../service/code-editor/ui-udf-parameters-sync.service";
 Quill.register("modules/cursors", QuillCursors);
 
 /**
@@ -155,7 +155,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     private changeDetectorRef: ChangeDetectorRef,
     private workflowVersionService: WorkflowVersionService,
     private workflowStatusSerivce: WorkflowStatusService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -191,6 +192,54 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       .subscribe(update => {
         if (this.currentOperatorId) {
           this.currentOperatorStatus = update[this.currentOperatorId];
+        }
+      });
+
+    this.uiUdfParametersSyncService.uiParametersChanged$
+      .pipe(untilDestroyed(this))
+      .subscribe(({ operatorId, parameters }) => {
+        if (operatorId !== this.currentOperatorId) return;
+
+        const readCurrentUiParams = () =>
+          this.workflowActionService
+            .getTexeraGraph()
+            .getOperator(operatorId)
+            .operatorProperties?.uiParameters ?? [];
+
+        // initial read
+        let currentUiParams = readCurrentUiParams();
+
+        // max attempts = abs(prevLen - newLen), with sane bounds
+        const diffLen = Math.abs((currentUiParams?.length ?? 0) - (parameters?.length ?? 0));
+        const MAX_ATTEMPTS = Math.min(Math.max(diffLen, 1), 20);
+
+        let attempts = 0;
+
+        while (!isEqual(currentUiParams, parameters) && attempts < MAX_ATTEMPTS) {
+          const currentOperator =
+            this.workflowActionService
+              .getTexeraGraph()
+              .getOperator(operatorId);
+
+          const newModel = {
+            ...cloneDeep(currentOperator.operatorProperties),
+            uiParameters: cloneDeep(parameters),
+          };
+
+          this.listeningToChange = false;
+          this.workflowActionService.setOperatorProperty(operatorId, newModel);
+          this.listeningToChange = true;
+
+          // re-read after mutation
+          currentUiParams = readCurrentUiParams();
+          attempts++;
+        }
+
+        if (!isEqual(currentUiParams, parameters)) {
+          console.warn(
+            `uiParameters did not converge after ${attempts}/${MAX_ATTEMPTS} attempts`,
+            { currentLen: currentUiParams.length, targetLen: parameters.length }
+          );
         }
       });
   }
@@ -331,6 +380,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         this.listeningToChange = false;
         this.typeInferenceOnLambdaFunction(formData);
         this.workflowActionService.setOperatorProperty(this.currentOperatorId, cloneDeep(formData));
+        //const normalizedFormData = this.uiUdfParametersSyncService.syncStructureFromCode(this.currentOperatorId, formData.code)
         this.listeningToChange = true;
       }
     });
@@ -451,6 +501,10 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       // if the title is fileName, then change it to custom autocomplete input template
       if (mappedField.key == "fileName") {
         mappedField.type = "inputautocomplete";
+      }
+
+      if (mappedField.key === "uiParameters") {
+        mappedField.type = "ui-udf-parameters";
       }
 
       // if the title is python script (for Python UDF), then make this field a custom template 'codearea'

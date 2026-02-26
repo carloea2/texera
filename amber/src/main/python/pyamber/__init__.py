@@ -27,6 +27,7 @@ from core.models import (
     SourceOperator,
     TupleOperatorV2,
     State,
+    AttributeType,
 )
 
 __all__ = [
@@ -41,4 +42,5 @@ __all__ = [
     "TupleOperatorV2",
     "SourceOperator",
     "State",
+    "AttributeType",
 ]

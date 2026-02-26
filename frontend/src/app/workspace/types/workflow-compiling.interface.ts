@@ -70,8 +70,24 @@ export type CompilationStateInfo = Readonly<
       operatorErrors: Readonly<Record<string, WorkflowFatalError>>;
     }
 >;
+
 // possible types of an attribute
-export type AttributeType = "string" | "integer" | "double" | "boolean" | "long" | "timestamp" | "binary"; // schema: an array of attribute names and types
+// Canonical frontend / JSON schema names
+export type AttributeType = "string" | "integer" | "long" | "double" | "boolean" | "timestamp" | "binary" | "large_binary";
+
+// Java enum constant names (AttributeType.java)
+export const JAVA_ATTRIBUTE_TYPE_NAMES = ["STRING", "INTEGER", "LONG", "DOUBLE", "BOOLEAN", "TIMESTAMP", "BINARY", "LARGE_BINARY",] as const;
+
+export type JavaAttributeTypeName = (typeof JAVA_ATTRIBUTE_TYPE_NAMES)[number];
+
+// Python enum constant names (core.models.AttributeType)
+export const PYTHON_ATTRIBUTE_TYPE_NAMES = ["STRING", "INT", "LONG", "DOUBLE", "BOOL", "TIMESTAMP", "BINARY", "LARGE_BINARY",] as const;
+
+export type PythonAttributeTypeName = (typeof PYTHON_ATTRIBUTE_TYPE_NAMES)[number];
+
+// Useful when parsing code from either side
+export type AttributeTypeToken = AttributeType | JavaAttributeTypeName | PythonAttributeTypeName;
+
 export interface SchemaAttribute
   extends Readonly<{
     attributeName: string;

@@ -77,6 +77,11 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp {
   )
   var outputColumns: List[Attribute] = List()
 
+  @JsonProperty
+  @JsonSchemaTitle("Parameters")
+  @JsonPropertyDescription("Parameters inferred from self.UiParameter(...) in Python script")
+  var uiParameters: List[UiUDFParameter] = List()
+
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
@@ -88,7 +93,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(code, "python")
+          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
         )
         .withParallelizable(true)
         .withSuggestedWorkerNum(workers)
@@ -98,7 +103,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(code, "python")
+          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
         )
         .withParallelizable(false)
     }

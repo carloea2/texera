@@ -47,11 +47,12 @@ import "@codingame/monaco-vscode-python-default-extension";
 import "@codingame/monaco-vscode-r-default-extension";
 import "@codingame/monaco-vscode-java-default-extension";
 import { isDefined } from "../../../common/util/predicate";
-import { filter, switchMap } from "rxjs/operators";
+import { debounceTime, filter, switchMap } from "rxjs/operators";
 import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
 import { CodeDebuggerComponent } from "./code-debugger.component";
 import { MonacoEditor } from "monaco-breakpoints/dist/types";
 import { GuiConfigService } from "src/app/common/service/gui-config.service";
+import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
 
 export const LANGUAGE_SERVER_CONNECTION_TIMEOUT_MS = 1000;
 
@@ -102,6 +103,7 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
   private isMultipleVariables: boolean = false;
   public codeDebuggerComponent!: Type<any> | null;
   public editorToPass!: MonacoEditor;
+  // private readonly pythonCodeChangeSubject = new Subject<string>();
 
   private generateLanguageTitle(language: string): string {
     return `${language.charAt(0).toUpperCase()}${language.slice(1)} UDF`;
@@ -118,7 +120,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     private workflowVersionService: WorkflowVersionService,
     public coeditorPresenceService: CoeditorPresenceService,
     private aiAssistantService: AIAssistantService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService
   ) {
     this.currentOperatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     const operatorType = this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType;
@@ -143,9 +146,11 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         .get("operatorProperties") as YType<Readonly<{ [key: string]: any }>>
     ).get("code") as YText;
   }
-
+  private detachYCodeListener?: () => void;
   ngAfterViewInit() {
-    // hacky solution to reset view after view is rendered.
+    // this.pythonCodeChangeSubject
+    //    .pipe(debounceTime(250), untilDestroyed(this))
+    //    .subscribe(code => this.uiUdfParametersSyncService.syncStructureFromCode(this.currentOperatorId, code));    // hacky solution to reset view after view is rendered.
     const style = localStorage.getItem(this.currentOperatorId);
     if (style) this.containerElement.nativeElement.style.cssText = style;
 
@@ -175,6 +180,9 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     if (isDefined(this.workflowVersionStreamSubject)) {
       this.workflowVersionStreamSubject.next();
       this.workflowVersionStreamSubject.complete();
+    }
+    if (this.detachYCodeListener) {
+      this.detachYCodeListener();
     }
   }
 
@@ -273,6 +281,23 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         );
         this.setupAIAssistantActions(editor);
         this.initCodeDebuggerComponent(editor);
+        if (this.detachYCodeListener) {
+          this.detachYCodeListener();
+        }
+
+        if (this.code) {
+          this.detachYCodeListener =
+            this.uiUdfParametersSyncService.attachToYCode(
+              this.currentOperatorId,
+              this.code
+            );
+        }
+        // editor.onDidChangeModelContent(() => {
+        //   const latestCode = editor.getModel()?.getValue();
+        //   if (isDefined(latestCode)) {
+        //     this.pythonCodeChangeSubject.next(latestCode);
+        //   }
+        // });
       });
   }
 

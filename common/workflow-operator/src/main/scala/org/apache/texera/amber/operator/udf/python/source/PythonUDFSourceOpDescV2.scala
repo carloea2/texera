@@ -27,6 +27,7 @@ import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, Workflow
 import org.apache.texera.amber.core.workflow.{OutputPort, PhysicalOp, SchemaPropagationFunc}
 import org.apache.texera.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import org.apache.texera.amber.operator.source.SourceOperatorDescriptor
+import org.apache.texera.amber.operator.udf.python.{PythonUdfUiParameterInjector, UiUDFParameter}
 
 class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
 
@@ -54,13 +55,18 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   @JsonPropertyDescription("The columns of the source")
   var columns: List[Attribute] = List.empty
 
+  @JsonProperty
+  @JsonSchemaTitle("Parameters")
+  @JsonPropertyDescription("Parameters inferred from self.UiParameter(...) in Python script")
+  var uiParameters: List[UiUDFParameter] = List()
+
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
   ): PhysicalOp = {
     require(workers >= 1, "Need at least 1 worker.")
     val physicalOp = PhysicalOp
-      .sourcePhysicalOp(workflowId, executionId, operatorIdentifier, OpExecWithCode(code, "python"))
+      .sourcePhysicalOp(workflowId, executionId, operatorIdentifier, OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python"))
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
       .withIsOneToManyOp(true)

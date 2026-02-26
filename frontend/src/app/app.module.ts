@@ -153,6 +153,7 @@ import { NzTreeViewModule } from "ng-zorro-antd/tree-view";
 import { NzNoAnimationModule } from "ng-zorro-antd/core/no-animation";
 import { TreeModule } from "@ali-hm/angular-tree-component";
 import { FileSelectionComponent } from "./workspace/component/file-selection/file-selection.component";
+import { UiUdfParametersComponent } from "./workspace/component/ui-udf-parameters/ui-udf-parameters.component";
 import { ResultExportationComponent } from "./workspace/component/result-exportation/result-exportation.component";
 import { ReportGenerationService } from "./workspace/service/report-generation/report-generation.service";
 import { SearchBarComponent } from "./dashboard/component/user/search-bar/search-bar.component";
@@ -257,6 +258,7 @@ registerLocaleData(en);
     AgentRegistrationComponent,
     InputAutoCompleteComponent,
     FileSelectionComponent,
+    UiUdfParametersComponent,
     CollabWrapperComponent,
     AboutComponent,
     UserWorkflowListItemComponent,

@@ -15,13 +15,87 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import datetime
 from abc import abstractmethod
-from typing import Iterator, Optional, Union
+from typing import Any, Dict, Iterator, Optional, Union
+
+import functools
+import datetime
+from abc import abstractmethod
+from typing import Any, Dict, Iterator, Optional, Union
 
 from pyamber import *
+from core.models.schema.attribute_type import AttributeType, TO_PYOBJECT_MAPPING
 
+class _UiParameterSupport:
+    _ui_parameter_injected_values: Dict[str, Any] = {}
+    _ui_parameter_name_types: Dict[str, AttributeType] = {}
 
-class UDFOperatorV2(TupleOperatorV2):
+    # Reserved hook name. Backend injector will generate this in the user's class.
+    def _texera_injected_ui_parameters(self) -> Dict[str, Any]:
+        return {}
+
+    def _texera_apply_injected_ui_parameters(self) -> None:
+        values = self._texera_injected_ui_parameters()
+        # Write to base class storage (not cls) because UiParameter reads from _UiParameterSupport directly
+        _UiParameterSupport._ui_parameter_injected_values = dict(values or {})
+        _UiParameterSupport._ui_parameter_name_types = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        # Wrap only methods defined on this class (not inherited ones)
+        original_open = getattr(cls, "open", None)
+        if original_open is None:
+            return
+
+        # Avoid double wrapping
+        if getattr(original_open, "__texera_ui_params_wrapped__", False):
+            return
+
+        @functools.wraps(original_open)
+        def wrapped_open(self, *args, **kwargs):
+            self._texera_apply_injected_ui_parameters()
+            return original_open(self, *args, **kwargs)
+
+        setattr(wrapped_open, "__texera_ui_params_wrapped__", True)
+        cls.open = wrapped_open
+
+    class UiParameter:
+        def __init__(self, name: str, type: AttributeType):
+            if not isinstance(type, AttributeType):
+                raise TypeError(
+                    f"UiParameter.type must be an AttributeType, got {type!r}."
+                )
+
+            existing_type = _UiParameterSupport._ui_parameter_name_types.get(name)
+            if existing_type is not None and existing_type != type:
+                raise ValueError(
+                    f"Duplicate UiParameter name '{name}' with conflicting types: "
+                    f"{existing_type.name} vs {type.name}."
+                )
+
+            _UiParameterSupport._ui_parameter_name_types[name] = type
+            raw_value = _UiParameterSupport._ui_parameter_injected_values.get(name)
+            self.name = name
+            self.type = type
+            self.value = _UiParameterSupport._parse(raw_value, type)
+
+    @classmethod
+    def set_injected_ui_parameters(cls, values: Dict[str, Any]) -> None:
+        # keep for backward compatibility if anything else calls it
+        _UiParameterSupport._ui_parameter_injected_values = dict(values or {})
+        _UiParameterSupport._ui_parameter_name_types = {}
+
+    @staticmethod
+    def _parse(value: Any, attr_type: AttributeType) -> Any:
+        if value is None:
+            return None
+
+        py_type = TO_PYOBJECT_MAPPING.get(attr_type)
+        return py_type(value)
+
+class UDFOperatorV2(_UiParameterSupport, TupleOperatorV2):
     """
     Base class for tuple-oriented user-defined operators. A concrete implementation must
     be provided upon using.
@@ -65,7 +139,7 @@ class UDFOperatorV2(TupleOperatorV2):
         pass
 
 
-class UDFSourceOperator(SourceOperator):
+class UDFSourceOperator(_UiParameterSupport, SourceOperator):
     def open(self) -> None:
         """
         Open a context of the operator. Usually can be used for loading/initiating some
@@ -90,7 +164,7 @@ class UDFSourceOperator(SourceOperator):
         pass
 
 
-class UDFTableOperator(TableOperator):
+class UDFTableOperator(_UiParameterSupport, TableOperator):
     """
     Base class for table-oriented user-defined operators. A concrete implementation must
     be provided upon using.
@@ -123,7 +197,7 @@ class UDFTableOperator(TableOperator):
         pass
 
 
-class UDFBatchOperator(BatchOperator):
+class UDFBatchOperator(_UiParameterSupport, BatchOperator):
     """
     Base class for batch-oriented user-defined operators. A concrete implementation must
     be provided upon using.
