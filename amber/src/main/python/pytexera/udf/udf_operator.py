@@ -81,12 +81,6 @@ class _UiParameterSupport:
             self.type = type
             self.value = _UiParameterSupport._parse(raw_value, type)
 
-    @classmethod
-    def set_injected_ui_parameters(cls, values: Dict[str, Any]) -> None:
-        # keep for backward compatibility if anything else calls it
-        _UiParameterSupport._ui_parameter_injected_values = dict(values or {})
-        _UiParameterSupport._ui_parameter_name_types = {}
-
     @staticmethod
     def _parse(value: Any, attr_type: AttributeType) -> Any:
         if value is None:

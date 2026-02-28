@@ -14,7 +14,7 @@
   margin-bottom: 0;
 }
 
-/* Hide Formly labels since you already have a header row */
+/* Hide Formly labels*/
 :host ::ng-deep .ant-form-item-label {
   display: none;
 }

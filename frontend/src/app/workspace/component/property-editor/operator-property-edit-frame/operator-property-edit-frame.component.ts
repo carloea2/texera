@@ -380,7 +380,6 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         this.listeningToChange = false;
         this.typeInferenceOnLambdaFunction(formData);
         this.workflowActionService.setOperatorProperty(this.currentOperatorId, cloneDeep(formData));
-        //const normalizedFormData = this.uiUdfParametersSyncService.syncStructureFromCode(this.currentOperatorId, formData.code)
         this.listeningToChange = true;
       }
     });

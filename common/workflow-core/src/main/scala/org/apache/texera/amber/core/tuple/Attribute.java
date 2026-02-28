@@ -23,6 +23,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.texera.amber.pybuilder.EncodableStringAnnotation;
 import org.apache.texera.amber.pybuilder.PyStringTypes;
+import org.apache.texera.amber.pybuilder.PyStringTypes.EncodableStringFactory$;
+
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
@@ -35,7 +37,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class Attribute implements Serializable {
 
-    private final @EncodableStringAnnotation String attributeName;
+    private final String attributeName;
     private final AttributeType attributeType;
 
     @JsonCreator
@@ -52,7 +54,7 @@ public class Attribute implements Serializable {
     @JsonProperty(value = "attributeName", required = true)
     @NotBlank(message = "Attribute name is required")
     public @EncodableStringAnnotation String getName() {
-        return attributeName;
+        return PyStringTypes.EncodableStringFactory$.MODULE$.apply(attributeName);
     }
 
     @JsonProperty(value = "attributeType", required = true)

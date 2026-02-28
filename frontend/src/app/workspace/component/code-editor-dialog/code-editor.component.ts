@@ -148,9 +148,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
   }
   private detachYCodeListener?: () => void;
   ngAfterViewInit() {
-    // this.pythonCodeChangeSubject
-    //    .pipe(debounceTime(250), untilDestroyed(this))
-    //    .subscribe(code => this.uiUdfParametersSyncService.syncStructureFromCode(this.currentOperatorId, code));    // hacky solution to reset view after view is rendered.
     const style = localStorage.getItem(this.currentOperatorId);
     if (style) this.containerElement.nativeElement.style.cssText = style;
 
@@ -292,12 +289,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
               this.code
             );
         }
-        // editor.onDidChangeModelContent(() => {
-        //   const latestCode = editor.getModel()?.getValue();
-        //   if (isDefined(latestCode)) {
-        //     this.pythonCodeChangeSubject.next(latestCode);
-        //   }
-        // });
       });
   }
 
