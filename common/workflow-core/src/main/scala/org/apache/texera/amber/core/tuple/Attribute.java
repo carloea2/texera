@@ -53,8 +53,9 @@ public class Attribute implements Serializable {
 
     @JsonProperty(value = "attributeName", required = true)
     @NotBlank(message = "Attribute name is required")
-    public @EncodableStringAnnotation String getName() {
-        return PyStringTypes.EncodableStringFactory$.MODULE$.apply(attributeName);
+    @EncodableStringAnnotation
+    public String getName() {
+        return attributeName;
     }
 
     @JsonProperty(value = "attributeType", required = true)

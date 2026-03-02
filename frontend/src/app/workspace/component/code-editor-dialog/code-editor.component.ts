@@ -283,11 +283,7 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         }
 
         if (this.code) {
-          this.detachYCodeListener =
-            this.uiUdfParametersSyncService.attachToYCode(
-              this.currentOperatorId,
-              this.code
-            );
+          this.detachYCodeListener = this.uiUdfParametersSyncService.attachToYCode(this.currentOperatorId, this.code);
         }
       });
   }

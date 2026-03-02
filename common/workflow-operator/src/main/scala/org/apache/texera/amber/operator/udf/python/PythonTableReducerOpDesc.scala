@@ -57,6 +57,7 @@ class PythonTableReducerOpDesc extends PythonOperatorDescriptor {
 
     s"""
        |from pytexera import *
+       |from core.models.schema.attribute_type import *"+
        |class ProcessTableOperator(UDFTableOperator):
        |
        |    @overrides

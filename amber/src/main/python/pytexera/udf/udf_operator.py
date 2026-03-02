@@ -15,17 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import datetime
 from abc import abstractmethod
 from typing import Any, Dict, Iterator, Optional, Union
 
 import functools
-import datetime
-from abc import abstractmethod
-from typing import Any, Dict, Iterator, Optional, Union
 
 from pyamber import *
-from core.models.schema.attribute_type import AttributeType, TO_PYOBJECT_MAPPING
+from core.models.schema.attribute_type import AttributeType, FROM_STRING_PARSER_MAPPING
 
 class _UiParameterSupport:
     _ui_parameter_injected_values: Dict[str, Any] = {}
@@ -86,7 +82,7 @@ class _UiParameterSupport:
         if value is None:
             return None
 
-        py_type = TO_PYOBJECT_MAPPING.get(attr_type)
+        py_type = FROM_STRING_PARSER_MAPPING.get(attr_type)
         return py_type(value)
 
 class UDFOperatorV2(_UiParameterSupport, TupleOperatorV2):

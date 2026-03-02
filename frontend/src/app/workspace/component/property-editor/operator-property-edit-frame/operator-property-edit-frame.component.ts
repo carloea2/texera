@@ -201,10 +201,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         if (operatorId !== this.currentOperatorId) return;
 
         const readCurrentUiParams = () =>
-          this.workflowActionService
-            .getTexeraGraph()
-            .getOperator(operatorId)
-            .operatorProperties?.uiParameters ?? [];
+          this.workflowActionService.getTexeraGraph().getOperator(operatorId).operatorProperties?.uiParameters ?? [];
 
         // initial read
         let currentUiParams = readCurrentUiParams();
@@ -216,10 +213,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         let attempts = 0;
 
         while (!isEqual(currentUiParams, parameters) && attempts < MAX_ATTEMPTS) {
-          const currentOperator =
-            this.workflowActionService
-              .getTexeraGraph()
-              .getOperator(operatorId);
+          const currentOperator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
 
           const newModel = {
             ...cloneDeep(currentOperator.operatorProperties),
@@ -236,10 +230,10 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         }
 
         if (!isEqual(currentUiParams, parameters)) {
-          console.warn(
-            `uiParameters did not converge after ${attempts}/${MAX_ATTEMPTS} attempts`,
-            { currentLen: currentUiParams.length, targetLen: parameters.length }
-          );
+          console.warn(`uiParameters did not converge after ${attempts}/${MAX_ATTEMPTS} attempts`, {
+            currentLen: currentUiParams.length,
+            targetLen: parameters.length,
+          });
         }
       });
   }

@@ -1,6 +1,5 @@
 package org.apache.texera.amber.operator.udf.python
 
-import org.apache.texera.amber.pybuilder.PyStringTypes.{EncodableString, EncodableStringFactory}
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder.PythonTemplateBuilderStringContext
 
@@ -33,11 +32,11 @@ object PythonUdfUiParameterInjector {
     }
   }
 
-  private def buildInjectedParametersMap(uiParameters: List[UiUDFParameter]): PythonTemplateBuilder = {
+  private def buildInjectedParametersMap(
+      uiParameters: List[UiUDFParameter]
+  ): PythonTemplateBuilder = {
     val entries = uiParameters.map { parameter =>
-      val key: EncodableString = EncodableStringFactory(parameter.attribute.getName)
-      val value: EncodableString = EncodableStringFactory(parameter.value)
-      pyb"$key: $value"
+      pyb"${parameter.attribute.getName()}: ${parameter.value}"
     }
 
     entries.reduceOption((acc, entry) => acc + pyb", " + entry).getOrElse(pyb"")
@@ -123,7 +122,10 @@ object PythonUdfUiParameterInjector {
     }
 
     val bodyIndent = inferClassBodyIndent(classBlock, classIndent).getOrElse(classIndent + "    ")
-    val indentedHook = indentBlock((if (classBlock.endsWith("\n")) "" else "\n") + hookMethod.trim + "\n", bodyIndent)
+    val indentedHook = indentBlock(
+      (if (classBlock.endsWith("\n")) "" else "\n") + hookMethod.trim + "\n",
+      bodyIndent
+    )
 
     encodedUserCode.substring(0, classBlockEnd) +
       indentedHook +

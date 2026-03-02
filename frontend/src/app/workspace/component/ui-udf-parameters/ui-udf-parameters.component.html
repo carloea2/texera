@@ -1,5 +1,6 @@
-<div class="ui-udf-param-list" *ngIf="(model?.length ?? 0) > 0">
-
+<div
+  class="ui-udf-param-list"
+  *ngIf="(model?.length ?? 0) > 0">
   <!-- Optional header row -->
   <div class="ui-udf-param-row header">
     <div class="field-cell"><span class="col-title">Value</span></div>
@@ -9,10 +10,8 @@
 
   <div
     class="ui-udf-param-row"
-    *ngFor="let param of (model || []); let i = index; trackBy: trackByParamName"
-  >
+    *ngFor="let param of (model || []); let i = index; trackBy: trackByParamName">
     <ng-container *ngIf="field.fieldGroup?.[i] as rowField">
-
       <!-- Value -->
       <div class="field-cell">
         <ng-container *ngIf="getValueField(rowField) as valueField">
@@ -33,7 +32,6 @@
           <formly-field [field]="typeField"></formly-field>
         </ng-container>
       </div>
-
     </ng-container>
   </div>
 </div>

@@ -73,15 +73,41 @@ export type CompilationStateInfo = Readonly<
 
 // possible types of an attribute
 // Canonical frontend / JSON schema names
-export type AttributeType = "string" | "integer" | "long" | "double" | "boolean" | "timestamp" | "binary" | "large_binary";
+export type AttributeType =
+  | "string"
+  | "integer"
+  | "long"
+  | "double"
+  | "boolean"
+  | "timestamp"
+  | "binary"
+  | "large_binary";
 
 // Java enum constant names (AttributeType.java)
-export const JAVA_ATTRIBUTE_TYPE_NAMES = ["STRING", "INTEGER", "LONG", "DOUBLE", "BOOLEAN", "TIMESTAMP", "BINARY", "LARGE_BINARY",] as const;
+export const JAVA_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INTEGER",
+  "LONG",
+  "DOUBLE",
+  "BOOLEAN",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
 
 export type JavaAttributeTypeName = (typeof JAVA_ATTRIBUTE_TYPE_NAMES)[number];
 
 // Python enum constant names (core.models.AttributeType)
-export const PYTHON_ATTRIBUTE_TYPE_NAMES = ["STRING", "INT", "LONG", "DOUBLE", "BOOL", "TIMESTAMP", "BINARY", "LARGE_BINARY",] as const;
+export const PYTHON_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INT",
+  "LONG",
+  "DOUBLE",
+  "BOOL",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
 
 export type PythonAttributeTypeName = (typeof PYTHON_ATTRIBUTE_TYPE_NAMES)[number];
 

@@ -36,6 +36,7 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp {
       "# Choose from the following templates:\n" +
         "# \n" +
         "# from pytexera import *\n" +
+        "# from core.models.schema.attribute_type import *\n" +
         "# \n" +
         "# class ProcessTupleOperator(UDFOperatorV2):\n" +
         "#     \n" +

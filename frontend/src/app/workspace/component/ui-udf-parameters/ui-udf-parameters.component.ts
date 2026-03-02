@@ -28,9 +28,11 @@ export class UiUdfParametersComponent extends FieldArrayType {
 
     // 3) Enforce at the reactive form level
     if (field.formControl) {
-      disabled
-          ? field.formControl.disable({ emitEvent: false })
-          : field.formControl.enable({ emitEvent: false });
+      if (disabled) {
+        field.formControl.disable({ emitEvent: false });
+      } else {
+        field.formControl.enable({ emitEvent: false });
+      }
     } else {
       // If control isn't created yet, disable it at init time.
       const prevOnInit = field.hooks?.onInit;

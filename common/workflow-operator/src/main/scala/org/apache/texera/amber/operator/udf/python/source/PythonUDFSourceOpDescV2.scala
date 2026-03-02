@@ -33,13 +33,14 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
 
   @JsonProperty(
     required = true,
-    defaultValue = "# from pytexera import *\n" +
-      "# class GenerateOperator(UDFSourceOperator):\n" +
-      "# \n" +
-      "#     @overrides\n" +
-      "#     \n" +
-      "#     def produce(self) -> Iterator[Union[TupleLike, TableLike, None]]:\n" +
-      "#         yield\n"
+    defaultValue =
+      "# from pytexera import *\n" + "# from core.models.schema.attribute_type import *\n" +
+        "# class GenerateOperator(UDFSourceOperator):\n" +
+        "# \n" +
+        "#     @overrides\n" +
+        "#     \n" +
+        "#     def produce(self) -> Iterator[Union[TupleLike, TableLike, None]]:\n" +
+        "#         yield\n"
   )
   @JsonSchemaTitle("Python script")
   @JsonPropertyDescription("Input your code here")
@@ -66,7 +67,12 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   ): PhysicalOp = {
     require(workers >= 1, "Need at least 1 worker.")
     val physicalOp = PhysicalOp
-      .sourcePhysicalOp(workflowId, executionId, operatorIdentifier, OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python"))
+      .sourcePhysicalOp(
+        workflowId,
+        executionId,
+        operatorIdentifier,
+        OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
+      )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
       .withIsOneToManyOp(true)

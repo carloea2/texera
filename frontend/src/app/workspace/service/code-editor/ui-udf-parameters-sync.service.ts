@@ -15,13 +15,11 @@ import { YText } from "yjs/dist/src/types/YText";
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersSyncService {
+  private readonly uiParametersChangedSubject = new ReplaySubject<{ operatorId: string; parameters: UiUdfParameter[] }>(
+    1
+  );
 
-  private readonly uiParametersChangedSubject =
-    new ReplaySubject<{ operatorId: string; parameters: UiUdfParameter[] }>(1);
-
-
-  readonly uiParametersChanged$ =
-    this.uiParametersChangedSubject.asObservable();
+  readonly uiParametersChanged$ = this.uiParametersChangedSubject.asObservable();
 
   constructor(
     private workflowActionService: WorkflowActionService,
@@ -46,9 +44,7 @@ export class UiUdfParametersSyncService {
   }
 
   syncStructureFromCode(operatorId: string, codeFromEditor?: string): void {
-    const operator = this.workflowActionService
-      .getTexeraGraph()
-      .getOperator(operatorId);
+    const operator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
 
     if (!operator || !this.isSupportedPythonUdfType(operator.operatorType)) {
       return;
@@ -60,8 +56,7 @@ export class UiUdfParametersSyncService {
     }
 
     const existingParameters = operator.operatorProperties?.uiParameters ?? [];
-    const mergedUiParameters =
-      this.buildParsedShapeWithPreservedValues(code, existingParameters);
+    const mergedUiParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
 
     if (isEqual(existingParameters, mergedUiParameters)) {
       return;
@@ -77,18 +72,12 @@ export class UiUdfParametersSyncService {
     // this.workflowActionService.setOperatorProperty(...)
   }
 
-  private buildParsedShapeWithPreservedValues(
-    code: string,
-    existingParameters: any[]
-  ): UiUdfParameter[] {
-    const parsedParameters =
-      this.uiUdfParametersParserService.parse(code);
+  private buildParsedShapeWithPreservedValues(code: string, existingParameters: any[]): UiUdfParameter[] {
+    const parsedParameters = this.uiUdfParametersParserService.parse(code);
 
     const existingValues = new Map<string, string>();
     existingParameters.forEach((parameter: any) => {
-      const parameterName =
-        parameter?.attribute?.attributeName ??
-        parameter?.attribute?.name;
+      const parameterName = parameter?.attribute?.attributeName ?? parameter?.attribute?.name;
 
       if (isDefined(parameterName) && isDefined(parameter?.value)) {
         existingValues.set(parameterName, parameter.value);
@@ -97,21 +86,17 @@ export class UiUdfParametersSyncService {
 
     return parsedParameters.map(parameter => ({
       ...parameter,
-      value:
-        existingValues.get(parameter.attribute.attributeName) ?? "",
+      value: existingValues.get(parameter.attribute.attributeName) ?? "",
     }));
   }
 
   private getSharedCode(operatorId: string): string | undefined {
     try {
-      const sharedOperatorType =
-        this.workflowActionService
-          .getTexeraGraph()
-          .getSharedOperatorType(operatorId);
+      const sharedOperatorType = this.workflowActionService.getTexeraGraph().getSharedOperatorType(operatorId);
 
-      const operatorProperties =
-        sharedOperatorType.get("operatorProperties") as
-          YType<Readonly<{ [key: string]: any }>>;
+      const operatorProperties = sharedOperatorType.get("operatorProperties") as YType<
+        Readonly<{ [key: string]: any }>
+      >;
 
       const yCode = operatorProperties.get("code") as YText;
       return yCode?.toString();
@@ -121,10 +106,8 @@ export class UiUdfParametersSyncService {
   }
 
   private isSupportedPythonUdfType(operatorType: string): boolean {
-    return [
-      PYTHON_UDF_V2_OP_TYPE,
-      PYTHON_UDF_SOURCE_V2_OP_TYPE,
-      DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE,
-    ].includes(operatorType);
+    return [PYTHON_UDF_V2_OP_TYPE, PYTHON_UDF_SOURCE_V2_OP_TYPE, DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE].includes(
+      operatorType
+    );
   }
 }

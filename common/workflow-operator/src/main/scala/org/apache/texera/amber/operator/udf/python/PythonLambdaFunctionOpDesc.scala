@@ -78,6 +78,7 @@ class PythonLambdaFunctionOpDesc extends PythonOperatorDescriptor {
     // build the python udf code
     var code: String =
       "from pytexera import *\n" +
+        "from core.models.schema.attribute_type import *\n" +
         "class ProcessTupleOperator(UDFOperatorV2):\n" +
         "    @overrides\n" +
         "    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:\n"
