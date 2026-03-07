@@ -200,41 +200,16 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       .subscribe(({ operatorId, parameters }) => {
         if (operatorId !== this.currentOperatorId) return;
 
-        const readCurrentUiParams = () =>
-          this.workflowActionService.getTexeraGraph().getOperator(operatorId).operatorProperties?.uiParameters ?? [];
+        const currentOperator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
 
-        // initial read
-        let currentUiParams = readCurrentUiParams();
+        const newModel = {
+          ...cloneDeep(currentOperator.operatorProperties),
+          uiParameters: cloneDeep(parameters),
+        };
 
-        // max attempts = abs(prevLen - newLen), with sane bounds
-        const diffLen = Math.abs((currentUiParams?.length ?? 0) - (parameters?.length ?? 0));
-        const MAX_ATTEMPTS = Math.min(Math.max(diffLen, 1), 20);
-
-        let attempts = 0;
-
-        while (!isEqual(currentUiParams, parameters) && attempts < MAX_ATTEMPTS) {
-          const currentOperator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
-
-          const newModel = {
-            ...cloneDeep(currentOperator.operatorProperties),
-            uiParameters: cloneDeep(parameters),
-          };
-
-          this.listeningToChange = false;
-          this.workflowActionService.setOperatorProperty(operatorId, newModel);
-          this.listeningToChange = true;
-
-          // re-read after mutation
-          currentUiParams = readCurrentUiParams();
-          attempts++;
-        }
-
-        if (!isEqual(currentUiParams, parameters)) {
-          console.warn(`uiParameters did not converge after ${attempts}/${MAX_ATTEMPTS} attempts`, {
-            currentLen: currentUiParams.length,
-            targetLen: parameters.length,
-          });
-        }
+        this.listeningToChange = false;
+        this.workflowActionService.setOperatorProperty(operatorId, newModel);
+        this.listeningToChange = true;
       });
   }
 
