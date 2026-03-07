@@ -905,7 +905,7 @@ class DatasetResourceSpec
     uploadPart(filePath, 1, minPartBytes(1.toByte)).getStatus shouldEqual 200
     fetchPartRows(oldUploadId).find(_.getPartNumber == 1).get.getEtag.trim should not be ""
 
-    // Age the session so it is definitely expired (> PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS = 6)
+    // Age the session so it is definitely expired (> PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS)
     val expireHrs = S3StorageClient.PHYSICAL_ADDRESS_EXPIRATION_TIME_HRS
 
     getDSLContext
