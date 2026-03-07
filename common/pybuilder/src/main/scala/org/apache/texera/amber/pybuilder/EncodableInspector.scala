@@ -46,7 +46,7 @@ final class EncodableInspector[C <: blackbox.Context](val c: C) {
 
   // Keep this as a string so it also works if the annotation is referenced indirectly.
   private val encodableStringAnnotationFqn =
-    "org.apache.texera.amber.pybuilder.EncodableStringAnnotation"
+    "org.apache.texera.amber.EncodableStringAnn"
 
   /**
    * If we are pointing at a getter/accessor, hop to its accessed field symbol when possible.
@@ -110,20 +110,10 @@ final class EncodableInspector[C <: blackbox.Context](val c: C) {
     val symHasAnn =
       rawSym != null && rawSym != NoSymbol && {
         val accessed = safeAccessed(rawSym)
-        accessed != null && accessed != NoSymbol &&
-          accessed.annotations.exists(annIsEncodableString)
+        accessed != null && accessed != NoSymbol && accessed.annotations.exists(annIsEncodableString)
       }
 
-    val methodReturnHasAnn =
-      rawSym != null && rawSym != NoSymbol && (rawSym match {
-        case m: MethodSymbol =>
-          typeHasEncodableString(m.typeSignature.finalResultType)
-        case _ =>
-          false
-      })
-
-    symHasAnn || methodReturnHasAnn ||
-      (tree.tpe != null && typeHasEncodableString(tree.tpe))
+    symHasAnn || (tree.tpe != null && typeHasEncodableString(tree.tpe))
   }
 
   def isPythonTemplateBuilderArg(argExpr: c.Expr[Any]): Boolean = {

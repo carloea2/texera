@@ -29,7 +29,6 @@ import java.lang.annotation.Target;
     ElementType.FIELD,
     ElementType.PARAMETER,
     ElementType.TYPE_USE,
-    ElementType.LOCAL_VARIABLE,
-    ElementType.METHOD
+    ElementType.LOCAL_VARIABLE
 })
 public @interface EncodableStringAnnotation {}
