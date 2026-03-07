@@ -34,7 +34,7 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   @JsonProperty(
     required = true,
     defaultValue =
-      "# from pytexera import *\n" + "# from core.models.schema.attribute_type import *\n" +
+      "# from pytexera import *\n" +
         "# class GenerateOperator(UDFSourceOperator):\n" +
         "# \n" +
         "#     @overrides\n" +

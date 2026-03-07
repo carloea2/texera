@@ -25,7 +25,7 @@ import scala.util.matching.Regex
 
 object PythonUdfUiParameterInjector {
 
-  private val ReservedHookMethod = "_texera_injected_ui_parameters"
+  private val ReservedHookMethod = "@overrides\n_texera_injected_ui_parameters"
 
   // Match user-facing UDF classes (the ones users write)
   private val SupportedUserClassRegex: Regex =

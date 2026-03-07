@@ -30,6 +30,7 @@ from .udf.udf_operator import (
     UDFSourceOperator,
 )
 from core.models.type.large_binary import largebinary
+from core.models.schema.attribute_type import *
 
 __all__ = [
     "State",
@@ -53,4 +54,5 @@ __all__ = [
     "Iterator",
     "Optional",
     "Union",
+    "AttributeType",
 ]
