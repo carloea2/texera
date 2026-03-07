@@ -25,7 +25,7 @@ import scala.util.matching.Regex
 
 object PythonUdfUiParameterInjector {
 
-  private val ReservedHookMethod = "@overrides\n_texera_injected_ui_parameters"
+  private val ReservedHookMethod = "_texera_injected_ui_parameters"
 
   // Match user-facing UDF classes (the ones users write)
   private val SupportedUserClassRegex: Regex =
@@ -54,7 +54,7 @@ object PythonUdfUiParameterInjector {
       uiParameters: List[UiUDFParameter]
   ): PythonTemplateBuilder = {
     val entries = uiParameters.map { parameter =>
-      pyb"${parameter.attribute.getName()}: ${parameter.value}"
+      pyb"'${parameter.attribute.getName()}': ${parameter.value}"
     }
 
     entries.reduceOption((acc, entry) => acc + pyb", " + entry).getOrElse(pyb"")
@@ -64,11 +64,24 @@ object PythonUdfUiParameterInjector {
     val injectedParametersMap = buildInjectedParametersMap(uiParameters)
 
     // unindented method; we indent it when inserting into the class body
-    (pyb"""def """ + pyb"$ReservedHookMethod" + pyb"""(self):
-                                                     |    return {""" +
+    (pyb"""|@overrides
+            |def """ + pyb"$ReservedHookMethod" + pyb"""(self) -> typing.Dict[str, typing.Any]:
+                                                       |    return {""" +
       injectedParametersMap +
       pyb"""}
-           |""").encode
+             |""").encode
+  }
+
+  private def ensureTypingImport(encodedUserCode: String): String = {
+    val alreadyImported = encodedUserCode
+      .split("\n", -1)
+      .exists(_.trim == "import typing")
+
+    if (alreadyImported) {
+      encodedUserCode
+    } else {
+      "import typing\n" + encodedUserCode
+    }
   }
 
   private def indentBlock(block: String, indent: String): String = {
@@ -149,6 +162,7 @@ object PythonUdfUiParameterInjector {
       indentedHook +
       encodedUserCode.substring(classBlockEnd)
   }
+
   private def inferClassBodyIndent(classBlock: String, classIndent: String): Option[String] = {
     val lines = classBlock.split("\n", -1).toList.drop(1) // skip class header line
 
@@ -158,6 +172,7 @@ object PythonUdfUiParameterInjector {
         if (leading.length > classIndent.length) leading else classIndent + "    "
     }
   }
+
   def inject(code: String, uiParameters: List[UiUDFParameter]): String = {
     val params = Option(uiParameters).getOrElse(List.empty)
     validate(params)
@@ -170,10 +185,12 @@ object PythonUdfUiParameterInjector {
       return encodedUserCode
     }
 
+    val encodedUserCodeWithTypingImport = ensureTypingImport(encodedUserCode)
+
     // Build encoded hook method (contains self.decode_python_template(...))
     val hookMethod = buildInjectedHookMethod(params)
 
     // Inject hook into the UDF class body; Python base class will auto-call it before open()
-    injectHookIntoUserClass(encodedUserCode, hookMethod)
+    injectHookIntoUserClass(encodedUserCodeWithTypingImport, hookMethod)
   }
 }
