@@ -36,11 +36,6 @@ object Utils extends LazyLogging {
     *
     * @return the real absolute path to amber home directory
     */
-
-  import java.nio.file.{Files, Path, Paths}
-  import scala.jdk.CollectionConverters._
-  import scala.util.Using
-
   lazy val amberHomePath: Path = {
     val currentWorkingDirectory = Paths.get(".").toRealPath()
     // check if the current directory is the amber home path
