@@ -22,7 +22,6 @@ package org.apache.texera.amber.engine.common
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.texera.amber.engine.architecture.rpc.controlreturns.WorkflowAggregatedState
 
-import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.locks.Lock
 import scala.annotation.tailrec
 
@@ -36,24 +35,51 @@ object Utils extends LazyLogging {
     *
     * @return the real absolute path to amber home directory
     */
+
+  import java.nio.file.{Files, Path, Paths}
+  import scala.jdk.CollectionConverters._
+  import scala.util.Using
+
   lazy val amberHomePath: Path = {
     val currentWorkingDirectory = Paths.get(".").toRealPath()
-    // check if the current directory is the amber home path
+
     if (isAmberHomePath(currentWorkingDirectory)) {
       currentWorkingDirectory
     } else {
-      // from current path's parent directory, search its children to find amber home path
-      // current max depth is set to 2 (current path's siblings and direct children)
-      val searchChildren = Files
-        .walk(currentWorkingDirectory.getParent, 2)
-        .filter((path: Path) => isAmberHomePath(path))
-        .findAny
-      if (searchChildren.isPresent) {
-        searchChildren.get
-      } else {
+      val parent = Option(currentWorkingDirectory.getParent).getOrElse {
         throw new RuntimeException(
-          "Finding texera home path failed. Current working directory is " + currentWorkingDirectory
+          s"Cannot search for texera home from filesystem root: $currentWorkingDirectory"
         )
+      }
+
+      // Pass 1: prefer the closest prefix (deepest ancestor) of currentWorkingDirectory
+      val closestPrefix: Option[Path] =
+        Using.resource(Files.walk(parent, 2)) { stream =>
+          stream
+            .iterator()
+            .asScala
+            .filter(path => isAmberHomePath(path))
+            .map(_.toRealPath()) // normalize after filtering
+            .filter(path => path.startsWith(currentWorkingDirectory))
+            .maxByOption(_.getNameCount) // deepest prefix = closest ancestor
+        }
+
+      closestPrefix.getOrElse {
+        // Pass 2: fallback to any valid match
+        val anyMatch =
+          Using.resource(Files.walk(parent, 2)) { stream =>
+            stream
+              .filter((path: Path) => isAmberHomePath(path))
+              .findAny()
+          }
+
+        if (anyMatch.isPresent) {
+          anyMatch.get().toRealPath()
+        } else {
+          throw new RuntimeException(
+            s"Finding texera home path failed. Current working directory is $currentWorkingDirectory"
+          )
+        }
       }
     }
   }
