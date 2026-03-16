@@ -22,65 +22,54 @@ package org.apache.texera.amber.engine.common
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.texera.amber.engine.architecture.rpc.controlreturns.WorkflowAggregatedState
 
+import java.nio.file.{Files, Path, Paths}
 import java.util.concurrent.locks.Lock
 import scala.annotation.tailrec
+import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 object Utils extends LazyLogging {
 
   /**
     * Gets the real path of the amber home directory by:
-    * 1): check if the current directory is texera/amber
+    * 1): checking whether the current directory is `texera/amber`
     * if it's not then:
-    * 2): search the siblings and children to find the texera home path
+    * 2): searching siblings and children for an amber home path, preferring matches under the
+    *     current working directory before falling back to the first discovered match
     *
     * @return the real absolute path to amber home directory
     */
-
-  import java.nio.file.{Files, Path, Paths}
-  import scala.jdk.CollectionConverters._
-  import scala.util.Using
-
   lazy val amberHomePath: Path = {
-    val currentWorkingDirectory = Paths.get(".").toRealPath()
+    resolveAmberHomePath(Paths.get(".").toRealPath())
+  }
 
-    if (isAmberHomePath(currentWorkingDirectory)) {
-      currentWorkingDirectory
+  private[common] def resolveAmberHomePath(currentWorkingDirectory: Path): Path = {
+    val realCurrentWorkingDirectory = currentWorkingDirectory.toRealPath()
+
+    if (isAmberHomePath(realCurrentWorkingDirectory)) {
+      realCurrentWorkingDirectory
     } else {
-      val parent = Option(currentWorkingDirectory.getParent).getOrElse {
+      val parent = Option(realCurrentWorkingDirectory.getParent).getOrElse {
         throw new RuntimeException(
-          s"Cannot search for texera home from filesystem root: $currentWorkingDirectory"
+          s"Cannot search for amber home from filesystem root: $realCurrentWorkingDirectory"
         )
       }
 
-      // Pass 1: prefer the closest prefix (deepest ancestor) of currentWorkingDirectory
-      val closestPrefix: Option[Path] =
+      val amberCandidates =
         Using.resource(Files.walk(parent, 2)) { stream =>
-          stream
-            .iterator()
-            .asScala
-            .filter(path => isAmberHomePath(path))
-            .map(_.toRealPath()) // normalize after filtering
-            .filter(path => path.startsWith(currentWorkingDirectory))
-            .maxByOption(_.getNameCount) // deepest prefix = closest ancestor
+          stream.iterator().asScala.flatMap(normalizeAmberHomePath).toVector
         }
 
-      closestPrefix.getOrElse {
-        // Pass 2: fallback to any valid match
-        val anyMatch =
-          Using.resource(Files.walk(parent, 2)) { stream =>
-            stream
-              .filter((path: Path) => isAmberHomePath(path))
-              .findAny()
-          }
-
-        if (anyMatch.isPresent) {
-          anyMatch.get().toRealPath()
-        } else {
+      // Preserve the current behavior by preferring an amber directory discovered under the CWD.
+      amberCandidates
+        .filter(_.startsWith(realCurrentWorkingDirectory))
+        .maxByOption(_.getNameCount)
+        .orElse(amberCandidates.headOption)
+        .getOrElse {
           throw new RuntimeException(
-            s"Finding texera home path failed. Current working directory is $currentWorkingDirectory"
+            s"Finding amber home path failed. Current working directory is $realCurrentWorkingDirectory"
           )
         }
-      }
     }
   }
   val AMBER_HOME_FOLDER_NAME = "amber";
@@ -113,7 +102,12 @@ object Utils extends LazyLogging {
   }
 
   private def isAmberHomePath(path: Path): Boolean = {
-    path.toRealPath().endsWith(AMBER_HOME_FOLDER_NAME)
+    normalizeAmberHomePath(path).nonEmpty
+  }
+
+  private def normalizeAmberHomePath(path: Path): Option[Path] = {
+    val realPath = path.toRealPath()
+    Option.when(realPath.endsWith(AMBER_HOME_FOLDER_NAME))(realPath)
   }
 
   def aggregatedStateToString(state: WorkflowAggregatedState): String = {
