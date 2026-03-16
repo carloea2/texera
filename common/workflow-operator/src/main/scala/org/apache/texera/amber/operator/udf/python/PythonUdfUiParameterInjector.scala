@@ -128,13 +128,6 @@ object PythonUdfUiParameterInjector {
     hookRegex.findFirstIn(classBlock).isDefined
   }
 
-  private def findInsertionPointInsideClass(classBlock: String, classIndent: String): Int = {
-    // Insert before the first method definition in the class body.
-    // This preserves existing open() and also preserves class docstrings if present.
-    val methodRegex = """(?m)^[ \t]+def\s+\w+\s*\(""".r
-    methodRegex.findFirstMatchIn(classBlock).map(_.start).getOrElse(classBlock.length)
-  }
-
   private def injectHookIntoUserClass(encodedUserCode: String, hookMethod: String): String = {
     val m = SupportedUserClassRegex.findFirstMatchIn(encodedUserCode).getOrElse {
       return encodedUserCode

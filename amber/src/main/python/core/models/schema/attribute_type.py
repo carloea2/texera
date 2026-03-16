@@ -22,6 +22,7 @@ from enum import Enum
 from pyarrow import lib
 from core.models.type.large_binary import largebinary
 
+
 class AttributeType(Enum):
     """
     Types supported by PyTexera & PyAmber.
@@ -82,7 +83,7 @@ FROM_STRING_PARSER_MAPPING = {
     AttributeType.INT: int,
     AttributeType.LONG: int,
     AttributeType.DOUBLE: float,
-    AttributeType.BOOL: lambda v: str(v).strip().lower() in ("True", "true", "1", "yes"),
+    AttributeType.BOOL: lambda v: str(v).strip().lower() in ("true", "1", "yes"),
     AttributeType.BINARY: lambda v: v if isinstance(v, bytes) else str(v).encode(),
     AttributeType.TIMESTAMP: lambda v: datetime.datetime.fromisoformat(v),
     AttributeType.LARGE_BINARY: largebinary,

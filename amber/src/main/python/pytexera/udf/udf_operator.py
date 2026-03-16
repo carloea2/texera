@@ -16,31 +16,45 @@
 # under the License.
 
 from abc import abstractmethod
-from typing import Any, Dict, Iterator, Optional, Union
-
+from dataclasses import dataclass
 import functools
+from typing import Any, Dict, Iterator, Optional, Union
 
 from pyamber import *
 from core.models.schema.attribute_type import AttributeType, FROM_STRING_PARSER_MAPPING
 
+
+@dataclass(frozen=True)
+class _UiParameterValue:
+    name: str
+    type: AttributeType
+    value: Any
+
+
 class _UiParameterSupport:
-    _ui_parameter_injected_values: Dict[str, Any] = {}
-    _ui_parameter_name_types: Dict[str, AttributeType] = {}
+    _ui_parameter_injected_values: Dict[str, Any]
+    _ui_parameter_name_types: Dict[str, AttributeType]
 
     # Reserved hook name. Backend injector will generate this in the user's class.
     def _texera_injected_ui_parameters(self) -> Dict[str, Any]:
         return {}
 
+    def _ensure_ui_parameter_state(self) -> None:
+        if "_ui_parameter_injected_values" not in self.__dict__:
+            self._ui_parameter_injected_values = {}
+        if "_ui_parameter_name_types" not in self.__dict__:
+            self._ui_parameter_name_types = {}
+
     def _texera_apply_injected_ui_parameters(self) -> None:
+        self._ensure_ui_parameter_state()
         values = self._texera_injected_ui_parameters()
-        # Write to base class storage (not cls) because UiParameter reads from _UiParameterSupport directly
-        _UiParameterSupport._ui_parameter_injected_values = dict(values or {})
-        _UiParameterSupport._ui_parameter_name_types = {}
+        self._ui_parameter_injected_values = dict(values or {})
+        self._ui_parameter_name_types = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        # Wrap only methods defined on this class (not inherited ones)
+        # Wrap the effective open() method once per subclass.
         original_open = getattr(cls, "open", None)
         if original_open is None:
             return
@@ -57,25 +71,44 @@ class _UiParameterSupport:
         setattr(wrapped_open, "__texera_ui_params_wrapped__", True)
         cls.open = wrapped_open
 
-    class UiParameter:
-        def __init__(self, name: str, type: AttributeType):
-            if not isinstance(type, AttributeType):
-                raise TypeError(
-                    f"UiParameter.type must be an AttributeType, got {type!r}."
-                )
+    def UiParameter(
+        self, name: str, attr_type: Optional[AttributeType] = None, **kwargs: Any
+    ) -> _UiParameterValue:
+        if "type" in kwargs:
+            if attr_type is not None:
+                raise TypeError("UiParameter.type was provided multiple times.")
+            attr_type = kwargs.pop("type")
 
-            existing_type = _UiParameterSupport._ui_parameter_name_types.get(name)
-            if existing_type is not None and existing_type != type:
-                raise ValueError(
-                    f"Duplicate UiParameter name '{name}' with conflicting types: "
-                    f"{existing_type.name} vs {type.name}."
-                )
+        if kwargs:
+            unexpected_arguments = ", ".join(sorted(kwargs))
+            raise TypeError(
+                f"UiParameter got unexpected keyword argument(s): "
+                f"{unexpected_arguments}."
+            )
 
-            _UiParameterSupport._ui_parameter_name_types[name] = type
-            raw_value = _UiParameterSupport._ui_parameter_injected_values.get(name)
-            self.name = name
-            self.type = type
-            self.value = _UiParameterSupport._parse(raw_value, type)
+        if attr_type is None:
+            raise TypeError("UiParameter.type is required.")
+
+        if not isinstance(attr_type, AttributeType):
+            raise TypeError(
+                f"UiParameter.type must be an AttributeType, got {attr_type!r}."
+            )
+
+        self._ensure_ui_parameter_state()
+        existing_type = self._ui_parameter_name_types.get(name)
+        if existing_type is not None and existing_type != attr_type:
+            raise ValueError(
+                f"Duplicate UiParameter name '{name}' with conflicting types: "
+                f"{existing_type.name} vs {attr_type.name}."
+            )
+
+        self._ui_parameter_name_types[name] = attr_type
+        raw_value = self._ui_parameter_injected_values.get(name)
+        return _UiParameterValue(
+            name=name,
+            type=attr_type,
+            value=self._parse(raw_value, attr_type),
+        )
 
     @staticmethod
     def _parse(value: Any, attr_type: AttributeType) -> Any:
@@ -83,7 +116,13 @@ class _UiParameterSupport:
             return None
 
         py_type = FROM_STRING_PARSER_MAPPING.get(attr_type)
+        if py_type is None:
+            raise TypeError(
+                f"UiParameter.type {attr_type!r} is not supported for parsing."
+            )
+
         return py_type(value)
+
 
 class UDFOperatorV2(_UiParameterSupport, TupleOperatorV2):
     """

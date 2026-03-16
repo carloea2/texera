@@ -66,23 +66,41 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     )
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
-    injectedCode should include("def _texera_injected_ui_parameters(self):")
+    injectedCode should include("def _texera_injected_ui_parameters(self)")
     injectedCode should include("return {")
     injectedCode should include("self.decode_python_template")
     injectedCode should include("""print("open")""")
   }
 
-  it should "inject the reserved hook before the first method definition" in {
+  it should "append the reserved hook inside the class before the next top-level statement" in {
+    val udfCodeWithSiblingDefinition =
+      """from pytexera import *
+        |
+        |class ProcessTupleOperator(UDFOperatorV2):
+        |    @overrides
+        |    def open(self):
+        |        print("open")
+        |
+        |    @overrides
+        |    def process_tuple(self, tuple_: Tuple, port: int):
+        |        yield tuple_
+        |
+        |def helper():
+        |    return "outside"
+        |""".stripMargin
+
     val injectedCode = PythonUdfUiParameterInjector.inject(
-      baseUdfCode,
+      udfCodeWithSiblingDefinition,
       List(createParameter("k", AttributeType.STRING, "v"))
     )
 
-    val hookIndex = injectedCode.indexOf("def _texera_injected_ui_parameters(self):")
-    val openIndex = injectedCode.indexOf("def open(self):")
+    val hookIndex = injectedCode.indexOf("def _texera_injected_ui_parameters(self)")
+    val processTupleIndex = injectedCode.indexOf("def process_tuple(self, tuple_: Tuple, port: int):")
+    val helperIndex = injectedCode.indexOf("def helper():")
 
     hookIndex should be >= 0
-    openIndex should be > hookIndex
+    processTupleIndex should be < hookIndex
+    helperIndex should be > hookIndex
   }
 
   it should "preserve multiple ui parameters in the injected map" in {
@@ -96,7 +114,7 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
       )
     )
 
-    injectedCode should include("def _texera_injected_ui_parameters(self):")
+    injectedCode should include("def _texera_injected_ui_parameters(self)")
     injectedCode should include("self.decode_python_template")
     injectedCode.count(_ == ':') should be > 0
   }

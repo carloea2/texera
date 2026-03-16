@@ -47,7 +47,7 @@ import "@codingame/monaco-vscode-python-default-extension";
 import "@codingame/monaco-vscode-r-default-extension";
 import "@codingame/monaco-vscode-java-default-extension";
 import { isDefined } from "../../../common/util/predicate";
-import { debounceTime, filter, switchMap } from "rxjs/operators";
+import { filter, switchMap } from "rxjs/operators";
 import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
 import { CodeDebuggerComponent } from "./code-debugger.component";
 import { MonacoEditor } from "monaco-breakpoints/dist/types";
@@ -103,7 +103,6 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
   private isMultipleVariables: boolean = false;
   public codeDebuggerComponent!: Type<any> | null;
   public editorToPass!: MonacoEditor;
-  // private readonly pythonCodeChangeSubject = new Subject<string>();
 
   private generateLanguageTitle(language: string): string {
     return `${language.charAt(0).toUpperCase()}${language.slice(1)} UDF`;

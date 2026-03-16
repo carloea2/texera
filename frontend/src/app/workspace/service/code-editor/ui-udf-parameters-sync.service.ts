@@ -19,7 +19,6 @@
 import { Injectable } from "@angular/core";
 import { isEqual } from "lodash-es";
 import { ReplaySubject } from "rxjs";
-import { Subject } from "rxjs";
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
 import { UiUdfParameter, UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
 import { isDefined } from "../../../common/util/predicate";

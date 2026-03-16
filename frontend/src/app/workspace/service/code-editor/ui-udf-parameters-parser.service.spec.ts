@@ -30,19 +30,19 @@ describe("UiUdfParametersParserService", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
           def open(self):
-              self.UiParameter(AttributeType.INT, "count")
+              self.UiParameter("count", AttributeType.INT)
               self.UiParameter(type=AttributeType.STRING, name="name")
               self.UiParameter(name="age", type=AttributeType.LONG)
-              self.UiParameter(AttributeType.DOUBLE, name="score")
+              self.UiParameter("score", AttributeType.DOUBLE)
               self.UiParameter("created_at", type=AttributeType.TIMESTAMP)
     `;
 
     expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "count", attributeType: "INT" }, value: "" },
-      { attribute: { attributeName: "name", attributeType: "STRING" }, value: "" },
-      { attribute: { attributeName: "age", attributeType: "LONG" }, value: "" },
-      { attribute: { attributeName: "score", attributeType: "DOUBLE" }, value: "" },
-      { attribute: { attributeName: "created_at", attributeType: "TIMESTAMP" }, value: "" },
+      { attribute: { attributeName: "count", attributeType: "integer" }, value: "" },
+      { attribute: { attributeName: "name", attributeType: "string" }, value: "" },
+      { attribute: { attributeName: "age", attributeType: "long" }, value: "" },
+      { attribute: { attributeName: "score", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "created_at", attributeType: "timestamp" }, value: "" },
     ]);
   });
 
