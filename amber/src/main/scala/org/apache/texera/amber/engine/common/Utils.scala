@@ -60,11 +60,14 @@ object Utils extends LazyLogging {
           stream.iterator().asScala.flatMap(normalizeAmberHomePath).toVector
         }
 
+      // Sort candidates to avoid dependence on Files.walk traversal order.
+      val amberCandidatesSorted = amberCandidates.sortBy(_.toString)
+
       // Preserve the current behavior by preferring an amber directory discovered under the CWD.
-      amberCandidates
+      amberCandidatesSorted
         .filter(_.startsWith(realCurrentWorkingDirectory))
         .maxByOption(_.getNameCount)
-        .orElse(amberCandidates.headOption)
+        .orElse(amberCandidatesSorted.headOption)
         .getOrElse {
           throw new RuntimeException(
             s"Finding amber home path failed. Current working directory is $realCurrentWorkingDirectory"
