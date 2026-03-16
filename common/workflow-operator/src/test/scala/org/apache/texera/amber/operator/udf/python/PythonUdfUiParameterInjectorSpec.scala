@@ -95,7 +95,8 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     )
 
     val hookIndex = injectedCode.indexOf("def _texera_injected_ui_parameters(self)")
-    val processTupleIndex = injectedCode.indexOf("def process_tuple(self, tuple_: Tuple, port: int):")
+    val processTupleIndex =
+      injectedCode.indexOf("def process_tuple(self, tuple_: Tuple, port: int):")
     val helperIndex = injectedCode.indexOf("def helper():")
 
     hookIndex should be >= 0
