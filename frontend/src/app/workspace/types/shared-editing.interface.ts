@@ -141,9 +141,7 @@ export function updateYTypeFromObject<T extends object>(oldYObj: YType<T>, newOb
 
     // lcsLengthTable[i][j] = longest common subsequence length between
     // oldObjAsArr[i:] and newObjAsArr[j:].
-    const lcsLengthTable: number[][] = Array.from({ length: oldArrLen + 1 }, () =>
-      Array(newArrLen + 1).fill(0)
-    );
+    const lcsLengthTable: number[][] = Array.from({ length: oldArrLen + 1 }, () => Array(newArrLen + 1).fill(0));
 
     for (let oldIndex = oldArrLen - 1; oldIndex >= 0; oldIndex--) {
       for (let newIndex = newArrLen - 1; newIndex >= 0; newIndex--) {
@@ -210,24 +208,15 @@ export function updateYTypeFromObject<T extends object>(oldYObj: YType<T>, newOb
     }
 
     // Apply from right to left so array indices remain stable.
-    for (
-      let segmentIndex = unmatchedSegments.length - 1;
-      segmentIndex >= 0;
-      segmentIndex--
-    ) {
-      const { oldStartIndex, oldEndIndex, newStartIndex, newEndIndex } =
-        unmatchedSegments[segmentIndex];
+    for (let segmentIndex = unmatchedSegments.length - 1; segmentIndex >= 0; segmentIndex--) {
+      const { oldStartIndex, oldEndIndex, newStartIndex, newEndIndex } = unmatchedSegments[segmentIndex];
 
       const oldSegmentLength = oldEndIndex - oldStartIndex;
       const newSegmentLength = newEndIndex - newStartIndex;
       const overlappingLength = Math.min(oldSegmentLength, newSegmentLength);
 
       // Update overlapping items in place where possible.
-      for (
-        let segmentOffset = overlappingLength - 1;
-        segmentOffset >= 0;
-        segmentOffset--
-      ) {
+      for (let segmentOffset = overlappingLength - 1; segmentOffset >= 0; segmentOffset--) {
         const arrayIndex = oldStartIndex + segmentOffset;
         const newValue = newObjAsArr[newStartIndex + segmentOffset];
 
@@ -241,17 +230,12 @@ export function updateYTypeFromObject<T extends object>(oldYObj: YType<T>, newOb
 
       // Delete remaining old items in this segment.
       if (oldSegmentLength > newSegmentLength) {
-        oldYObjAsYArray.delete(
-          oldStartIndex + overlappingLength,
-          oldSegmentLength - newSegmentLength
-        );
+        oldYObjAsYArray.delete(oldStartIndex + overlappingLength, oldSegmentLength - newSegmentLength);
       }
 
       // Insert remaining new items in this segment.
       if (newSegmentLength > oldSegmentLength) {
-        const insertedYValues = newObjAsArr
-          .slice(newStartIndex + overlappingLength, newEndIndex)
-          .map(toYValue);
+        const insertedYValues = newObjAsArr.slice(newStartIndex + overlappingLength, newEndIndex).map(toYValue);
 
         oldYObjAsYArray.insert(oldStartIndex + overlappingLength, insertedYValues);
       }
