@@ -242,38 +242,66 @@ export class UiUdfParametersParserService {
   }
 
   private extractParameter(tokens: string[]): UiUdfParameter | undefined {
-    let namedName: string | undefined;
-    let namedType: AttributeType | undefined;
-    let positionalName: string | undefined;
-    let positionalType: AttributeType | undefined;
+    let attributeName: string | undefined;
+    let attributeType: AttributeType | undefined;
+    let sawNamedArgument = false;
+    let positionalIndex = 0;
 
     for (const token of tokens) {
       const namedNameMatch = token.match(/^name\s*=\s*["']([^"']+)["']$/);
       if (namedNameMatch) {
-        namedName = namedNameMatch[1].trim();
+        sawNamedArgument = true;
+        if (attributeName) {
+          return undefined;
+        }
+
+        attributeName = namedNameMatch[1].trim();
         continue;
       }
 
-      const namedTypeMatch = token.match(/^type\s*=\s*AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
+      const namedTypeMatch = token.match(/^(type|attr_type)\s*=\s*AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
       if (namedTypeMatch) {
-        namedType = this.normalizeAttributeType(namedTypeMatch[1]);
-        continue;
-      }
+        sawNamedArgument = true;
+        if (attributeType) {
+          return undefined;
+        }
 
-      const positionalTypeMatch = token.match(/^AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
-      if (positionalTypeMatch && !positionalType) {
-        positionalType = this.normalizeAttributeType(positionalTypeMatch[1]);
+        attributeType = this.normalizeAttributeType(namedTypeMatch[2]);
+        if (!attributeType) {
+          return undefined;
+        }
+
         continue;
       }
 
       const positionalNameMatch = token.match(/^["']([^"']+)["']$/);
-      if (positionalNameMatch && !positionalName) {
-        positionalName = positionalNameMatch[1].trim();
-      }
-    }
+      if (positionalNameMatch) {
+        if (sawNamedArgument || positionalIndex !== 0 || attributeName) {
+          return undefined;
+        }
 
-    const attributeName = namedName ?? positionalName;
-    const attributeType = namedType ?? positionalType;
+        attributeName = positionalNameMatch[1].trim();
+        positionalIndex++;
+        continue;
+      }
+
+      const positionalTypeMatch = token.match(/^AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
+      if (positionalTypeMatch) {
+        if (sawNamedArgument || positionalIndex !== 1 || attributeType) {
+          return undefined;
+        }
+
+        attributeType = this.normalizeAttributeType(positionalTypeMatch[1]);
+        if (!attributeType) {
+          return undefined;
+        }
+
+        positionalIndex++;
+        continue;
+      }
+
+      return undefined;
+    }
 
     if (!attributeName || !attributeType) {
       return undefined;

@@ -26,7 +26,7 @@ describe("UiUdfParametersParserService", () => {
     service = new UiUdfParametersParserService();
   });
 
-  it("should parse positional and name-based arguments", () => {
+  it("should parse Python-compatible positional and name-based arguments", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
           def open(self):
@@ -46,6 +46,18 @@ describe("UiUdfParametersParserService", () => {
     ]);
   });
 
+  it("should parse the attr_type keyword used by the Python API", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("count", attr_type=AttributeType.INT)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "count", attributeType: "integer" }, value: "" },
+    ]);
+  });
+
   it("should ignore calls where name or type is missing", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
@@ -55,6 +67,19 @@ describe("UiUdfParametersParserService", () => {
     `;
 
     expect(service.parse(code)).toEqual([]);
+  });
+
+  it("should ignore invalid positional argument ordering", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter(AttributeType.INT, "count")
+              self.UiParameter(name="valid", type=AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "valid", attributeType: "string" }, value: "" },
+    ]);
   });
 
   it("should ignore legacy key= named argument", () => {
