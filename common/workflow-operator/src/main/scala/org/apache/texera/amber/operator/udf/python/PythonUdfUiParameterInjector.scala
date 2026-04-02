@@ -54,7 +54,7 @@ object PythonUdfUiParameterInjector {
       uiParameters: List[UiUDFParameter]
   ): PythonTemplateBuilder = {
     val entries = uiParameters.map { parameter =>
-      pyb"'${parameter.attribute.getName()}': ${parameter.value}"
+      pyb"${parameter.attribute.getName}: ${parameter.value}"
     }
 
     entries.reduceOption((acc, entry) => acc + pyb", " + entry).getOrElse(pyb"")
@@ -65,23 +65,11 @@ object PythonUdfUiParameterInjector {
 
     // unindented method; we indent it when inserting into the class body
     (pyb"""|@overrides
-            |def """ + pyb"$ReservedHookMethod" + pyb"""(self) -> typing.Dict[str, typing.Any]:
-                                                       |    return {""" +
+           |def """ + pyb"$ReservedHookMethod" + pyb"""(self) -> Dict[str, Any]:
+                                                      |    return {""" +
       injectedParametersMap +
       pyb"""}
-             |""").encode
-  }
-
-  private def ensureTypingImport(encodedUserCode: String): String = {
-    val alreadyImported = encodedUserCode
-      .split("\n", -1)
-      .exists(_.trim == "import typing")
-
-    if (alreadyImported) {
-      encodedUserCode
-    } else {
-      "import typing\n" + encodedUserCode
-    }
+           |""").encode
   }
 
   private def indentBlock(block: String, indent: String): String = {
@@ -178,12 +166,10 @@ object PythonUdfUiParameterInjector {
       return encodedUserCode
     }
 
-    val encodedUserCodeWithTypingImport = ensureTypingImport(encodedUserCode)
-
     // Build encoded hook method (contains self.decode_python_template(...))
     val hookMethod = buildInjectedHookMethod(params)
 
     // Inject hook into the UDF class body; Python base class will auto-call it before open()
-    injectHookIntoUserClass(encodedUserCodeWithTypingImport, hookMethod)
+    injectHookIntoUserClass(encodedUserCode, hookMethod)
   }
 }

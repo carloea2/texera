@@ -22,8 +22,6 @@ package org.apache.texera.amber.core.tuple;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.texera.amber.pybuilder.EncodableStringAnnotation;
-import org.apache.texera.amber.pybuilder.PyStringTypes;
-import org.apache.texera.amber.pybuilder.PyStringTypes.EncodableStringFactory$;
 
 
 import javax.validation.constraints.NotBlank;

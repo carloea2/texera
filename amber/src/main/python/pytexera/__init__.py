@@ -17,7 +17,7 @@
 
 from loguru import logger
 from overrides import overrides
-from typing import Iterator, Optional, Union
+from typing import Iterator, Optional, Union, Dict, Any
 
 from pyamber import *
 from .storage.dataset_file_document import DatasetFileDocument
@@ -54,5 +54,7 @@ __all__ = [
     "Iterator",
     "Optional",
     "Union",
+    "Dict",
+    "Any",
     "AttributeType",
 ]

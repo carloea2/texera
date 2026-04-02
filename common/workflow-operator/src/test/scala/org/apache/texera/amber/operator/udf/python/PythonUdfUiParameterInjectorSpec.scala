@@ -55,9 +55,10 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     injectedCode should include("""print("open")""")
     injectedCode should not include ("_texera_injected_ui_parameters")
     injectedCode should not include ("self.decode_python_template")
+    injectedCode should not include ("import typing")
   }
 
-  it should "inject ui parameter hook into supported UDF class" in {
+  it should "inject ui parameter hook into supported UDF class using Dict and Any from pytexera" in {
     val injectedCode = PythonUdfUiParameterInjector.inject(
       baseUdfCode,
       List(
@@ -66,10 +67,13 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     )
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
-    injectedCode should include("def _texera_injected_ui_parameters(self)")
+    injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
     injectedCode should include("return {")
     injectedCode should include("self.decode_python_template")
     injectedCode should include("""print("open")""")
+    injectedCode should not include ("import typing")
+    injectedCode should not include ("typing.Dict")
+    injectedCode should not include ("typing.Any")
   }
 
   it should "append the reserved hook inside the class before the next top-level statement" in {
@@ -115,9 +119,10 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
       )
     )
 
-    injectedCode should include("def _texera_injected_ui_parameters(self)")
+    injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
     injectedCode should include("self.decode_python_template")
     injectedCode.count(_ == ':') should be > 0
+    injectedCode should not include ("import typing")
   }
 
   it should "throw when a parameter attribute is missing" in {
@@ -196,5 +201,6 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
 
     injectedCode should not include ("_texera_injected_ui_parameters")
     injectedCode should include("class SomethingElse:")
+    injectedCode should not include ("import typing")
   }
 }
