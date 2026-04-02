@@ -41,7 +41,7 @@ export class UiUdfParametersComponent extends FieldArrayType {
     field.props = { ...(field.props ?? {}), disabled };
 
     // 2) Compatibility for templates/wrappers still using templateOptions
-    // (use `as any` so you don't get nagged by the @deprecated JSDoc)
+    // (`as any` so we don't get nagged by the @deprecated JSDoc)
     (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
 
     // 3) Enforce at the reactive form level
@@ -75,12 +75,12 @@ export class UiUdfParametersComponent extends FieldArrayType {
     return this.setDisabled(this.getAttributeChild(rowField, "attributeName"), true);
   }
 
-  // Disable Type (set to false if you want it editable)
+  // Disable Type
   getTypeField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
     return this.setDisabled(this.getAttributeChild(rowField, "attributeType"), true);
   }
 
-  // Value editable (set to true to disable)
+  // Value editable
   getValueField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
     return this.setDisabled(this.getField(rowField, "value"), false);
   }
