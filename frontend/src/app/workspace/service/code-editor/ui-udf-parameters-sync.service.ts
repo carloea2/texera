@@ -84,9 +84,6 @@ export class UiUdfParametersSyncService {
       operatorId,
       parameters: mergedUiParameters,
     });
-
-    // optionally persist here if desired
-    // this.workflowActionService.setOperatorProperty(...)
   }
 
   private buildParsedShapeWithPreservedValues(code: string, existingParameters: any[]): UiUdfParameter[] {
