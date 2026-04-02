@@ -121,7 +121,13 @@ class _UiParameterSupport:
                 f"UiParameter.type {attr_type!r} is not supported for parsing."
             )
 
-        return py_type(value)
+        try:
+            return py_type(value)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to parse UiParameter value {value!r} as {attr_type.name}. "
+                f"Please provide a valid {attr_type.name.lower()} value."
+            ) from e
 
 
 class UDFOperatorV2(_UiParameterSupport, TupleOperatorV2):

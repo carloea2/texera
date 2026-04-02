@@ -80,13 +80,31 @@ FROM_ARROW_MAPPING = {
 
 FROM_STRING_PARSER_MAPPING = {
     AttributeType.STRING: str,
-    AttributeType.INT: int,
-    AttributeType.LONG: int,
-    AttributeType.DOUBLE: float,
-    AttributeType.BOOL: lambda v: str(v).strip().lower() in ("true", "1", "yes"),
-    AttributeType.BINARY: lambda v: v if isinstance(v, bytes) else str(v).encode(),
-    AttributeType.TIMESTAMP: lambda v: datetime.datetime.fromisoformat(v),
-    AttributeType.LARGE_BINARY: largebinary,
+    AttributeType.INT: lambda v: (
+        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
+    ),
+    AttributeType.LONG: lambda v: (
+        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
+    ),
+    AttributeType.DOUBLE: lambda v: (
+        0.0 if v is None or (isinstance(v, str) and v.strip() == "") else float(v)
+    ),
+    AttributeType.BOOL: lambda v: (
+        False
+        if v is None or (isinstance(v, str) and v.strip() == "")
+        else str(v).strip().lower() in ("true", "1", "yes")
+    ),
+    AttributeType.BINARY: lambda v: (
+        b""
+        if v is None or (isinstance(v, str) and v.strip() == "")
+        else (v if isinstance(v, bytes) else str(v).encode())
+    ),
+    AttributeType.TIMESTAMP: lambda v: (
+        datetime.datetime.fromtimestamp(0)
+        if v is None or (isinstance(v, str) and v.strip() == "")
+        else datetime.datetime.fromisoformat(v)
+    ),
+    AttributeType.LARGE_BINARY: lambda v: largebinary(v),
 }
 
 # Only single-directional mapping.
