@@ -33,14 +33,13 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
 
   @JsonProperty(
     required = true,
-    defaultValue =
-      "# from pytexera import *\n" +
-        "# class GenerateOperator(UDFSourceOperator):\n" +
-        "# \n" +
-        "#     @overrides\n" +
-        "#     \n" +
-        "#     def produce(self) -> Iterator[Union[TupleLike, TableLike, None]]:\n" +
-        "#         yield\n"
+    defaultValue = "# from pytexera import *\n" +
+      "# class GenerateOperator(UDFSourceOperator):\n" +
+      "# \n" +
+      "#     @overrides\n" +
+      "#     \n" +
+      "#     def produce(self) -> Iterator[Union[TupleLike, TableLike, None]]:\n" +
+      "#         yield\n"
   )
   @JsonSchemaTitle("Python script")
   @JsonPropertyDescription("Input your code here")
