@@ -259,7 +259,6 @@ registerLocaleData(en);
     AgentPanelComponent,
     AgentChatComponent,
     AgentRegistrationComponent,
-    InputAutoCompleteComponent,
     UiUdfParametersComponent,
     DatasetFileSelectorComponent,
     DatasetVersionSelectorComponent,
