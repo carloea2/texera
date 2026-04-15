@@ -472,6 +472,7 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       }
       if (mappedField.key === "uiParameters") {
         mappedField.type = "ui-udf-parameters";
+      }
       if (mappedField.key === "datasetVersionPath") {
         mappedField.type = "datasetversionselector";
       }
