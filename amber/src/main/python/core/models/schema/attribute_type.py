@@ -95,16 +95,26 @@ FROM_STRING_PARSER_MAPPING = {
         else str(v).strip().lower() in ("true", "1", "yes")
     ),
     AttributeType.BINARY: lambda v: (
-        b""
-        if v is None or (isinstance(v, str) and v.strip() == "")
-        else (v if isinstance(v, bytes) else str(v).encode())
+        (_ for _ in ()).throw(
+            ValueError(
+                "UiParameter does not support BINARY values. "
+                "Use a supported type instead."
+            )
+        )
     ),
     AttributeType.TIMESTAMP: lambda v: (
         datetime.datetime.fromtimestamp(0)
         if v is None or (isinstance(v, str) and v.strip() == "")
         else datetime.datetime.fromisoformat(v)
     ),
-    AttributeType.LARGE_BINARY: lambda v: largebinary(v),
+    AttributeType.LARGE_BINARY: lambda v: (
+        (_ for _ in ()).throw(
+            ValueError(
+                "UiParameter does not support LARGE_BINARY values. "
+                "Use a supported type instead."
+            )
+        )
+    ),
 }
 
 # Only single-directional mapping.

@@ -37,10 +37,24 @@ class PythonUDFOpDescV2 extends LogicalOp {
     defaultValue =
       "# Choose from the following templates:\n" +
         "# \n" +
+        "# UiParameter notes:\n" +
+        "# - A UiParameter is a user-editable value exposed in the property panel and read from your Python code.\n" +
+        "# - Define UiParameter values in open() and then use them later in your UDF methods.\n" +
+        "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
+        "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
+        "# \n" +
         "# from pytexera import *\n" +
         "# \n" +
         "# class ProcessTupleOperator(UDFOperatorV2):\n" +
-        "#     \n" +
+        "#     @overrides\n" +
+        "#     def open(self):\n" +
+        "#         self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+        "#         self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+        "#         self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+        "#         self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+        "#         self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+        "#         self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+        "# \n" +
         "#     @overrides\n" +
         "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:\n" +
         "#         yield tuple_\n" +
@@ -49,10 +63,28 @@ class PythonUDFOpDescV2 extends LogicalOp {
         "#     BATCH_SIZE = 10 # must be a positive integer\n" +
         "# \n" +
         "#     @overrides\n" +
+        "#     def open(self):\n" +
+        "#         self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+        "#         self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+        "#         self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+        "#         self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+        "#         self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+        "#         self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+        "# \n" +
+        "#     @overrides\n" +
         "#     def process_batch(self, batch: Batch, port: int) -> Iterator[Optional[BatchLike]]:\n" +
         "#         yield batch\n" +
         "# \n" +
         "# class ProcessTableOperator(UDFTableOperator):\n" +
+        "# \n" +
+        "#     @overrides\n" +
+        "#     def open(self):\n" +
+        "#         self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+        "#         self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+        "#         self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+        "#         self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+        "#         self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+        "#         self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
         "# \n" +
         "#     @overrides\n" +
         "#     def process_table(self, table: Table, port: int) -> Iterator[Optional[TableLike]]:\n" +
@@ -81,7 +113,9 @@ class PythonUDFOpDescV2 extends LogicalOp {
 
   @JsonProperty
   @JsonSchemaTitle("Parameters")
-  @JsonPropertyDescription("Parameters inferred from self.UiParameter(...) in Python script")
+  @JsonPropertyDescription(
+    "Parameters inferred from active self.UiParameter(...) calls in the Python script"
+  )
   var uiParameters: List[UiUDFParameter] = List()
 
   override def getPhysicalOp(

@@ -18,6 +18,7 @@
  */
 package org.apache.texera.amber.operator.udf.python
 
+import org.apache.texera.amber.core.tuple.AttributeType
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder.PythonTemplateBuilderStringContext
 
@@ -26,6 +27,7 @@ import scala.util.matching.Regex
 object PythonUdfUiParameterInjector {
 
   private val ReservedHookMethod = "_texera_injected_ui_parameters"
+  private val UnsupportedUiParameterTypes = Set(AttributeType.BINARY, AttributeType.LARGE_BINARY)
 
   // Match user-facing UDF classes (the ones users write)
   private val SupportedUserClassRegex: Regex =
@@ -35,6 +37,13 @@ object PythonUdfUiParameterInjector {
     uiParameters.foreach { parameter =>
       if (parameter.attribute == null) {
         throw new RuntimeException("UiParameter attribute is required.")
+      }
+
+      if (UnsupportedUiParameterTypes.contains(parameter.attribute.getType)) {
+        throw new RuntimeException(
+          s"UiParameter type '${parameter.attribute.getType.name()}' is not supported. " +
+            "Use string, integer, long, double, boolean, or timestamp instead."
+        )
       }
     }
 

@@ -150,6 +150,17 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     exception.getMessage should include("UiParameter key 'date' has multiple types")
   }
 
+  it should "throw when a ui parameter uses a binary type" in {
+    val exception = the[RuntimeException] thrownBy {
+      PythonUdfUiParameterInjector.inject(
+        baseUdfCode,
+        List(createParameter("payload", AttributeType.BINARY, "68656c6c6f"))
+      )
+    }
+
+    exception.getMessage should include("UiParameter type 'BINARY' is not supported")
+  }
+
   it should "allow duplicate keys when the attribute type is the same" in {
     val sameTypeParameters = List(
       createParameter("date", AttributeType.TIMESTAMP, "2024-01-01"),

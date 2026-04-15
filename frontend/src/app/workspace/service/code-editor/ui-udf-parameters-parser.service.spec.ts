@@ -101,4 +101,43 @@ describe("UiUdfParametersParserService", () => {
 
     expect(service.parse(code)).toEqual([]);
   });
+
+  it("should ignore commented out UiParameter calls", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              # self.UiParameter("commented", AttributeType.INT)
+              self.UiParameter("active", AttributeType.INT)  # self.UiParameter("trailing", AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "active", attributeType: "integer" }, value: "" },
+    ]);
+  });
+
+  it("should ignore UiParameter examples inside triple-quoted strings", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              """
+              self.UiParameter("example", AttributeType.INT)
+              """
+              self.UiParameter("active", AttributeType.DOUBLE)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "active", attributeType: "double" }, value: "" },
+    ]);
+  });
+
+  it("should reject binary UiParameter types", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("payload", AttributeType.BINARY)
+              self.UiParameter("blob", AttributeType.LARGE_BINARY)
+    `;
+
+    expect(service.parse(code)).toEqual([]);
+  });
 });

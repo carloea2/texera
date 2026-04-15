@@ -20,7 +20,6 @@ from typing import Iterator, Optional
 
 import pytest
 
-from core.models.type.large_binary import largebinary
 from pytexera import AttributeType, Tuple, TupleLike, UDFOperatorV2
 from pytexera.udf.udf_operator import _UiParameterSupport
 
@@ -108,21 +107,36 @@ class TestUiParameterSupport:
             ("99", AttributeType.LONG, 99),
             ("3.14", AttributeType.DOUBLE, 3.14),
             ("yes", AttributeType.BOOL, True),
-            ("payload", AttributeType.BINARY, b"payload"),
             (
                 "2024-01-01T00:00:00",
                 AttributeType.TIMESTAMP,
                 datetime.datetime(2024, 1, 1, 0, 0),
             ),
-            (
-                "s3://bucket/path/to/object",
-                AttributeType.LARGE_BINARY,
-                largebinary("s3://bucket/path/to/object"),
-            ),
         ],
     )
     def test_parse_supported_types(self, raw_value, attr_type, expected):
         assert _UiParameterSupport._parse(raw_value, attr_type) == expected
+
+    @pytest.mark.parametrize(
+        ("raw_value", "attr_type", "expected_message"),
+        [
+            (
+                "payload",
+                AttributeType.BINARY,
+                "UiParameter does not support BINARY values",
+            ),
+            (
+                "s3://bucket/path/to/object",
+                AttributeType.LARGE_BINARY,
+                "UiParameter does not support LARGE_BINARY values",
+            ),
+        ],
+    )
+    def test_parse_binary_types_raise_helpful_error(
+        self, raw_value, attr_type, expected_message
+    ):
+        with pytest.raises(ValueError, match=expected_message):
+            _UiParameterSupport._parse(raw_value, attr_type)
 
     def test_parse_unsupported_type_raises_helpful_error(self):
         with pytest.raises(TypeError, match="UiParameter.type .* is not supported"):

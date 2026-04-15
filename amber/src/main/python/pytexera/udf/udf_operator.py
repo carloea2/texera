@@ -34,6 +34,10 @@ class _UiParameterValue:
 class _UiParameterSupport:
     _ui_parameter_injected_values: Dict[str, Any]
     _ui_parameter_name_types: Dict[str, AttributeType]
+    _unsupported_ui_parameter_types = {
+        AttributeType.BINARY,
+        AttributeType.LARGE_BINARY,
+    }
 
     # Reserved hook name. Backend injector will generate this in the user's class.
     def _texera_injected_ui_parameters(self) -> Dict[str, Any]:
@@ -124,6 +128,8 @@ class _UiParameterSupport:
         try:
             return py_type(value)
         except Exception as e:
+            if attr_type in _UiParameterSupport._unsupported_ui_parameter_types:
+                raise ValueError(str(e)) from e
             raise ValueError(
                 f"Failed to parse UiParameter value {value!r} as {attr_type.name}. "
                 f"Please provide a valid {attr_type.name.lower()} value."

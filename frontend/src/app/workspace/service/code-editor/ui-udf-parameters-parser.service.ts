@@ -49,6 +49,14 @@ const ATTRIBUTE_TYPE_TOKEN_TO_CANONICAL: Readonly<Record<ParserAttributeTypeToke
 
 const JAVA_ATTRIBUTE_TYPE_NAME_SET = new Set<string>(JAVA_ATTRIBUTE_TYPE_NAMES);
 const PYTHON_ATTRIBUTE_TYPE_NAME_SET = new Set<string>(PYTHON_ATTRIBUTE_TYPE_NAMES);
+const SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES = new Set<AttributeType>([
+  "string",
+  "integer",
+  "long",
+  "double",
+  "boolean",
+  "timestamp",
+]);
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersParserService {
@@ -64,6 +72,7 @@ export class UiUdfParametersParserService {
       return [];
     }
 
+    const sanitizedCode = this.stripCommentsAndDocstrings(code);
     const classPattern = UiUdfParametersParserService.SUPPORTED_CLASSES.join("|");
     const classRegex = new RegExp(
       `class\\s+(${classPattern})\\s*\\([^)]*\\)\\s*:[\\s\\S]*?(?=\\nclass\\s+\\w+\\s*\\(|$)`,
@@ -74,7 +83,7 @@ export class UiUdfParametersParserService {
     const existingNames = new Set<string>();
 
     let classMatch: RegExpExecArray | null;
-    while ((classMatch = classRegex.exec(code)) !== null) {
+    while ((classMatch = classRegex.exec(sanitizedCode)) !== null) {
       const classBlock = classMatch[0];
 
       for (const args of this.extractUiParameterArgumentLists(classBlock)) {
@@ -90,6 +99,95 @@ export class UiUdfParametersParserService {
     }
 
     return parsed;
+  }
+
+  private stripCommentsAndDocstrings(code: string): string {
+    let result = "";
+    let inSingle = false;
+    let inDouble = false;
+    let inTripleSingle = false;
+    let inTripleDouble = false;
+    let escaped = false;
+
+    for (let i = 0; i < code.length; i++) {
+      const current = code[i];
+      const nextThree = code.slice(i, i + 3);
+
+      if (inTripleSingle) {
+        if (nextThree === "'''") {
+          result += "   ";
+          i += 2;
+          inTripleSingle = false;
+        } else {
+          result += current === "\n" ? "\n" : " ";
+        }
+        continue;
+      }
+
+      if (inTripleDouble) {
+        if (nextThree === "\"\"\"") {
+          result += "   ";
+          i += 2;
+          inTripleDouble = false;
+        } else {
+          result += current === "\n" ? "\n" : " ";
+        }
+        continue;
+      }
+
+      if (escaped) {
+        result += current;
+        escaped = false;
+        continue;
+      }
+
+      if ((inSingle || inDouble) && current === "\\") {
+        result += current;
+        escaped = true;
+        continue;
+      }
+
+      if (!inSingle && !inDouble && nextThree === "'''") {
+        result += "   ";
+        i += 2;
+        inTripleSingle = true;
+        continue;
+      }
+
+      if (!inSingle && !inDouble && nextThree === "\"\"\"") {
+        result += "   ";
+        i += 2;
+        inTripleDouble = true;
+        continue;
+      }
+
+      if (!inDouble && current === "'") {
+        inSingle = !inSingle;
+        result += current;
+        continue;
+      }
+
+      if (!inSingle && current === "\"") {
+        inDouble = !inDouble;
+        result += current;
+        continue;
+      }
+
+      if (!inSingle && !inDouble && current === "#") {
+        while (i < code.length && code[i] !== "\n") {
+          result += " ";
+          i++;
+        }
+        if (i < code.length) {
+          result += "\n";
+        }
+        continue;
+      }
+
+      result += current;
+    }
+
+    return result;
   }
 
   /**
@@ -331,6 +429,7 @@ export class UiUdfParametersParserService {
       return undefined;
     }
 
-    return ATTRIBUTE_TYPE_TOKEN_TO_CANONICAL[normalized as ParserAttributeTypeToken];
+    const canonical = ATTRIBUTE_TYPE_TOKEN_TO_CANONICAL[normalized as ParserAttributeTypeToken];
+    return SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES.has(canonical) ? canonical : undefined;
   }
 }
