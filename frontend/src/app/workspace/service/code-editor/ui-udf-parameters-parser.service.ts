@@ -18,23 +18,48 @@
  */
 
 import { Injectable } from "@angular/core";
-import {
-  AttributeType,
-  JavaAttributeTypeName,
-  PythonAttributeTypeName,
-  SchemaAttribute,
-  JAVA_ATTRIBUTE_TYPE_NAMES,
-  PYTHON_ATTRIBUTE_TYPE_NAMES,
-} from "../../types/workflow-compiling.interface";
+import { parser } from "@lezer/python";
+import { AttributeType, SchemaAttribute } from "../../types/workflow-compiling.interface";
 
 export interface UiUdfParameter {
   attribute: SchemaAttribute;
   value: string;
 }
 
-type ParserAttributeTypeToken = JavaAttributeTypeName | PythonAttributeTypeName;
+const CLASSES = new Set(["ProcessTupleOperator", "ProcessBatchOperator", "ProcessTableOperator", "GenerateOperator"]);
 
-const ATTRIBUTE_TYPE_TOKEN_TO_CANONICAL: Readonly<Record<ParserAttributeTypeToken, AttributeType>> = {
+// Java enum constant names (AttributeType.java)
+const JAVA_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INTEGER",
+  "LONG",
+  "DOUBLE",
+  "BOOLEAN",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
+
+type JavaAttributeTypeName = (typeof JAVA_ATTRIBUTE_TYPE_NAMES)[number];
+
+// Python enum constant names (core.models.AttributeType)
+const PYTHON_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INT",
+  "LONG",
+  "DOUBLE",
+  "BOOL",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
+
+type PythonAttributeTypeName = (typeof PYTHON_ATTRIBUTE_TYPE_NAMES)[number];
+
+type ParserAttributeTypeToken = JavaAttributeTypeName | PythonAttributeTypeName;
+type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
+
+const TYPES: Readonly<Record<ParserAttributeTypeToken, AttributeType>> = {
   STRING: "string",
   INTEGER: "integer",
   INT: "integer",
@@ -60,376 +85,129 @@ const SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES = new Set<AttributeType>([
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersParserService {
-  private static readonly SUPPORTED_CLASSES = [
-    "ProcessTupleOperator",
-    "ProcessBatchOperator",
-    "ProcessTableOperator",
-    "GenerateOperator",
-  ];
-
   parse(code: string): UiUdfParameter[] {
-    if (!code) {
-      return [];
-    }
+    if (!code) return [];
 
-    const sanitizedCode = this.stripCommentsAndDocstrings(code);
-    const classPattern = UiUdfParametersParserService.SUPPORTED_CLASSES.join("|");
-    const classRegex = new RegExp(
-      `class\\s+(${classPattern})\\s*\\([^)]*\\)\\s*:[\\s\\S]*?(?=\\nclass\\s+\\w+\\s*\\(|$)`,
-      "g"
-    );
-
-    const parsed: UiUdfParameter[] = [];
-    const existingNames = new Set<string>();
-
-    let classMatch: RegExpExecArray | null;
-    while ((classMatch = classRegex.exec(sanitizedCode)) !== null) {
-      const classBlock = classMatch[0];
-
-      for (const args of this.extractUiParameterArgumentLists(classBlock)) {
-        const argumentTokens = this.tokenizeArguments(args);
-        const extracted = this.extractParameter(argumentTokens);
-        if (!extracted || existingNames.has(extracted.attribute.attributeName)) {
-          continue;
-        }
-
-        existingNames.add(extracted.attribute.attributeName);
-        parsed.push(extracted);
+    const result: UiUdfParameter[] = [];
+    const seen = new Set<string>();
+    const add = (parameter?: UiUdfParameter): void => {
+      const name = parameter?.attribute.attributeName;
+      if (parameter && name && !seen.has(name)) {
+        seen.add(name);
+        result.push(parameter);
       }
-    }
-
-    return parsed;
-  }
-
-  private stripCommentsAndDocstrings(code: string): string {
-    let result = "";
-    let inSingle = false;
-    let inDouble = false;
-    let inTripleSingle = false;
-    let inTripleDouble = false;
-    let escaped = false;
-
-    for (let i = 0; i < code.length; i++) {
-      const current = code[i];
-      const nextThree = code.slice(i, i + 3);
-
-      if (inTripleSingle) {
-        if (nextThree === "'''") {
-          result += "   ";
-          i += 2;
-          inTripleSingle = false;
-        } else {
-          result += current === "\n" ? "\n" : " ";
-        }
-        continue;
-      }
-
-      if (inTripleDouble) {
-        if (nextThree === "\"\"\"") {
-          result += "   ";
-          i += 2;
-          inTripleDouble = false;
-        } else {
-          result += current === "\n" ? "\n" : " ";
-        }
-        continue;
-      }
-
-      if (escaped) {
-        result += current;
-        escaped = false;
-        continue;
-      }
-
-      if ((inSingle || inDouble) && current === "\\") {
-        result += current;
-        escaped = true;
-        continue;
-      }
-
-      if (!inSingle && !inDouble && nextThree === "'''") {
-        result += "   ";
-        i += 2;
-        inTripleSingle = true;
-        continue;
-      }
-
-      if (!inSingle && !inDouble && nextThree === "\"\"\"") {
-        result += "   ";
-        i += 2;
-        inTripleDouble = true;
-        continue;
-      }
-
-      if (!inDouble && current === "'") {
-        inSingle = !inSingle;
-        result += current;
-        continue;
-      }
-
-      if (!inSingle && current === "\"") {
-        inDouble = !inDouble;
-        result += current;
-        continue;
-      }
-
-      if (!inSingle && !inDouble && current === "#") {
-        while (i < code.length && code[i] !== "\n") {
-          result += " ";
-          i++;
-        }
-        if (i < code.length) {
-          result += "\n";
-        }
-        continue;
-      }
-
-      result += current;
-    }
-
-    return result;
-  }
-
-  /**
-   * Extract argument strings from self.UiParameter(...)
-   * More robust than regex when there are nested parentheses.
-   */
-  private extractUiParameterArgumentLists(code: string): string[] {
-    const result: string[] = [];
-    const needle = "self.UiParameter(";
-    let index = 0;
-
-    while (index < code.length) {
-      const start = code.indexOf(needle, index);
-      if (start === -1) {
-        break;
-      }
-
-      const openParenIndex = start + needle.length - 1;
-      const closeParenIndex = this.findMatchingParen(code, openParenIndex);
-      if (closeParenIndex === -1) {
-        break;
-      }
-
-      result.push(code.slice(openParenIndex + 1, closeParenIndex));
-      index = closeParenIndex + 1;
-    }
-
-    return result;
-  }
-
-  /**
-   * Find matching ')' for a '(' while ignoring quoted strings.
-   */
-  private findMatchingParen(text: string, openIndex: number): number {
-    let depth = 0;
-    let inSingle = false;
-    let inDouble = false;
-    let escaped = false;
-
-    for (let i = openIndex; i < text.length; i++) {
-      const ch = text[i];
-
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-
-      if ((inSingle || inDouble) && ch === "\\") {
-        escaped = true;
-        continue;
-      }
-
-      if (!inDouble && ch === "'") {
-        inSingle = !inSingle;
-        continue;
-      }
-
-      if (!inSingle && ch === "\"") {
-        inDouble = !inDouble;
-        continue;
-      }
-
-      if (inSingle || inDouble) {
-        continue;
-      }
-
-      if (ch === "(") {
-        depth++;
-      } else if (ch === ")") {
-        depth--;
-        if (depth === 0) {
-          return i;
-        }
-      }
-    }
-
-    return -1;
-  }
-
-  /**
-   * Split on top-level commas only (ignores commas inside strings / nested calls).
-   */
-  private tokenizeArguments(argumentList: string): string[] {
-    const tokens: string[] = [];
-    let current = "";
-    let depth = 0;
-    let inSingle = false;
-    let inDouble = false;
-    let escaped = false;
-
-    for (let i = 0; i < argumentList.length; i++) {
-      const ch = argumentList[i];
-
-      if (escaped) {
-        current += ch;
-        escaped = false;
-        continue;
-      }
-
-      if ((inSingle || inDouble) && ch === "\\") {
-        current += ch;
-        escaped = true;
-        continue;
-      }
-
-      if (!inDouble && ch === "'") {
-        inSingle = !inSingle;
-        current += ch;
-        continue;
-      }
-
-      if (!inSingle && ch === "\"") {
-        inDouble = !inDouble;
-        current += ch;
-        continue;
-      }
-
-      if (!inSingle && !inDouble) {
-        if (ch === "(") {
-          depth++;
-          current += ch;
-          continue;
-        }
-
-        if (ch === ")") {
-          depth = Math.max(0, depth - 1);
-          current += ch;
-          continue;
-        }
-
-        if (ch === "," && depth === 0) {
-          const token = current.trim();
-          if (token.length > 0) {
-            tokens.push(token);
-          }
-          current = "";
-          continue;
-        }
-      }
-
-      current += ch;
-    }
-
-    const tail = current.trim();
-    if (tail.length > 0) {
-      tokens.push(tail);
-    }
-
-    return tokens;
-  }
-
-  private extractParameter(tokens: string[]): UiUdfParameter | undefined {
-    let attributeName: string | undefined;
-    let attributeType: AttributeType | undefined;
-    let sawNamedArgument = false;
-    let positionalIndex = 0;
-
-    for (const token of tokens) {
-      const namedNameMatch = token.match(/^name\s*=\s*["']([^"']+)["']$/);
-      if (namedNameMatch) {
-        sawNamedArgument = true;
-        if (attributeName) {
-          return undefined;
-        }
-
-        attributeName = namedNameMatch[1].trim();
-        continue;
-      }
-
-      const namedTypeMatch = token.match(/^(type|attr_type)\s*=\s*AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
-      if (namedTypeMatch) {
-        sawNamedArgument = true;
-        if (attributeType) {
-          return undefined;
-        }
-
-        attributeType = this.normalizeAttributeType(namedTypeMatch[2]);
-        if (!attributeType) {
-          return undefined;
-        }
-
-        continue;
-      }
-
-      const positionalNameMatch = token.match(/^["']([^"']+)["']$/);
-      if (positionalNameMatch) {
-        if (sawNamedArgument || positionalIndex !== 0 || attributeName) {
-          return undefined;
-        }
-
-        attributeName = positionalNameMatch[1].trim();
-        positionalIndex++;
-        continue;
-      }
-
-      const positionalTypeMatch = token.match(/^AttributeType\.([A-Za-z_][A-Za-z0-9_]*)$/);
-      if (positionalTypeMatch) {
-        if (sawNamedArgument || positionalIndex !== 1 || attributeType) {
-          return undefined;
-        }
-
-        attributeType = this.normalizeAttributeType(positionalTypeMatch[1]);
-        if (!attributeType) {
-          return undefined;
-        }
-
-        positionalIndex++;
-        continue;
-      }
-
-      return undefined;
-    }
-
-    if (!attributeName || !attributeType) {
-      return undefined;
-    }
-
-    return {
-      attribute: {
-        attributeName,
-        attributeType,
-      },
-      value: "",
     };
+
+    parser.parse(code).iterate({
+      enter: ({ name, node }) => {
+        const className = node.getChild("VariableName");
+        if (name !== "ClassDefinition" || !className || !CLASSES.has(code.slice(className.from, className.to))) return;
+        node
+          .cursor()
+          .iterate(ref => (ref.name === "CallExpression" ? (add(readCall(ref.node, code)), false) : undefined));
+        return false;
+      },
+    });
+
+    return result;
+  }
+}
+
+function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefined {
+  const args = call.getChild("ArgList");
+  if (!args || code.slice(call.from, args.from).replace(/\s+/g, "") !== "self.UiParameter") return undefined;
+
+  let attributeName: string | undefined;
+  let attributeType: AttributeType | undefined;
+  let index = 0;
+  let sawNamed = false;
+
+  for (const arg of splitArgs(code.slice(args.from + 1, args.to - 1))) {
+    const match = arg.match(/^([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/);
+    const key = match?.[1];
+    const value = match?.[2] ?? arg;
+
+    if (match) sawNamed = true;
+    else if (sawNamed || index > 1) return undefined;
+
+    if ((match ? key === "name" : index === 0) && !attributeName) attributeName = readString(value)?.trim();
+    else if ((match ? key === "type" || key === "attr_type" : index === 1) && !attributeType)
+      attributeType = readType(value);
+    else return undefined;
+
+    if (!match) index++;
+    if (!attributeName && (key === "name" || (!match && index === 1))) return undefined;
+    if (!attributeType && (key === "type" || key === "attr_type" || (!match && index === 2))) return undefined;
   }
 
-  /**
-   * Convert Java/Python enum tokens into canonical schema names.
-   * Examples:
-   *   STRING -> string
-   *   INTEGER -> integer
-   *   INT -> integer
-   *   BOOL -> boolean
-   */
-  private normalizeAttributeType(token: string): AttributeType | undefined {
-    const normalized = token.trim().toUpperCase();
+  return attributeName && attributeType ? { attribute: { attributeName, attributeType }, value: "" } : undefined;
+}
 
-    if (!JAVA_ATTRIBUTE_TYPE_NAME_SET.has(normalized) && !PYTHON_ATTRIBUTE_TYPE_NAME_SET.has(normalized)) {
-      return undefined;
+function splitArgs(input: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quote = "";
+  let triple = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    current += char;
+
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (triple && input.slice(i, i + 3) === quote.repeat(3)) {
+        current += input.slice(i + 1, i + 3);
+        i += 2;
+        quote = "";
+        triple = false;
+      } else if (!triple && char === quote) quote = "";
+      continue;
     }
 
-    const canonical = ATTRIBUTE_TYPE_TOKEN_TO_CANONICAL[normalized as ParserAttributeTypeToken];
-    return SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES.has(canonical) ? canonical : undefined;
+    if (char === "'" || char === "\"") {
+      quote = char;
+      triple = input.slice(i, i + 3) === char.repeat(3);
+      if (triple) {
+        current += input.slice(i + 1, i + 3);
+        i += 2;
+      }
+    } else if ("([{".includes(char)) depth++;
+    else if (")]}".includes(char)) depth--;
+    else if (char === "," && depth === 0) {
+      result.push(current.slice(0, -1).trim());
+      current = "";
+    }
   }
+
+  const tail = current.trim();
+  return tail ? [...result, tail] : result;
+}
+
+function readString(input: string): string | undefined {
+  return input
+    .trim()
+    .match(/^[rRuU]*(?:"""([\s\S]*)"""|'''([\s\S]*)'''|"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')$/)
+    ?.slice(1)
+    .find(value => value !== undefined);
+}
+
+function readType(input: string): AttributeType | undefined {
+  const token = input
+    .trim()
+    .replace(/\s+/g, "")
+    .match(/^AttributeType\.([A-Za-z_]\w*)$/)?.[1]
+    .toUpperCase();
+  if (!token) {
+    return undefined;
+  }
+
+  if (!JAVA_ATTRIBUTE_TYPE_NAME_SET.has(token) && !PYTHON_ATTRIBUTE_TYPE_NAME_SET.has(token)) {
+    return undefined;
+  }
+
+  const canonical = TYPES[token as ParserAttributeTypeToken];
+  return SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES.has(canonical) ? canonical : undefined;
 }

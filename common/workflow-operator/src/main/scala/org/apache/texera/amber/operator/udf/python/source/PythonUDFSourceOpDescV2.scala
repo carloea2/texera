@@ -39,17 +39,18 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
       "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
       "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
       "# \n" +
+      "# Example usage in open():\n" +
+      "# @overrides\n" +
+      "# def open(self):\n" +
+      "#     self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+      "#     self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+      "#     self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+      "#     self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+      "#     self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+      "#     self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+      "# \n" +
       "# from pytexera import *\n" +
       "# class GenerateOperator(UDFSourceOperator):\n" +
-      "# \n" +
-      "#     @overrides\n" +
-      "#     def open(self):\n" +
-      "#         self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
-      "#         self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
-      "#         self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
-      "#         self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
-      "#         self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
-      "#         self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
       "# \n" +
       "#     @overrides\n" +
       "#     \n" +

@@ -92,7 +92,15 @@ FROM_STRING_PARSER_MAPPING = {
     AttributeType.BOOL: lambda v: (
         False
         if v is None or (isinstance(v, str) and v.strip() == "")
-        else str(v).strip().lower() in ("true", "1", "yes")
+        else (
+            True
+            if str(v).strip().lower() == "true"
+            else (
+                False
+                if str(v).strip().lower() == "false"
+                else float(str(v).strip()) != 0
+            )
+        )
     ),
     AttributeType.BINARY: lambda v: (
         (_ for _ in ()).throw(

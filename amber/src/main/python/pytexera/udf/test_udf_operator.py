@@ -28,7 +28,7 @@ class InjectedParametersOperator(UDFOperatorV2):
     def _texera_injected_ui_parameters(self):
         return {
             "count": "7",
-            "enabled": "yes",
+            "enabled": "1",
             "created_at": "2024-01-01T00:00:00",
         }
 
@@ -106,7 +106,7 @@ class TestUiParameterSupport:
             ("7", AttributeType.INT, 7),
             ("99", AttributeType.LONG, 99),
             ("3.14", AttributeType.DOUBLE, 3.14),
-            ("yes", AttributeType.BOOL, True),
+            ("1", AttributeType.BOOL, True),
             (
                 "2024-01-01T00:00:00",
                 AttributeType.TIMESTAMP,
@@ -116,6 +116,26 @@ class TestUiParameterSupport:
     )
     def test_parse_supported_types(self, raw_value, attr_type, expected):
         assert _UiParameterSupport._parse(raw_value, attr_type) == expected
+
+    @pytest.mark.parametrize(
+        ("raw_value", "expected"),
+        [
+            ("", False),
+            ("   ", False),
+            ("True", True),
+            ("true", True),
+            ("1", True),
+            ("1.0", True),
+            ("2", True),
+            ("-1", True),
+            ("False", False),
+            ("false", False),
+            ("0", False),
+            ("0.0", False),
+        ],
+    )
+    def test_parse_bool_string_values(self, raw_value, expected):
+        assert _UiParameterSupport._parse(raw_value, AttributeType.BOOL) is expected
 
     @pytest.mark.parametrize(
         ("raw_value", "attr_type", "expected_message"),

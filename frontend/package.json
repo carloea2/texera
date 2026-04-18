@@ -38,6 +38,8 @@
     "@codingame/monaco-vscode-java-default-extension": "8.0.4",
     "@codingame/monaco-vscode-python-default-extension": "8.0.4",
     "@codingame/monaco-vscode-r-default-extension": "8.0.4",
+    "@lezer/common": "^1.5.2",
+    "@lezer/python": "1.1.18",
     "@loaders.gl/core": "3.4.2",
     "@luma.gl/core": "8.5.20",
     "@ngneat/until-destroy": "8.1.4",
