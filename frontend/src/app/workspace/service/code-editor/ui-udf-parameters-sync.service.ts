@@ -28,7 +28,7 @@ import {
   PYTHON_UDF_V2_OP_TYPE,
 } from "../workflow-graph/model/workflow-graph";
 import { YType } from "../../types/shared-editing.interface";
-import { YText } from "yjs/dist/src/types/YText";
+import * as Y from "yjs";
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersSyncService {
@@ -46,7 +46,7 @@ export class UiUdfParametersSyncService {
   /**
    * Attach directly to YText and sync whenever it changes
    */
-  attachToYCode(operatorId: string, yCode: YText): () => void {
+  attachToYCode(operatorId: string, yCode: Y.Text): () => void {
     const handler = () => {
       const latestCode = yCode.toString();
       this.syncStructureFromCode(operatorId, latestCode);
@@ -112,7 +112,7 @@ export class UiUdfParametersSyncService {
         Readonly<{ [key: string]: any }>
       >;
 
-      const yCode = operatorProperties.get("code") as YText;
+      const yCode = operatorProperties.get("code") as Y.Text;
       return yCode?.toString();
     } catch {
       return undefined;

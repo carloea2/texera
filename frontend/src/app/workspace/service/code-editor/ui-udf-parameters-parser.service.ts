@@ -167,7 +167,7 @@ function splitArgs(input: string): string[] {
       continue;
     }
 
-    if (char === "'" || char === "\"") {
+    if (char === "'" || char === '"') {
       quote = char;
       triple = input.slice(i, i + 3) === char.repeat(3);
       if (triple) {
