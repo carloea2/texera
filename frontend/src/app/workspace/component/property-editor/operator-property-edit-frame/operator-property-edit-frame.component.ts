@@ -58,7 +58,6 @@ import * as Y from "yjs";
 import { OperatorSchema } from "src/app/workspace/types/operator-schema.interface";
 import { AttributeType, PortSchema } from "../../../types/workflow-compiling.interface";
 import { GuiConfigService } from "../../../../common/service/gui-config.service";
-
 Quill.register("modules/cursors", QuillCursors);
 
 /**
@@ -443,7 +442,9 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       if (mappedField.key === "fileName") {
         mappedField.type = "inputautocomplete";
       }
-
+      if (mappedField.key === "uiParameters") {
+        mappedField.type = "ui-udf-parameters";
+      }
       if (mappedField.key === "datasetVersionPath") {
         mappedField.type = "datasetversionselector";
       }

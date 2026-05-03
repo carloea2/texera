@@ -73,3 +73,17 @@
     margin-bottom: 0;
   }
 }
+
+/* ================================
+   Style ONLY the UDF Parameters field
+   ================================ */
+
+:host ::ng-deep label[for*="ui-udf-parameters"] {
+  font-weight: 700;
+}
+
+:host ::ng-deep nz-form-item:has(label[for*="ui-udf-parameters"]) {
+  border-top: 1.5px solid #d1d1d1;
+  padding-top: 12px;
+  margin-top: 8px;
+}

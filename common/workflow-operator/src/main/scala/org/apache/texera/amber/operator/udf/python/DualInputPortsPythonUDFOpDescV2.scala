@@ -77,6 +77,13 @@ class DualInputPortsPythonUDFOpDescV2 extends LogicalOp {
   )
   var outputColumns: List[Attribute] = List()
 
+  @JsonProperty
+  @JsonSchemaTitle("Parameters")
+  @JsonPropertyDescription(
+    "Parameters inferred from active self.UiParameter(...) calls in the Python script"
+  )
+  var uiParameters: List[UiUDFParameter] = List()
+
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity

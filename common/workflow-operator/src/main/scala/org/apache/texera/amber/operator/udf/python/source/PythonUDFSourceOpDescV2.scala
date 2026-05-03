@@ -27,6 +27,7 @@ import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, Workflow
 import org.apache.texera.amber.core.workflow.{OutputPort, PhysicalOp, SchemaPropagationFunc}
 import org.apache.texera.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import org.apache.texera.amber.operator.source.SourceOperatorDescriptor
+import org.apache.texera.amber.operator.udf.python.UiUDFParameter
 
 class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
 
@@ -53,6 +54,13 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   @JsonSchemaTitle("Columns")
   @JsonPropertyDescription("The columns of the source")
   var columns: List[Attribute] = List.empty
+
+  @JsonProperty
+  @JsonSchemaTitle("Parameters")
+  @JsonPropertyDescription(
+    "Parameters inferred from active self.UiParameter(...) calls in the Python script"
+  )
+  var uiParameters: List[UiUDFParameter] = List()
 
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
