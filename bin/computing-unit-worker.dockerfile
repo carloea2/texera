@@ -26,21 +26,34 @@ COPY amber/ amber/
 COPY project/ project/
 COPY build.sbt build.sbt
 
-# Update system and install dependencies
+# Update system and install dependencies. python3-minimal is needed by
+# bin/licensing/concat_license_binary.py below.
 RUN apt-get update && apt-get install -y \
     netcat \
     unzip \
     libpq-dev \
+    python3-minimal \
     && apt-get clean
 
 # Add .git for runtime calls to jgit from OPversion
 COPY .git .git
-COPY LICENSE NOTICE DISCLAIMER-WIP ./
+COPY LICENSE NOTICE DISCLAIMER ./
+COPY licenses/ licenses/
+COPY bin/licensing/ bin/licensing/
 
 RUN sbt clean WorkflowExecutionService/dist
 
 # Unzip the texera binary
 RUN unzip amber/target/universal/amber-*.zip -d amber/target/
+
+# Merge per-aspect LICENSE-binary files (java jars + python packages) into
+# a single LICENSE-binary-combined keyed by license group, for the runtime
+# image. Per-license-group merge keeps Scala/Java jars and Python packages
+# inside the same Apache-2.0 / MIT / BSD / ... section instead of stacking
+# the inputs end-to-end.
+RUN python3 bin/licensing/concat_license_binary.py amber/LICENSE-binary-combined \
+        amber/LICENSE-binary-java \
+        amber/LICENSE-binary-python
 
 FROM eclipse-temurin:11-jre-jammy AS runtime
 
@@ -67,6 +80,14 @@ COPY --from=build /texera/amber/target/amber-* /texera/amber/
 # Copy resources directories from build phase
 COPY --from=build /texera/amber/src/main/resources /texera/amber/src/main/resources
 COPY --from=build /texera/common/config/src/main/resources /texera/amber/common/config/src/main/resources
+# Copy ASF licensing files. LICENSE-binary and NOTICE-binary describe the
+# bundled third-party contents of this image and ship as /texera/LICENSE
+# and /texera/NOTICE; licenses/ holds the per-license full texts referenced
+# by LICENSE-binary.
+COPY --from=build /texera/amber/LICENSE-binary-combined /texera/LICENSE
+COPY --from=build /texera/amber/NOTICE-binary /texera/NOTICE
+COPY --from=build /texera/licenses /texera/licenses
+COPY --from=build /texera/DISCLAIMER /texera/
 CMD ["bin/computing-unit-worker"]
 
 EXPOSE 8085

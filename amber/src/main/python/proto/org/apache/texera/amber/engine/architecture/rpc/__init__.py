@@ -13,7 +13,6 @@ from typing import (
 )
 
 import betterproto
-import betterproto.lib.google.protobuf as betterproto_lib_google_protobuf
 import grpclib
 from betterproto.grpc.grpclib_server import ServiceBase
 
@@ -84,22 +83,25 @@ class ControlRequest(betterproto.Message):
     evaluate_python_expression_request: "EvaluatePythonExpressionRequest" = (
         betterproto.message_field(4, group="sealed_value")
     )
-    modify_logic_request: "ModifyLogicRequest" = betterproto.message_field(
+    retry_workflow_request: "RetryWorkflowRequest" = betterproto.message_field(
         5, group="sealed_value"
     )
-    retry_workflow_request: "RetryWorkflowRequest" = betterproto.message_field(
-        6, group="sealed_value"
-    )
     console_message_triggered_request: "ConsoleMessageTriggeredRequest" = (
-        betterproto.message_field(8, group="sealed_value")
+        betterproto.message_field(6, group="sealed_value")
     )
     port_completed_request: "PortCompletedRequest" = betterproto.message_field(
-        9, group="sealed_value"
+        7, group="sealed_value"
     )
     worker_state_updated_request: "WorkerStateUpdatedRequest" = (
-        betterproto.message_field(10, group="sealed_value")
+        betterproto.message_field(8, group="sealed_value")
     )
     link_workers_request: "LinkWorkersRequest" = betterproto.message_field(
+        9, group="sealed_value"
+    )
+    workflow_reconfigure_request: "WorkflowReconfigureRequest" = (
+        betterproto.message_field(10, group="sealed_value")
+    )
+    jump_to_operator_region_request: "JumpToOperatorRegionRequest" = betterproto.message_field(
         11, group="sealed_value"
     )
     add_input_channel_request: "AddInputChannelRequest" = betterproto.message_field(
@@ -198,7 +200,7 @@ class TakeGlobalCheckpointRequest(betterproto.Message):
 
 @dataclass(eq=False, repr=False)
 class WorkflowReconfigureRequest(betterproto.Message):
-    reconfiguration: "ModifyLogicRequest" = betterproto.message_field(1)
+    reconfiguration: List["UpdateExecutorRequest"] = betterproto.message_field(1)
     reconfiguration_id: str = betterproto.string_field(2)
 
 
@@ -212,11 +214,6 @@ class DebugCommandRequest(betterproto.Message):
 class EvaluatePythonExpressionRequest(betterproto.Message):
     expression: str = betterproto.string_field(1)
     operator_id: str = betterproto.string_field(2)
-
-
-@dataclass(eq=False, repr=False)
-class ModifyLogicRequest(betterproto.Message):
-    update_request: List["UpdateExecutorRequest"] = betterproto.message_field(1)
 
 
 @dataclass(eq=False, repr=False)
@@ -372,10 +369,7 @@ class InitializeExecutorRequest(betterproto.Message):
 @dataclass(eq=False, repr=False)
 class UpdateExecutorRequest(betterproto.Message):
     target_op_id: "___core__.PhysicalOpIdentity" = betterproto.message_field(1)
-    new_executor: "betterproto_lib_google_protobuf.Any" = betterproto.message_field(2)
-    state_transfer_func: "betterproto_lib_google_protobuf.Any" = (
-        betterproto.message_field(3)
-    )
+    new_exec_init_info: "___core__.OpExecInitInfo" = betterproto.message_field(2)
 
 
 @dataclass(eq=False, repr=False)
@@ -392,6 +386,11 @@ class QueryStatisticsRequest(betterproto.Message):
         betterproto.message_field(1)
     )
     update_target: "StatisticsUpdateTarget" = betterproto.enum_field(2)
+
+
+@dataclass(eq=False, repr=False)
+class JumpToOperatorRegionRequest(betterproto.Message):
+    target_operator_id: "___core__.OperatorIdentity" = betterproto.message_field(1)
 
 
 @dataclass(eq=False, repr=False)
@@ -1037,6 +1036,23 @@ class WorkerServiceStub(betterproto.ServiceStub):
             metadata=metadata,
         )
 
+    async def update_executor(
+        self,
+        update_executor_request: "UpdateExecutorRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "EmptyReturn":
+        return await self._unary_unary(
+            "/org.apache.texera.amber.engine.architecture.rpc.WorkerService/UpdateExecutor",
+            update_executor_request,
+            EmptyReturn,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
 
 class ControllerServiceStub(betterproto.ServiceStub):
     async def retrieve_workflow_state(
@@ -1243,6 +1259,23 @@ class ControllerServiceStub(betterproto.ServiceStub):
             metadata=metadata,
         )
 
+    async def jump_to_operator_region(
+        self,
+        jump_to_operator_region_request: "JumpToOperatorRegionRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "EmptyReturn":
+        return await self._unary_unary(
+            "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/JumpToOperatorRegion",
+            jump_to_operator_region_request,
+            EmptyReturn,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
     async def link_workers(
         self,
         link_workers_request: "LinkWorkersRequest",
@@ -1288,6 +1321,23 @@ class ControllerServiceStub(betterproto.ServiceStub):
         return await self._unary_unary(
             "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/RetryWorkflow",
             retry_workflow_request,
+            EmptyReturn,
+            timeout=timeout,
+            deadline=deadline,
+            metadata=metadata,
+        )
+
+    async def reconfigure_workflow(
+        self,
+        workflow_reconfigure_request: "WorkflowReconfigureRequest",
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional["MetadataLike"] = None
+    ) -> "EmptyReturn":
+        return await self._unary_unary(
+            "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/ReconfigureWorkflow",
+            workflow_reconfigure_request,
             EmptyReturn,
             timeout=timeout,
             deadline=deadline,
@@ -1554,6 +1604,11 @@ class WorkerServiceBase(ServiceBase):
     async def no_operation(self, empty_request: "EmptyRequest") -> "EmptyReturn":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
+    async def update_executor(
+        self, update_executor_request: "UpdateExecutorRequest"
+    ) -> "EmptyReturn":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
     async def __rpc_add_input_channel(
         self, stream: "grpclib.server.Stream[AddInputChannelRequest, EmptyReturn]"
     ) -> None:
@@ -1696,6 +1751,13 @@ class WorkerServiceBase(ServiceBase):
         response = await self.no_operation(request)
         await stream.send_message(response)
 
+    async def __rpc_update_executor(
+        self, stream: "grpclib.server.Stream[UpdateExecutorRequest, EmptyReturn]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.update_executor(request)
+        await stream.send_message(response)
+
     def __mapping__(self) -> Dict[str, grpclib.const.Handler]:
         return {
             "/org.apache.texera.amber.engine.architecture.rpc.WorkerService/AddInputChannel": grpclib.const.Handler(
@@ -1818,6 +1880,12 @@ class WorkerServiceBase(ServiceBase):
                 EmptyRequest,
                 EmptyReturn,
             ),
+            "/org.apache.texera.amber.engine.architecture.rpc.WorkerService/UpdateExecutor": grpclib.const.Handler(
+                self.__rpc_update_executor,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                UpdateExecutorRequest,
+                EmptyReturn,
+            ),
         }
 
 
@@ -1880,6 +1948,11 @@ class ControllerServiceBase(ServiceBase):
     ) -> "EmptyReturn":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
+    async def jump_to_operator_region(
+        self, jump_to_operator_region_request: "JumpToOperatorRegionRequest"
+    ) -> "EmptyReturn":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
     async def link_workers(
         self, link_workers_request: "LinkWorkersRequest"
     ) -> "EmptyReturn":
@@ -1892,6 +1965,11 @@ class ControllerServiceBase(ServiceBase):
 
     async def retry_workflow(
         self, retry_workflow_request: "RetryWorkflowRequest"
+    ) -> "EmptyReturn":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
+
+    async def reconfigure_workflow(
+        self, workflow_reconfigure_request: "WorkflowReconfigureRequest"
     ) -> "EmptyReturn":
         raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
@@ -1984,6 +2062,13 @@ class ControllerServiceBase(ServiceBase):
         response = await self.worker_execution_completed(request)
         await stream.send_message(response)
 
+    async def __rpc_jump_to_operator_region(
+        self, stream: "grpclib.server.Stream[JumpToOperatorRegionRequest, EmptyReturn]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.jump_to_operator_region(request)
+        await stream.send_message(response)
+
     async def __rpc_link_workers(
         self, stream: "grpclib.server.Stream[LinkWorkersRequest, EmptyReturn]"
     ) -> None:
@@ -2003,6 +2088,13 @@ class ControllerServiceBase(ServiceBase):
     ) -> None:
         request = await stream.recv_message()
         response = await self.retry_workflow(request)
+        await stream.send_message(response)
+
+    async def __rpc_reconfigure_workflow(
+        self, stream: "grpclib.server.Stream[WorkflowReconfigureRequest, EmptyReturn]"
+    ) -> None:
+        request = await stream.recv_message()
+        response = await self.reconfigure_workflow(request)
         await stream.send_message(response)
 
     def __mapping__(self) -> Dict[str, grpclib.const.Handler]:
@@ -2079,6 +2171,12 @@ class ControllerServiceBase(ServiceBase):
                 EmptyRequest,
                 EmptyReturn,
             ),
+            "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/JumpToOperatorRegion": grpclib.const.Handler(
+                self.__rpc_jump_to_operator_region,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                JumpToOperatorRegionRequest,
+                EmptyReturn,
+            ),
             "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/LinkWorkers": grpclib.const.Handler(
                 self.__rpc_link_workers,
                 grpclib.const.Cardinality.UNARY_UNARY,
@@ -2095,6 +2193,12 @@ class ControllerServiceBase(ServiceBase):
                 self.__rpc_retry_workflow,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 RetryWorkflowRequest,
+                EmptyReturn,
+            ),
+            "/org.apache.texera.amber.engine.architecture.rpc.ControllerService/ReconfigureWorkflow": grpclib.const.Handler(
+                self.__rpc_reconfigure_workflow,
+                grpclib.const.Cardinality.UNARY_UNARY,
+                WorkflowReconfigureRequest,
                 EmptyReturn,
             ),
         }
