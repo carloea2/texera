@@ -58,6 +58,7 @@ import * as Y from "yjs";
 import { OperatorSchema } from "src/app/workspace/types/operator-schema.interface";
 import { AttributeType, PortSchema } from "../../../types/workflow-compiling.interface";
 import { GuiConfigService } from "../../../../common/service/gui-config.service";
+import { UiUdfParametersSyncService } from "../../../service/code-editor/ui-udf-parameters-sync.service";
 Quill.register("modules/cursors", QuillCursors);
 
 /**
@@ -146,7 +147,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     private changeDetectorRef: ChangeDetectorRef,
     private workflowVersionService: WorkflowVersionService,
     private workflowStatusSerivce: WorkflowStatusService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -179,6 +181,23 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         if (this.currentOperatorId) {
           this.currentOperatorStatus = update[this.currentOperatorId];
         }
+      });
+
+    this.uiUdfParametersSyncService.uiParametersChanged$
+      .pipe(untilDestroyed(this))
+      .subscribe(({ operatorId, parameters }) => {
+        if (operatorId !== this.currentOperatorId) return;
+
+        const currentOperator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
+
+        const newModel = {
+          ...cloneDeep(currentOperator.operatorProperties),
+          uiParameters: cloneDeep(parameters),
+        };
+
+        this.listeningToChange = false;
+        this.workflowActionService.setOperatorProperty(operatorId, newModel);
+        this.listeningToChange = true;
       });
   }
 

@@ -51,6 +51,7 @@ import { filter, switchMap } from "rxjs/operators";
 import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
 import { CodeDebuggerComponent } from "./code-debugger.component";
 import { GuiConfigService } from "src/app/common/service/gui-config.service";
+import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
 
 type MonacoEditor = monaco.editor.IStandaloneCodeEditor;
 
@@ -120,7 +121,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     private workflowVersionService: WorkflowVersionService,
     public coeditorPresenceService: CoeditorPresenceService,
     private aiAssistantService: AIAssistantService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService
   ) {
     this.currentOperatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     const operatorType = this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType;
@@ -145,9 +147,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         .get("operatorProperties") as YType<Readonly<{ [key: string]: any }>>
     ).get("code") as YText;
   }
-
+  private detachYCodeListener?: () => void;
   ngAfterViewInit() {
-    // hacky solution to reset view after view is rendered.
     const style = localStorage.getItem(this.currentOperatorId);
     if (style) this.containerElement.nativeElement.style.cssText = style;
 
@@ -177,6 +178,9 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     if (isDefined(this.workflowVersionStreamSubject)) {
       this.workflowVersionStreamSubject.next();
       this.workflowVersionStreamSubject.complete();
+    }
+    if (this.detachYCodeListener) {
+      this.detachYCodeListener();
     }
   }
 
@@ -275,6 +279,13 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         );
         this.setupAIAssistantActions(editor);
         this.initCodeDebuggerComponent(editor);
+        if (this.detachYCodeListener) {
+          this.detachYCodeListener();
+        }
+
+        if (this.code) {
+          this.detachYCodeListener = this.uiUdfParametersSyncService.attachToYCode(this.currentOperatorId, this.code);
+        }
       });
   }
 

@@ -27,13 +27,29 @@ import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, Workflow
 import org.apache.texera.amber.core.workflow.{OutputPort, PhysicalOp, SchemaPropagationFunc}
 import org.apache.texera.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import org.apache.texera.amber.operator.source.SourceOperatorDescriptor
-import org.apache.texera.amber.operator.udf.python.UiUDFParameter
+import org.apache.texera.amber.operator.udf.python.{PythonUdfUiParameterInjector, UiUDFParameter}
 
 class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
 
   @JsonProperty(
     required = true,
-    defaultValue = "# from pytexera import *\n" +
+    defaultValue = "# UiParameter notes:\n" +
+      "# - A UiParameter is a user-editable value exposed in the property panel and read from your Python code.\n" +
+      "# - Define UiParameter values in open() and then use them later in your UDF methods.\n" +
+      "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
+      "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
+      "# \n" +
+      "# Example usage in open():\n" +
+      "# @overrides\n" +
+      "# def open(self):\n" +
+      "#     self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+      "#     self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+      "#     self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+      "#     self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+      "#     self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+      "#     self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+      "# \n" +
+      "# from pytexera import *\n" +
       "# class GenerateOperator(UDFSourceOperator):\n" +
       "# \n" +
       "#     @overrides\n" +
@@ -68,7 +84,12 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   ): PhysicalOp = {
     require(workers >= 1, "Need at least 1 worker.")
     val physicalOp = PhysicalOp
-      .sourcePhysicalOp(workflowId, executionId, operatorIdentifier, OpExecWithCode(code, "python"))
+      .sourcePhysicalOp(
+        workflowId,
+        executionId,
+        operatorIdentifier,
+        OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
+      )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
       .withIsOneToManyOp(true)

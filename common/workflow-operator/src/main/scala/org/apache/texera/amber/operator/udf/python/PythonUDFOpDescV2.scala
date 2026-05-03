@@ -37,6 +37,22 @@ class PythonUDFOpDescV2 extends LogicalOp {
     defaultValue =
       "# Choose from the following templates:\n" +
         "# \n" +
+        "# UiParameter notes:\n" +
+        "# - A UiParameter is a user-editable value exposed in the property panel and read from your Python code.\n" +
+        "# - Define UiParameter values in open() and then use them later in your UDF methods.\n" +
+        "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
+        "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
+        "# \n" +
+        "# Example usage in open():\n" +
+        "# @overrides\n" +
+        "# def open(self):\n" +
+        "#     self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
+        "#     self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
+        "#     self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
+        "#     self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
+        "#     self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
+        "#     self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+        "# \n" +
         "# from pytexera import *\n" +
         "# \n" +
         "# class ProcessTupleOperator(UDFOperatorV2):\n" +
@@ -125,7 +141,7 @@ class PythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(code, "python")
+          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
         )
         .withParallelizable(true)
         .withSuggestedWorkerNum(workers)
@@ -135,7 +151,7 @@ class PythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(code, "python")
+          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
         )
         .withParallelizable(false)
     }
