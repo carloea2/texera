@@ -16,12 +16,127 @@
 # under the License.
 
 from abc import abstractmethod
-from typing import Iterator, Optional, Union
+from dataclasses import dataclass
+import functools
+from typing import Any, Dict, Iterator, Optional, Union
 
 from pyamber import *
+from core.models.schema.attribute_type import AttributeType, FROM_STRING_PARSER_MAPPING
 
 
-class UDFOperatorV2(TupleOperatorV2):
+@dataclass(frozen=True)
+class _UiParameterValue:
+    name: str
+    type: AttributeType
+    value: Any
+
+
+class _UiParameterSupport:
+    _ui_parameter_injected_values: Dict[str, Any]
+    _ui_parameter_name_types: Dict[str, AttributeType]
+    _unsupported_ui_parameter_types = {
+        AttributeType.BINARY,
+        AttributeType.LARGE_BINARY,
+    }
+
+    # Reserved hook name. Backend injector will generate this in the user's class.
+    def _texera_injected_ui_parameters(self) -> Dict[str, Any]:
+        return {}
+
+    def _ensure_ui_parameter_state(self) -> None:
+        if "_ui_parameter_injected_values" not in self.__dict__:
+            self._ui_parameter_injected_values = {}
+        if "_ui_parameter_name_types" not in self.__dict__:
+            self._ui_parameter_name_types = {}
+
+    def _texera_apply_injected_ui_parameters(self) -> None:
+        self._ensure_ui_parameter_state()
+        values = self._texera_injected_ui_parameters()
+        self._ui_parameter_injected_values = dict(values or {})
+        self._ui_parameter_name_types = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        # Wrap the effective open() method once per subclass.
+        original_open = getattr(cls, "open", None)
+        if original_open is None:
+            return
+
+        # Avoid double wrapping
+        if getattr(original_open, "__texera_ui_params_wrapped__", False):
+            return
+
+        @functools.wraps(original_open)
+        def wrapped_open(self, *args, **kwargs):
+            self._texera_apply_injected_ui_parameters()
+            return original_open(self, *args, **kwargs)
+
+        setattr(wrapped_open, "__texera_ui_params_wrapped__", True)
+        cls.open = wrapped_open
+
+    def UiParameter(
+        self, name: str, attr_type: Optional[AttributeType] = None, **kwargs: Any
+    ) -> _UiParameterValue:
+        if "type" in kwargs:
+            if attr_type is not None:
+                raise TypeError("UiParameter.type was provided multiple times.")
+            attr_type = kwargs.pop("type")
+
+        if kwargs:
+            unexpected_arguments = ", ".join(sorted(kwargs))
+            raise TypeError(
+                f"UiParameter got unexpected keyword argument(s): "
+                f"{unexpected_arguments}."
+            )
+
+        if attr_type is None:
+            raise TypeError("UiParameter.type is required.")
+
+        if not isinstance(attr_type, AttributeType):
+            raise TypeError(
+                f"UiParameter.type must be an AttributeType, got {attr_type!r}."
+            )
+
+        self._ensure_ui_parameter_state()
+        existing_type = self._ui_parameter_name_types.get(name)
+        if existing_type is not None and existing_type != attr_type:
+            raise ValueError(
+                f"Duplicate UiParameter name '{name}' with conflicting types: "
+                f"{existing_type.name} vs {attr_type.name}."
+            )
+
+        self._ui_parameter_name_types[name] = attr_type
+        raw_value = self._ui_parameter_injected_values.get(name)
+        return _UiParameterValue(
+            name=name,
+            type=attr_type,
+            value=self._parse(raw_value, attr_type),
+        )
+
+    @staticmethod
+    def _parse(value: Any, attr_type: AttributeType) -> Any:
+        if value is None:
+            return None
+
+        py_type = FROM_STRING_PARSER_MAPPING.get(attr_type)
+        if py_type is None:
+            raise TypeError(
+                f"UiParameter.type {attr_type!r} is not supported for parsing."
+            )
+
+        try:
+            return py_type(value)
+        except Exception as e:
+            if attr_type in _UiParameterSupport._unsupported_ui_parameter_types:
+                raise ValueError(str(e)) from e
+            raise ValueError(
+                f"Failed to parse UiParameter value {value!r} as {attr_type.name}. "
+                f"Please provide a valid {attr_type.name.lower()} value."
+            ) from e
+
+
+class UDFOperatorV2(_UiParameterSupport, TupleOperatorV2):
     """
     Base class for tuple-oriented user-defined operators. A concrete implementation must
     be provided upon using.
@@ -65,7 +180,7 @@ class UDFOperatorV2(TupleOperatorV2):
         pass
 
 
-class UDFSourceOperator(SourceOperator):
+class UDFSourceOperator(_UiParameterSupport, SourceOperator):
     def open(self) -> None:
         """
         Open a context of the operator. Usually can be used for loading/initiating some
@@ -90,7 +205,7 @@ class UDFSourceOperator(SourceOperator):
         pass
 
 
-class UDFTableOperator(TableOperator):
+class UDFTableOperator(_UiParameterSupport, TableOperator):
     """
     Base class for table-oriented user-defined operators. A concrete implementation must
     be provided upon using.
@@ -123,7 +238,7 @@ class UDFTableOperator(TableOperator):
         pass
 
 
-class UDFBatchOperator(BatchOperator):
+class UDFBatchOperator(_UiParameterSupport, BatchOperator):
     """
     Base class for batch-oriented user-defined operators. A concrete implementation must
     be provided upon using.

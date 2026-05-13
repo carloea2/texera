@@ -33,8 +33,11 @@ class AttributeType(Enum):
 
     STRING = 1
     INT = 2
+    # Java enum-name aliases accepted by the UI parameter parser.
+    INTEGER = 2
     LONG = 3
     BOOL = 4
+    BOOLEAN = 4
     DOUBLE = 5
     TIMESTAMP = 6
     BINARY = 7
@@ -77,6 +80,53 @@ FROM_ARROW_MAPPING = {
     lib.Type_TIMESTAMP: AttributeType.TIMESTAMP,
 }
 
+
+FROM_STRING_PARSER_MAPPING = {
+    AttributeType.STRING: str,
+    AttributeType.INT: lambda v: (
+        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
+    ),
+    AttributeType.LONG: lambda v: (
+        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
+    ),
+    AttributeType.DOUBLE: lambda v: (
+        0.0 if v is None or (isinstance(v, str) and v.strip() == "") else float(v)
+    ),
+    AttributeType.BOOL: lambda v: (
+        False
+        if v is None or (isinstance(v, str) and v.strip() == "")
+        else (
+            True
+            if str(v).strip().lower() == "true"
+            else (
+                False
+                if str(v).strip().lower() == "false"
+                else float(str(v).strip()) != 0
+            )
+        )
+    ),
+    AttributeType.BINARY: lambda v: (
+        (_ for _ in ()).throw(
+            ValueError(
+                "UiParameter does not support BINARY values. "
+                "Use a supported type instead."
+            )
+        )
+    ),
+    AttributeType.TIMESTAMP: lambda v: (
+        datetime.datetime.fromtimestamp(0)
+        if v is None or (isinstance(v, str) and v.strip() == "")
+        else datetime.datetime.fromisoformat(v)
+    ),
+    AttributeType.LARGE_BINARY: lambda v: (
+        (_ for _ in ()).throw(
+            ValueError(
+                "UiParameter does not support LARGE_BINARY values. "
+                "Use a supported type instead."
+            )
+        )
+    ),
+}
 
 # Only single-directional mapping.
 TO_PYOBJECT_MAPPING = {
