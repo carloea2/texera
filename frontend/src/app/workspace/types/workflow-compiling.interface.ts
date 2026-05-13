@@ -71,15 +71,7 @@ export type CompilationStateInfo = Readonly<
     }
 >;
 // possible types of an attribute
-export type AttributeType =
-  | "string"
-  | "integer"
-  | "double"
-  | "boolean"
-  | "long"
-  | "timestamp"
-  | "binary"
-  | "large_binary"; // schema: an array of attribute names and types
+export type AttributeType = "string" | "integer" | "double" | "boolean" | "long" | "timestamp" | "binary"; // schema: an array of attribute names and types
 export interface SchemaAttribute
   extends Readonly<{
     attributeName: string;

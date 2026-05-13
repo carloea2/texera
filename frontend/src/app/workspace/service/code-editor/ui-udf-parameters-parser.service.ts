@@ -57,9 +57,11 @@ const PYTHON_ATTRIBUTE_TYPE_NAMES = [
 type PythonAttributeTypeName = (typeof PYTHON_ATTRIBUTE_TYPE_NAMES)[number];
 
 type ParserAttributeTypeToken = JavaAttributeTypeName | PythonAttributeTypeName;
+type UnsupportedParserAttributeTypeToken = "BINARY" | "LARGE_BINARY";
+type SupportedParserAttributeTypeToken = Exclude<ParserAttributeTypeToken, UnsupportedParserAttributeTypeToken>;
 type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 
-const TYPES: Readonly<Record<ParserAttributeTypeToken, AttributeType>> = {
+const TYPES: Readonly<Record<SupportedParserAttributeTypeToken, AttributeType>> = {
   STRING: "string",
   INTEGER: "integer",
   INT: "integer",
@@ -68,8 +70,6 @@ const TYPES: Readonly<Record<ParserAttributeTypeToken, AttributeType>> = {
   BOOLEAN: "boolean",
   BOOL: "boolean",
   TIMESTAMP: "timestamp",
-  BINARY: "binary",
-  LARGE_BINARY: "large_binary",
 };
 
 const JAVA_ATTRIBUTE_TYPE_NAME_SET = new Set<string>(JAVA_ATTRIBUTE_TYPE_NAMES);
@@ -208,6 +208,10 @@ function readType(input: string): AttributeType | undefined {
     return undefined;
   }
 
-  const canonical = TYPES[token as ParserAttributeTypeToken];
+  if (token === "BINARY" || token === "LARGE_BINARY") {
+    return undefined;
+  }
+
+  const canonical = TYPES[token as SupportedParserAttributeTypeToken];
   return SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES.has(canonical) ? canonical : undefined;
 }
