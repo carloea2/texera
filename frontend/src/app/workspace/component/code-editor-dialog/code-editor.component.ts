@@ -60,6 +60,7 @@ import { NzButtonComponent } from "ng-zorro-antd/button";
 import { ɵNzTransitionPatchDirective } from "ng-zorro-antd/core/transition-patch";
 import { NzIconDirective } from "ng-zorro-antd/icon";
 import { NgFor, NgComponentOutlet, NgIf } from "@angular/common";
+import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
 
 type MonacoEditor = monaco.editor.IStandaloneCodeEditor;
 
@@ -110,6 +111,7 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
   private editorApp?: EditorApp;
   private languageClientWrapper?: LanguageClientWrapper;
   private monacoBinding?: MonacoBinding;
+  private detachYCodeListener?: () => void;
 
   // Boolean to determine whether the suggestion UI should be shown
   public showAnnotationSuggestion: boolean = false;
@@ -144,7 +146,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     private workflowVersionService: WorkflowVersionService,
     public coeditorPresenceService: CoeditorPresenceService,
     private aiAssistantService: AIAssistantService,
-    private config: GuiConfigService
+    private config: GuiConfigService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService
   ) {
     this.currentOperatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     const operatorType = this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType;
@@ -196,6 +199,10 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
 
     this.workflowVersionStreamSubject.next();
     this.workflowVersionStreamSubject.complete();
+
+    if (this.detachYCodeListener) {
+      this.detachYCodeListener();
+    }
   }
 
   /**
@@ -403,6 +410,13 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         }
         this.setupAIAssistantActions(editor);
         this.initCodeDebuggerComponent(editor);
+        if (this.detachYCodeListener) {
+          this.detachYCodeListener();
+        }
+
+        if (this.code) {
+          this.detachYCodeListener = this.uiUdfParametersSyncService.attachToYCode(this.currentOperatorId, this.code);
+        }
       });
   }
 
