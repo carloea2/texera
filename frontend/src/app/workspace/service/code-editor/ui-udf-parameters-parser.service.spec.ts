@@ -58,6 +58,29 @@ describe("UiUdfParametersParserService", () => {
     ]);
   });
 
+  it("should parse multiline UiParameter calls with split named arguments", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter(
+                  name=
+                      "threshold",
+                  type=
+                      AttributeType.DOUBLE,
+              )
+              self.UiParameter(
+                  "label",
+                  type=
+                      AttributeType.STRING,
+              )
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
+    ]);
+  });
+
   it("should ignore calls where name or type is missing", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
@@ -112,6 +135,25 @@ describe("UiUdfParametersParserService", () => {
 
     expect(service.parse(code)).toEqual([
       { attribute: { attributeName: "active", attributeType: "integer" }, value: "" },
+    ]);
+  });
+
+  it("should ignore commented out multiline UiParameter sections", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              # self.UiParameter(
+              #     name="commented",
+              #     type=AttributeType.INT,
+              # )
+              self.UiParameter(
+                  name="active",
+                  type=AttributeType.STRING,
+              )
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "active", attributeType: "string" }, value: "" },
     ]);
   });
 
