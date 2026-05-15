@@ -47,6 +47,7 @@ import "@codingame/monaco-vscode-python-default-extension";
 import "@codingame/monaco-vscode-r-default-extension";
 import "@codingame/monaco-vscode-java-default-extension";
 import "@codingame/monaco-vscode-cpp-default-extension";
+import "@codingame/monaco-vscode-rust-default-extension";
 import { isDefined } from "../../../common/util/predicate";
 import { filter, switchMap } from "rxjs/operators";
 import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
@@ -158,6 +159,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
       this.setLanguage("python");
     } else if (operatorType === "CompiledCppUDF") {
       this.setLanguage("cpp");
+    } else if (operatorType === "CompiledRustUDF") {
+      this.setLanguage("rust");
     } else {
       this.setLanguage("java");
     }
@@ -231,6 +234,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         return ".java";
       case "cpp":
         return ".cpp";
+      case "rust":
+        return ".rs";
       default:
         return ".py";
     }

@@ -37,6 +37,7 @@ import { of } from "rxjs";
 const R_OPERATOR_TYPES = ["RUDFSource", "RUDF"];
 const PYTHON_OPERATOR_TYPES = ["PythonUDFV2", "PythonUDFSourceV2", "DualInputPortsPythonUDFV2"];
 const CPP_OPERATOR_TYPES = ["CompiledCppUDF"];
+const RUST_OPERATOR_TYPES = ["CompiledRustUDF"];
 
 // Augment `mockOperatorMetaData` with synthetic schemas for the V2 operator
 // types and one unknown type so `addOperator` and `JointUIService` accept
@@ -55,6 +56,7 @@ const augmentedSchemas: OperatorSchema[] = [
   ...PYTHON_OPERATOR_TYPES.map(synthesizeSchema),
   ...R_OPERATOR_TYPES.map(synthesizeSchema),
   ...CPP_OPERATOR_TYPES.map(synthesizeSchema),
+  ...RUST_OPERATOR_TYPES.map(synthesizeSchema),
   synthesizeSchema("SomeUnknownType"),
 ];
 class AugmentedStubMetadataService extends StubOperatorMetadataService {
@@ -162,6 +164,14 @@ describe("CodeEditorComponent", () => {
       const fixture = makeFixture(buildPredicate(`cpp-${index}`, operatorType));
       expect(fixture.componentInstance.language).toBe("cpp");
       expect(fixture.componentInstance.languageTitle).toBe("C++ UDF");
+    });
+  });
+
+  RUST_OPERATOR_TYPES.forEach((operatorType, index) => {
+    it(`picks language="rust" for operatorType=${operatorType}`, () => {
+      const fixture = makeFixture(buildPredicate(`rust-${index}`, operatorType));
+      expect(fixture.componentInstance.language).toBe("rust");
+      expect(fixture.componentInstance.languageTitle).toBe("Rust UDF");
     });
   });
 

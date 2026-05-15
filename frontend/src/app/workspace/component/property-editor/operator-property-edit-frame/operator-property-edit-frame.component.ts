@@ -493,7 +493,8 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
       // Code UDF fields use the custom code editor button instead of a plain text input.
       if (
         mapSource?.description?.toLowerCase() === "input your code here" ||
-        (this.currentOperatorSchema?.operatorType === "CompiledCppUDF" && mappedField.key === "code")
+        (["CompiledCppUDF", "CompiledRustUDF"].includes(this.currentOperatorSchema?.operatorType ?? "") &&
+          mappedField.key === "code")
       ) {
         if (mappedField.type) {
           mappedField.type = "codearea";

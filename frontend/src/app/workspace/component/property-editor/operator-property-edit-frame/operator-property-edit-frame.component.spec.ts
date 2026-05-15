@@ -288,7 +288,7 @@ describe("OperatorPropertyEditFrameComponent", () => {
     expect(component.operatorVersion).toEqual(mockScanPredicate.operatorVersion);
   });
 
-  it("should render CompiledCppUDF code as the codearea editor button", () => {
+  it("should render compiled native UDF code as the codearea editor button", () => {
     const schema: CustomJSONSchema7 = {
       type: "object",
       properties: {
@@ -299,23 +299,25 @@ describe("OperatorPropertyEditFrameComponent", () => {
         },
       },
     };
-    component.currentOperatorSchema = {
-      operatorType: "CompiledCppUDF",
-      jsonSchema: schema,
-      additionalMetadata: {
-        userFriendlyName: "Compiled C++ UDF",
-        operatorGroupName: "User Defined Functions",
-        inputPorts: [],
-        outputPorts: [],
-      },
-      operatorVersion: "test",
-    };
+    ["CompiledCppUDF", "CompiledRustUDF"].forEach(operatorType => {
+      component.currentOperatorSchema = {
+        operatorType,
+        jsonSchema: schema,
+        additionalMetadata: {
+          userFriendlyName: operatorType === "CompiledCppUDF" ? "Compiled C++ UDF" : "Compiled Rust UDF",
+          operatorGroupName: "User Defined Functions",
+          inputPorts: [],
+          outputPorts: [],
+        },
+        operatorVersion: "test",
+      };
 
-    component.setFormlyFormBinding(schema);
+      component.setFormlyFormBinding(schema);
 
-    const flattenFields = (fields: FormlyFieldConfig[] | undefined): FormlyFieldConfig[] =>
-      (fields ?? []).flatMap(field => [field, ...flattenFields(field.fieldGroup)]);
-    const codeField = flattenFields(component.formlyFields).find(field => field.key === "code");
-    expect(codeField?.type).toBe("codearea");
+      const flattenFields = (fields: FormlyFieldConfig[] | undefined): FormlyFieldConfig[] =>
+        (fields ?? []).flatMap(field => [field, ...flattenFields(field.fieldGroup)]);
+      const codeField = flattenFields(component.formlyFields).find(field => field.key === "code");
+      expect(codeField?.type).toBe("codearea");
+    });
   });
 });
