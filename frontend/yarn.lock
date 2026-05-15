@@ -2339,6 +2339,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@codingame/monaco-vscode-rust-default-extension@npm:8.0.4":
+  version: 8.0.4
+  resolution: "@codingame/monaco-vscode-rust-default-extension@npm:8.0.4"
+  dependencies:
+    vscode: "npm:@codingame/monaco-vscode-api@8.0.4"
+  checksum: 10c0/e42ad132c7f49f50e004c93aa842ba4b53153fac87dd7f6d3c21381f81ba02bf0da55f22973f9bd9cac6edb5afe9b114ec1d893d018c8086e2d6d7d9ddfeefc7
+  languageName: node
+  linkType: hard
+
 "@codingame/monaco-vscode-textmate-service-override@npm:~8.0.4":
   version: 8.0.4
   resolution: "@codingame/monaco-vscode-textmate-service-override@npm:8.0.4"
@@ -11065,6 +11074,7 @@ __metadata:
     "@codingame/monaco-vscode-java-default-extension": "npm:8.0.4"
     "@codingame/monaco-vscode-python-default-extension": "npm:8.0.4"
     "@codingame/monaco-vscode-r-default-extension": "npm:8.0.4"
+    "@codingame/monaco-vscode-rust-default-extension": "npm:8.0.4"
     "@lezer/python": "npm:1.1.18"
     "@ngneat/until-destroy": "npm:8.1.4"
     "@ngx-formly/core": "npm:6.3.12"

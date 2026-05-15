@@ -93,6 +93,7 @@ import org.apache.texera.amber.operator.udf.java.JavaUDFOpDesc
 import org.apache.texera.amber.operator.udf.python._
 import org.apache.texera.amber.operator.udf.python.source.PythonUDFSourceOpDescV2
 import org.apache.texera.amber.operator.udf.r.{RUDFOpDesc, RUDFSourceOpDesc}
+import org.apache.texera.amber.operator.udf.rust.CompiledRustUDFOpDesc
 import org.apache.texera.amber.operator.union.UnionOpDesc
 import org.apache.texera.amber.operator.unneststring.UnnestStringOpDesc
 import org.apache.texera.amber.operator.visualization.DotPlot.DotPlotOpDesc
@@ -265,6 +266,7 @@ trait StateTransferFunc
     new Type(value = classOf[TernaryPlotOpDesc], name = "TernaryPlot"),
     new Type(value = classOf[DendrogramOpDesc], name = "Dendrogram"),
     new Type(value = classOf[NestedTableOpDesc], name = "NestedTable"),
+    new Type(value = classOf[CompiledRustUDFOpDesc], name = "CompiledRustUDF"),
     new Type(value = classOf[JavaUDFOpDesc], name = "JavaUDF"),
     new Type(value = classOf[RUDFOpDesc], name = "RUDF"),
     new Type(value = classOf[RUDFSourceOpDesc], name = "RUDFSource"),

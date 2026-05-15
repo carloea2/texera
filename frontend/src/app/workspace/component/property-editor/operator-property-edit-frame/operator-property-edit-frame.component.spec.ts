@@ -50,6 +50,8 @@ import { FormlyNgZorroAntdModule } from "@ngx-formly/ng-zorro-antd";
 import { ComputingUnitStatusService } from "../../../../common/service/computing-unit/computing-unit-status/computing-unit-status.service";
 import { MockComputingUnitStatusService } from "../../../../common/service/computing-unit/computing-unit-status/mock-computing-unit-status.service";
 import { commonTestProviders } from "../../../../common/testing/test-utils";
+import { FormlyFieldConfig } from "@ngx-formly/core";
+import { CustomJSONSchema7 } from "../../../types/custom-json-schema.interface";
 
 const { marbles } = configure({ run: false });
 describe("OperatorPropertyEditFrameComponent", () => {
@@ -284,5 +286,36 @@ describe("OperatorPropertyEditFrameComponent", () => {
     });
     fixture.detectChanges();
     expect(component.operatorVersion).toEqual(mockScanPredicate.operatorVersion);
+  });
+
+  it("should render CompiledRustUDF code as the codearea editor button", () => {
+    const schema: CustomJSONSchema7 = {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          title: "Rust script",
+          description: "Input your Rust UDF operator code here",
+        },
+      },
+    };
+    component.currentOperatorSchema = {
+      operatorType: "CompiledRustUDF",
+      jsonSchema: schema,
+      additionalMetadata: {
+        userFriendlyName: "Compiled Rust UDF",
+        operatorGroupName: "User Defined Functions",
+        inputPorts: [],
+        outputPorts: [],
+      },
+      operatorVersion: "test",
+    };
+
+    component.setFormlyFormBinding(schema);
+
+    const flattenFields = (fields: FormlyFieldConfig[] | undefined): FormlyFieldConfig[] =>
+      (fields ?? []).flatMap(field => [field, ...flattenFields(field.fieldGroup)]);
+    const codeField = flattenFields(component.formlyFields).find(field => field.key === "code");
+    expect(codeField?.type).toBe("codearea");
   });
 });

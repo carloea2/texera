@@ -46,6 +46,7 @@ import * as monaco from "monaco-editor";
 import "@codingame/monaco-vscode-python-default-extension";
 import "@codingame/monaco-vscode-r-default-extension";
 import "@codingame/monaco-vscode-java-default-extension";
+import "@codingame/monaco-vscode-rust-default-extension";
 import { isDefined } from "../../../common/util/predicate";
 import { filter, switchMap } from "rxjs/operators";
 import { BreakpointConditionInputComponent } from "./breakpoint-condition-input/breakpoint-condition-input.component";
@@ -152,6 +153,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
       operatorType === "DualInputPortsPythonUDFV2"
     ) {
       this.setLanguage("python");
+    } else if (operatorType === "CompiledRustUDF") {
+      this.setLanguage("rust");
     } else {
       this.setLanguage("java");
     }
@@ -223,6 +226,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
         return ".js";
       case "java":
         return ".java";
+      case "rust":
+        return ".rs";
       default:
         return ".py";
     }
