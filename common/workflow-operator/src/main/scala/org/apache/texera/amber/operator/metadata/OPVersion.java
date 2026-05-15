@@ -21,32 +21,44 @@ package org.apache.texera.amber.operator.metadata;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 public class OPVersion {
     private static Git git = null;
     private static Map<String, String> opMap = new HashMap<>();
     static {
         try {
-            git = Git.open(new File(Path.of(System.getenv().getOrDefault("TEXERA_HOME", ".")).toString()));
+            File texeraHome = Path.of(System.getenv().getOrDefault("TEXERA_HOME", ".")).toFile();
+            Repository repository = new FileRepositoryBuilder()
+                    .readEnvironment()
+                    .findGitDir(texeraHome)
+                    .build();
+            git = new Git(repository);
         } catch (IOException e) {
-            e.printStackTrace();
+            git = null;
         }
     }
 
     public static String getVersion(String operatorName, String operatorPath) {
         if(!opMap.containsKey(operatorName)) {
+            if (git == null) {
+                opMap.put(operatorName, "N/A");
+                return opMap.get(operatorName);
+            }
             try {
                 String version = git.log().addPath(operatorPath).setMaxCount(1).call().iterator().next().getName();
                 opMap.put(operatorName, version);
             } catch (GitAPIException e) {
-                e.printStackTrace();
-            } catch (NullPointerException e) {
+                opMap.put(operatorName, "N/A");
+            } catch (NullPointerException | NoSuchElementException e) {
                 opMap.put(operatorName, "N/A");
             }
         }

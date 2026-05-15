@@ -490,8 +490,11 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         };
       }
 
-      // if the title is python script (for Python UDF), then make this field a custom template 'codearea'
-      if (mapSource?.description?.toLowerCase() === "input your code here") {
+      // Code UDF fields use the custom code editor button instead of a plain text input.
+      if (
+        mapSource?.description?.toLowerCase() === "input your code here" ||
+        (this.currentOperatorSchema?.operatorType === "CompiledCppUDF" && mappedField.key === "code")
+      ) {
         if (mappedField.type) {
           mappedField.type = "codearea";
         }
