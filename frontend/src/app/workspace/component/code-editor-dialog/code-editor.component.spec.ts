@@ -36,6 +36,7 @@ import { of } from "rxjs";
 // don't perturb the shared mock-workflow-data fixtures.
 const R_OPERATOR_TYPES = ["RUDFSource", "RUDF"];
 const PYTHON_OPERATOR_TYPES = ["PythonUDFV2", "PythonUDFSourceV2", "DualInputPortsPythonUDFV2"];
+const CPP_OPERATOR_TYPES = ["CompiledCppUDF"];
 
 // Augment `mockOperatorMetaData` with synthetic schemas for the V2 operator
 // types and one unknown type so `addOperator` and `JointUIService` accept
@@ -45,7 +46,7 @@ const PYTHON_OPERATOR_TYPES = ["PythonUDFV2", "PythonUDFSourceV2", "DualInputPor
 const baseSchema = mockOperatorMetaData.operators.find(op => op.operatorType === "PythonUDF");
 if (!baseSchema) {
   throw new Error(
-    "CodeEditorComponent spec setup expected a PythonUDF schema in mockOperatorMetaData — fixture has drifted."
+    "CodeEditorComponent spec setup expected a PythonUDF schema in mockOperatorMetaData - fixture has drifted."
   );
 }
 const synthesizeSchema = (operatorType: string): OperatorSchema => ({ ...baseSchema, operatorType });
@@ -53,6 +54,7 @@ const augmentedSchemas: OperatorSchema[] = [
   ...mockOperatorMetaData.operators,
   ...PYTHON_OPERATOR_TYPES.map(synthesizeSchema),
   ...R_OPERATOR_TYPES.map(synthesizeSchema),
+  ...CPP_OPERATOR_TYPES.map(synthesizeSchema),
   synthesizeSchema("SomeUnknownType"),
 ];
 class AugmentedStubMetadataService extends StubOperatorMetadataService {
@@ -90,6 +92,22 @@ const buildPredicate = (operatorID: string, operatorType: string): OperatorPredi
 describe("CodeEditorComponent", () => {
   let workflowActionService: WorkflowActionService;
 
+  beforeAll(() => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  });
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
@@ -117,7 +135,7 @@ describe("CodeEditorComponent", () => {
     expect(fixture.componentInstance.currentOperatorId).toBe(mockJavaUDFPredicate.operatorID);
   });
 
-  // Language detection — the constructor maps `RUDFSource` / `RUDF` to `r`,
+  // Language detection: the constructor maps `RUDFSource` / `RUDF` to `r`,
   // the three V2-era Python operator types to `python`, and anything else
   // to `java`. The exact branch lives in the constructor; the public
   // `language` field is what the rest of the editor (LSP wiring, file-
@@ -136,6 +154,14 @@ describe("CodeEditorComponent", () => {
       const fixture = makeFixture(buildPredicate(`p-${index}`, operatorType));
       expect(fixture.componentInstance.language).toBe("python");
       expect(fixture.componentInstance.languageTitle).toBe("Python UDF");
+    });
+  });
+
+  CPP_OPERATOR_TYPES.forEach((operatorType, index) => {
+    it(`picks language="cpp" for operatorType=${operatorType}`, () => {
+      const fixture = makeFixture(buildPredicate(`cpp-${index}`, operatorType));
+      expect(fixture.componentInstance.language).toBe("cpp");
+      expect(fixture.componentInstance.languageTitle).toBe("C++ UDF");
     });
   });
 
@@ -159,7 +185,7 @@ describe("CodeEditorComponent", () => {
     expect(c.languageTitle).toBe(expected);
   });
 
-  // Coeditor cursor styles — getCoeditorCursorStyles takes the awareness-
+  // Coeditor cursor styles: getCoeditorCursorStyles takes the awareness-
   // sourced clientId + colour and wraps a `<style>` block via
   // `DomSanitizer.bypassSecurityTrustHtml`, so the return value is a
   // SafeHtml (consumed via `[innerHTML]` in the template). We assert the

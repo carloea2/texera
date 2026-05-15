@@ -2085,6 +2085,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@codingame/monaco-vscode-cpp-default-extension@npm:8.0.4":
+  version: 8.0.4
+  resolution: "@codingame/monaco-vscode-cpp-default-extension@npm:8.0.4"
+  dependencies:
+    vscode: "npm:@codingame/monaco-vscode-api@8.0.4"
+  checksum: 10c0/0ad394b56124c3d7aad3610156e3e1e2e5425f7ea985b3c8f7cba5387af2b5704a9f777fe2f7c2d3cd7d565067bc8bbfdb32a7e695c3153b5dd8bf0fa285bb03
+  languageName: node
+  linkType: hard
+
 "@codingame/monaco-vscode-editor-service-override@npm:~8.0.4":
   version: 8.0.4
   resolution: "@codingame/monaco-vscode-editor-service-override@npm:8.0.4"
@@ -11062,6 +11071,7 @@ __metadata:
     "@angular/platform-browser-dynamic": "npm:21.2.10"
     "@angular/router": "npm:21.2.10"
     "@auth0/angular-jwt": "npm:5.1.0"
+    "@codingame/monaco-vscode-cpp-default-extension": "npm:8.0.4"
     "@codingame/monaco-vscode-java-default-extension": "npm:8.0.4"
     "@codingame/monaco-vscode-python-default-extension": "npm:8.0.4"
     "@codingame/monaco-vscode-r-default-extension": "npm:8.0.4"

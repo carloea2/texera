@@ -35,6 +35,7 @@
     "@angular/platform-browser-dynamic": "21.2.10",
     "@angular/router": "21.2.10",
     "@auth0/angular-jwt": "5.1.0",
+    "@codingame/monaco-vscode-cpp-default-extension": "8.0.4",
     "@codingame/monaco-vscode-java-default-extension": "8.0.4",
     "@codingame/monaco-vscode-python-default-extension": "8.0.4",
     "@codingame/monaco-vscode-r-default-extension": "8.0.4",
