@@ -19,13 +19,9 @@
 
 import { Injectable } from "@angular/core";
 import { parser } from "@lezer/python";
-import { AttributeType, SchemaAttribute } from "../../types/workflow-compiling.interface";
+import { AttributeType, UiUdfParameter } from "../../types/workflow-compiling.interface";
 
-export interface UiUdfParameter {
-  attribute: SchemaAttribute;
-  value: string;
-}
-
+// Keep in sync with Python UDF template class names in PythonUDFOpDescV2, DualInputPortsPythonUDFOpDescV2, and PythonUDFSourceOpDescV2.
 const CLASSES = new Set(["ProcessTupleOperator", "ProcessBatchOperator", "ProcessTableOperator", "GenerateOperator"]);
 
 // Java enum constant names (AttributeType.java)
@@ -60,6 +56,8 @@ type ParserAttributeTypeToken = JavaAttributeTypeName | PythonAttributeTypeName;
 type UnsupportedParserAttributeTypeToken = "BINARY" | "LARGE_BINARY";
 type SupportedParserAttributeTypeToken = Exclude<ParserAttributeTypeToken, UnsupportedParserAttributeTypeToken>;
 type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
+type ParsedArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
+type UiParameterArgument = Readonly<{ kind: "name"; value: string }> | Readonly<{ kind: "type"; value: AttributeType }>;
 
 const TYPES: Readonly<Record<SupportedParserAttributeTypeToken, AttributeType>> = {
   STRING: "string",
@@ -102,9 +100,11 @@ export class UiUdfParametersParserService {
       enter: ({ name, node }) => {
         const className = node.getChild("VariableName");
         if (name !== "ClassDefinition" || !className || !CLASSES.has(code.slice(className.from, className.to))) return;
-        node
-          .cursor()
-          .iterate(ref => (ref.name === "CallExpression" ? (add(readCall(ref.node, code)), false) : undefined));
+        node.cursor().iterate(ref => {
+          if (ref.name !== "CallExpression") return;
+          add(readCall(ref.node, code));
+          return false;
+        });
         return false;
       },
     });
@@ -119,71 +119,91 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
 
   let attributeName: string | undefined;
   let attributeType: AttributeType | undefined;
-  let index = 0;
+  let positionalIndex = 0;
   let sawNamed = false;
 
-  for (const arg of splitArgs(code.slice(args.from + 1, args.to - 1))) {
-    const match = arg.match(/^([A-Za-z_]\w*)\s*=\s*([\s\S]+)$/);
-    const key = match?.[1];
-    const value = match?.[2] ?? arg;
+  for (const arg of readArguments(args, code)) {
+    if (arg.key) {
+      sawNamed = true;
+    } else if (sawNamed) {
+      return undefined;
+    }
 
-    if (match) sawNamed = true;
-    else if (sawNamed || index > 1) return undefined;
+    const parsedArg = readArgument(arg, positionalIndex, code);
+    if (!parsedArg) {
+      return undefined;
+    }
 
-    if ((match ? key === "name" : index === 0) && !attributeName) attributeName = readString(value)?.trim();
-    else if ((match ? key === "type" || key === "attr_type" : index === 1) && !attributeType)
-      attributeType = readType(value);
-    else return undefined;
+    if (parsedArg.kind === "name") {
+      if (attributeName) {
+        return undefined;
+      }
+      attributeName = parsedArg.value;
+    } else {
+      if (attributeType) {
+        return undefined;
+      }
+      attributeType = parsedArg.value;
+    }
 
-    if (!match) index++;
-    if (!attributeName && (key === "name" || (!match && index === 1))) return undefined;
-    if (!attributeType && (key === "type" || key === "attr_type" || (!match && index === 2))) return undefined;
+    if (!arg.key) {
+      positionalIndex++;
+    }
   }
 
   return attributeName && attributeType ? { attribute: { attributeName, attributeType }, value: "" } : undefined;
 }
 
-function splitArgs(input: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let depth = 0;
-  let quote = "";
-  let triple = false;
-  let escaped = false;
+function readArguments(args: ParserSyntaxNode, code: string): ParsedArgument[] {
+  const result: ParsedArgument[] = [];
+  const children = getChildren(args).filter(node => !["(", ")", ","].includes(node.name));
 
-  for (let i = 0; i < input.length; i++) {
-    const char = input[i];
-    current += char;
+  for (let index = 0; index < children.length; index++) {
+    const node = children[index];
 
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (char === "\\") escaped = true;
-      else if (triple && input.slice(i, i + 3) === quote.repeat(3)) {
-        current += input.slice(i + 1, i + 3);
-        i += 2;
-        quote = "";
-        triple = false;
-      } else if (!triple && char === quote) quote = "";
-      continue;
-    }
-
-    if (char === "'" || char === '"') {
-      quote = char;
-      triple = input.slice(i, i + 3) === char.repeat(3);
-      if (triple) {
-        current += input.slice(i + 1, i + 3);
-        i += 2;
+    if (node.name === "VariableName" && children[index + 1]?.name === "AssignOp") {
+      const value = children[index + 2];
+      if (!value) {
+        return [];
       }
-    } else if ("([{".includes(char)) depth++;
-    else if (")]}".includes(char)) depth--;
-    else if (char === "," && depth === 0) {
-      result.push(current.slice(0, -1).trim());
-      current = "";
+      result.push({ key: code.slice(node.from, node.to), value });
+      index += 2;
+    } else if (node.name !== "AssignOp") {
+      result.push({ value: node });
+    } else {
+      return [];
     }
   }
 
-  const tail = current.trim();
-  return tail ? [...result, tail] : result;
+  return result;
+}
+
+function getChildren(node: ParserSyntaxNode): ParserSyntaxNode[] {
+  const children: ParserSyntaxNode[] = [];
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    children.push(child);
+  }
+  return children;
+}
+
+function readArgument(arg: ParsedArgument, positionalIndex: number, code: string): UiParameterArgument | undefined {
+  const key = arg.key;
+  const value = code.slice(arg.value.from, arg.value.to);
+
+  if ((key === "name" || (!key && positionalIndex === 0)) && arg.value.name === "String") {
+    const name = readString(value)?.trim();
+    return name ? { kind: "name", value: name } : undefined;
+  }
+
+  if (
+    (key === "type" || key === "attr_type" || (!key && positionalIndex === 1)) &&
+    arg.value.name === "MemberExpression"
+  ) {
+    const type = readType(value);
+    return type ? { kind: "type", value: type } : undefined;
+  }
+
+  return undefined;
 }
 
 function readString(input: string): string | undefined {

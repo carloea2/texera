@@ -78,6 +78,12 @@ export interface SchemaAttribute
     attributeType: AttributeType;
   }> {}
 
+export interface UiUdfParameter
+  extends Readonly<{
+    attribute: SchemaAttribute;
+    value: string;
+  }> {}
+
 export type PortSchema = ReadonlyArray<SchemaAttribute>;
 
 // schema of an operator: a map from serialized PortIdentity to port schema

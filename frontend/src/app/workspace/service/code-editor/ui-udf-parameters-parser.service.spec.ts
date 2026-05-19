@@ -58,7 +58,7 @@ describe("UiUdfParametersParserService", () => {
     ]);
   });
 
-  it("should parse multiline UiParameter calls with split named arguments", () => {
+  it("should parse multiline UiParameter calls with named arguments split across lines", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
           def open(self):
@@ -123,6 +123,70 @@ describe("UiUdfParametersParserService", () => {
     `;
 
     expect(service.parse(code)).toEqual([]);
+  });
+
+  it("should ignore custom-named subclasses because injection targets template class names", () => {
+    const code = `
+      class MyTupleOp(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("threshold", AttributeType.DOUBLE)
+
+      class MyWrappedTupleOp(ProcessTupleOperator):
+          def open(self):
+              self.UiParameter("label", AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([]);
+  });
+
+  it("should parse supported UiParameter calls across multiple classes", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("threshold", AttributeType.DOUBLE)
+
+      class RandomClass(ABC):
+          def open(self):
+              self.UiParameter("ignored", AttributeType.STRING)
+
+      class GenerateOperator(UDFSourceOperator):
+          def open(self):
+              self.UiParameter(name="batch_size", type=AttributeType.INT)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "batch_size", attributeType: "integer" }, value: "" },
+    ]);
+  });
+
+  it("should ignore empty and extra positional arguments", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter()
+              self.UiParameter("too_many", AttributeType.STRING, "extra")
+              self.UiParameter("valid", AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "valid", attributeType: "string" }, value: "" },
+    ]);
+  });
+
+  it("should keep the first duplicate parameter name", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("threshold", AttributeType.DOUBLE)
+              self.UiParameter("threshold", AttributeType.STRING)
+              self.UiParameter("label", AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
+    ]);
   });
 
   it("should ignore commented out UiParameter calls", () => {

@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Component } from "@angular/core";
+import { Component, OnInit } from "@angular/core";
 import { NgFor, NgIf } from "@angular/common";
 import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
 
@@ -26,7 +26,15 @@ import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/cor
   styleUrls: ["./ui-udf-parameters.component.scss"],
   imports: [NgIf, NgFor, FormlyModule],
 })
-export class UiUdfParametersComponent extends FieldArrayType {
+export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
+  ngOnInit(): void {
+    this.field.fieldGroup?.forEach(rowField => {
+      this.configureDisabledState(this.getAttributeChild(rowField, "attributeName"), true);
+      this.configureDisabledState(this.getAttributeChild(rowField, "attributeType"), true);
+      this.configureDisabledState(this.getField(rowField, "value"), false);
+    });
+  }
+
   private getField(rowField: FormlyFieldConfig, key: string): FormlyFieldConfig | undefined {
     return rowField.fieldGroup?.find(f => f.key === key);
   }
@@ -36,55 +44,49 @@ export class UiUdfParametersComponent extends FieldArrayType {
     return attributeGroup?.fieldGroup?.find(f => f.key === childKey);
   }
 
-  private setDisabled(field: FormlyFieldConfig | undefined, disabled: boolean): FormlyFieldConfig | undefined {
-    if (!field) return undefined;
+  private configureDisabledState(field: FormlyFieldConfig | undefined, disabled: boolean): void {
+    if (!field) return;
 
-    // 1) Modern Formly
     field.props = { ...(field.props ?? {}), disabled };
 
-    // 2) Compatibility for templates/wrappers still using templateOptions
     // (`as any` so we don't get nagged by the @deprecated JSDoc)
     (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
 
-    // 3) Enforce at the reactive form level
+    const prevOnInit = field.hooks?.onInit;
+    field.hooks = {
+      ...(field.hooks ?? {}),
+      onInit: f => {
+        prevOnInit?.(f);
+        this.applyDisabledState(f, disabled);
+      },
+    };
+
+    this.applyDisabledState(field, disabled);
+  }
+
+  private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {
     if (field.formControl) {
       if (disabled) {
         field.formControl.disable({ emitEvent: false });
       } else {
         field.formControl.enable({ emitEvent: false });
       }
-    } else {
-      // If control isn't created yet, disable it at init time.
-      const prevOnInit = field.hooks?.onInit;
-      field.hooks = {
-        ...(field.hooks ?? {}),
-        onInit: f => {
-          prevOnInit?.(f);
-          if (disabled) {
-            f.formControl?.disable({ emitEvent: false });
-          } else {
-            f.formControl?.enable({ emitEvent: false });
-          }
-        },
-      };
     }
-
-    return field;
   }
 
   // Disable Name
   getNameField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.setDisabled(this.getAttributeChild(rowField, "attributeName"), true);
+    return this.getAttributeChild(rowField, "attributeName");
   }
 
   // Disable Type
   getTypeField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.setDisabled(this.getAttributeChild(rowField, "attributeType"), true);
+    return this.getAttributeChild(rowField, "attributeType");
   }
 
   // Value editable
   getValueField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.setDisabled(this.getField(rowField, "value"), false);
+    return this.getField(rowField, "value");
   }
 
   trackByParamName = (index: number, param: any): string | number => {

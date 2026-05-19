@@ -18,17 +18,17 @@
  */
 import { Injectable } from "@angular/core";
 import { isEqual } from "lodash-es";
-import { ReplaySubject } from "rxjs";
+import { ReplaySubject, Subject } from "rxjs";
+import { debounceTime } from "rxjs/operators";
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
-import { UiUdfParameter, UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import { UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
 import { isDefined } from "../../../common/util/predicate";
-import {
-  DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE,
-  PYTHON_UDF_SOURCE_V2_OP_TYPE,
-  PYTHON_UDF_V2_OP_TYPE,
-} from "../workflow-graph/model/workflow-graph";
+import { isPythonUdf } from "../workflow-graph/model/workflow-graph";
 import { YType } from "../../types/shared-editing.interface";
 import type { Text as YText } from "yjs";
+import { UiUdfParameter } from "../../types/workflow-compiling.interface";
+
+const UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS = 200;
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersSyncService {
@@ -47,23 +47,31 @@ export class UiUdfParametersSyncService {
    * Attach directly to YText and sync whenever it changes
    */
   attachToYCode(operatorId: string, yCode: YText): () => void {
-    const handler = () => {
-      const latestCode = yCode.toString();
+    const codeChanges = new Subject<string>();
+    const subscription = codeChanges.pipe(debounceTime(UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS)).subscribe(latestCode => {
       this.syncStructureFromCode(operatorId, latestCode);
+    });
+
+    const handler = () => {
+      codeChanges.next(yCode.toString());
     };
 
     yCode.observe(handler);
 
-    handler();
+    this.syncStructureFromCode(operatorId, yCode.toString());
 
     // return cleanup function
-    return () => yCode.unobserve(handler);
+    return () => {
+      yCode.unobserve(handler);
+      subscription.unsubscribe();
+      codeChanges.complete();
+    };
   }
 
   syncStructureFromCode(operatorId: string, codeFromEditor?: string): void {
     const operator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
 
-    if (!operator || !this.isSupportedPythonUdfType(operator.operatorType)) {
+    if (!operator || !isPythonUdf(operator)) {
       return;
     }
 
@@ -72,7 +80,7 @@ export class UiUdfParametersSyncService {
       return;
     }
 
-    const existingParameters = operator.operatorProperties?.uiParameters ?? [];
+    const existingParameters = (operator.operatorProperties?.uiParameters ?? []) as UiUdfParameter[];
     const mergedUiParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
 
     if (isEqual(existingParameters, mergedUiParameters)) {
@@ -86,14 +94,14 @@ export class UiUdfParametersSyncService {
     });
   }
 
-  private buildParsedShapeWithPreservedValues(code: string, existingParameters: any[]): UiUdfParameter[] {
+  private buildParsedShapeWithPreservedValues(code: string, existingParameters: UiUdfParameter[]): UiUdfParameter[] {
     const parsedParameters = this.uiUdfParametersParserService.parse(code);
 
     const existingValues = new Map<string, string>();
-    existingParameters.forEach((parameter: any) => {
-      const parameterName = parameter?.attribute?.attributeName ?? parameter?.attribute?.name;
+    existingParameters.forEach(parameter => {
+      const parameterName = parameter.attribute.attributeName;
 
-      if (isDefined(parameterName) && isDefined(parameter?.value)) {
+      if (isDefined(parameterName) && isDefined(parameter.value)) {
         existingValues.set(parameterName, parameter.value);
       }
     });
@@ -117,11 +125,5 @@ export class UiUdfParametersSyncService {
     } catch {
       return undefined;
     }
-  }
-
-  private isSupportedPythonUdfType(operatorType: string): boolean {
-    return [PYTHON_UDF_V2_OP_TYPE, PYTHON_UDF_SOURCE_V2_OP_TYPE, DUAL_INPUT_PORTS_PYTHON_UDF_V2_OP_TYPE].includes(
-      operatorType
-    );
   }
 }
