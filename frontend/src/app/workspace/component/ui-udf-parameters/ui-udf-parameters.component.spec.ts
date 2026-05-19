@@ -16,54 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 import { FormControl } from "@angular/forms";
 import { FormlyFieldConfig } from "@ngx-formly/core";
 import { UiUdfParametersComponent } from "./ui-udf-parameters.component";
 
 describe("UiUdfParametersComponent", () => {
-  let component: UiUdfParametersComponent;
+  it("should lock inferred fields and keep value editable", () => {
+    const component = new UiUdfParametersComponent();
+    const value = field("value", new FormControl({ value: "42", disabled: true }));
+    const name = field("attributeName", new FormControl("threshold"));
+    const type = field("attributeType", new FormControl("double"));
 
-  beforeEach(() => {
-    component = new UiUdfParametersComponent();
-  });
-
-  it("should disable name and type fields while leaving value editable", () => {
-    const valueControl = new FormControl({ value: "42", disabled: true });
-    const nameControl = new FormControl("threshold");
-    const typeControl = new FormControl("double");
-
-    const valueField: FormlyFieldConfig = { key: "value", formControl: valueControl };
-    const nameField: FormlyFieldConfig = { key: "attributeName", formControl: nameControl };
-    const typeField: FormlyFieldConfig = { key: "attributeType", formControl: typeControl };
-    const rowField: FormlyFieldConfig = {
-      fieldGroup: [
-        valueField,
-        {
-          key: "attribute",
-          fieldGroup: [nameField, typeField],
-        },
-      ],
+    (component as any).field = {
+      fieldGroup: [{ fieldGroup: [value, { key: "attribute", fieldGroup: [name, type] }] }],
     };
-
-    (component as any).field = { fieldGroup: [rowField] } as FormlyFieldConfig;
-
     component.ngOnInit();
 
-    expect(component.getValueField(rowField)).toBe(valueField);
-    expect(component.getNameField(rowField)).toBe(nameField);
-    expect(component.getTypeField(rowField)).toBe(typeField);
-
-    expect(valueField.props?.disabled).toBe(false);
-    expect((valueField as any).templateOptions?.disabled).toBe(false);
-    expect(valueControl.enabled).toBe(true);
-
-    expect(nameField.props?.disabled).toBe(true);
-    expect((nameField as any).templateOptions?.disabled).toBe(true);
-    expect(nameControl.disabled).toBe(true);
-
-    expect(typeField.props?.disabled).toBe(true);
-    expect((typeField as any).templateOptions?.disabled).toBe(true);
-    expect(typeControl.disabled).toBe(true);
+    expect([value.props?.disabled, value.formControl?.enabled]).toEqual([false, true]);
+    expect([name.props?.disabled, name.formControl?.disabled]).toEqual([true, true]);
+    expect([type.props?.disabled, type.formControl?.disabled]).toEqual([true, true]);
   });
 });
+
+function field(key: string, formControl: FormControl): FormlyFieldConfig {
+  return { key, formControl };
+}

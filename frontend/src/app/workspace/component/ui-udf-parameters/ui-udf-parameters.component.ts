@@ -16,80 +16,40 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { NgFor } from "@angular/common";
 import { Component, OnInit } from "@angular/core";
-import { NgFor, NgIf } from "@angular/common";
 import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
+
+const COLUMN_KEYS = ["value", "attributeName", "attributeType"] as const;
 
 @Component({
   selector: "texera-ui-udf-parameters",
-  templateUrl: "./ui-udf-parameters.component.html",
-  styleUrls: ["./ui-udf-parameters.component.scss"],
-  imports: [NgIf, NgFor, FormlyModule],
+  template:
+    '<div class="ui-udf-param-row" *ngFor="let rowField of field.fieldGroup"><formly-field *ngFor="let childField of displayFields(rowField)" [field]="childField"></formly-field></div>',
+  styles: [
+    ".ui-udf-param-row{display:grid;grid-template-columns:minmax(160px,250px) minmax(160px,250px) minmax(120px,1fr);gap:12px}:host ::ng-deep .ant-form-item{margin-bottom:0}:host ::ng-deep .ant-form-item-label{display:none}",
+  ],
+  imports: [NgFor, FormlyModule],
 })
 export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
   ngOnInit(): void {
-    this.field.fieldGroup?.forEach(rowField => {
-      this.configureDisabledState(this.getAttributeChild(rowField, "attributeName"), true);
-      this.configureDisabledState(this.getAttributeChild(rowField, "attributeType"), true);
-      this.configureDisabledState(this.getField(rowField, "value"), false);
-    });
+    this.field.fieldGroup?.forEach(rowField =>
+      COLUMN_KEYS.forEach(key => this.setDisabled(this.child(rowField, key), key !== "value"))
+    );
   }
 
-  private getField(rowField: FormlyFieldConfig, key: string): FormlyFieldConfig | undefined {
-    return rowField.fieldGroup?.find(f => f.key === key);
+  displayFields(rowField: FormlyFieldConfig): FormlyFieldConfig[] {
+    return COLUMN_KEYS.map(key => this.child(rowField, key)).filter((field): field is FormlyFieldConfig => !!field);
   }
 
-  private getAttributeChild(rowField: FormlyFieldConfig, childKey: string): FormlyFieldConfig | undefined {
-    const attributeGroup = this.getField(rowField, "attribute");
-    return attributeGroup?.fieldGroup?.find(f => f.key === childKey);
+  private child(rowField: FormlyFieldConfig, key: string): FormlyFieldConfig | undefined {
+    if (key === "value") return rowField.fieldGroup?.find(field => field.key === key);
+    return rowField.fieldGroup?.find(field => field.key === "attribute")?.fieldGroup?.find(field => field.key === key);
   }
 
-  private configureDisabledState(field: FormlyFieldConfig | undefined, disabled: boolean): void {
+  private setDisabled(field: FormlyFieldConfig | undefined, disabled: boolean): void {
     if (!field) return;
-
     field.props = { ...(field.props ?? {}), disabled };
-
-    // (`as any` so we don't get nagged by the @deprecated JSDoc)
-    (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
-
-    const prevOnInit = field.hooks?.onInit;
-    field.hooks = {
-      ...(field.hooks ?? {}),
-      onInit: f => {
-        prevOnInit?.(f);
-        this.applyDisabledState(f, disabled);
-      },
-    };
-
-    this.applyDisabledState(field, disabled);
+    field.formControl?.[disabled ? "disable" : "enable"]({ emitEvent: false });
   }
-
-  private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {
-    if (field.formControl) {
-      if (disabled) {
-        field.formControl.disable({ emitEvent: false });
-      } else {
-        field.formControl.enable({ emitEvent: false });
-      }
-    }
-  }
-
-  // Disable Name
-  getNameField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getAttributeChild(rowField, "attributeName");
-  }
-
-  // Disable Type
-  getTypeField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getAttributeChild(rowField, "attributeType");
-  }
-
-  // Value editable
-  getValueField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getField(rowField, "value");
-  }
-
-  trackByParamName = (index: number, param: any): string | number => {
-    return param?.attribute?.attributeName ?? index;
-  };
 }
