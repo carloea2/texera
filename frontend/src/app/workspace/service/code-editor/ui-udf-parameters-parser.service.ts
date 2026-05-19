@@ -22,11 +22,44 @@ import { parser } from "@lezer/python";
 import { AttributeType, UiUdfParameter } from "../../types/workflow-compiling.interface";
 
 // Keep in sync with Python UDF template class names in PythonUDFOpDescV2, DualInputPortsPythonUDFOpDescV2, and PythonUDFSourceOpDescV2.
-const UDF_CLASSES = new Set(
-  "ProcessTupleOperator ProcessBatchOperator ProcessTableOperator GenerateOperator".split(" ")
-);
+const CLASSES = new Set(["ProcessTupleOperator", "ProcessBatchOperator", "ProcessTableOperator", "GenerateOperator"]);
 
-const ATTRIBUTE_TYPES: Readonly<Record<string, AttributeType>> = {
+// Java enum constant names (AttributeType.java)
+const JAVA_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INTEGER",
+  "LONG",
+  "DOUBLE",
+  "BOOLEAN",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
+
+type JavaAttributeTypeName = (typeof JAVA_ATTRIBUTE_TYPE_NAMES)[number];
+
+// Python enum constant names (core.models.AttributeType)
+const PYTHON_ATTRIBUTE_TYPE_NAMES = [
+  "STRING",
+  "INT",
+  "LONG",
+  "DOUBLE",
+  "BOOL",
+  "TIMESTAMP",
+  "BINARY",
+  "LARGE_BINARY",
+] as const;
+
+type PythonAttributeTypeName = (typeof PYTHON_ATTRIBUTE_TYPE_NAMES)[number];
+
+type ParserAttributeTypeToken = JavaAttributeTypeName | PythonAttributeTypeName;
+type UnsupportedParserAttributeTypeToken = "BINARY" | "LARGE_BINARY";
+type SupportedParserAttributeTypeToken = Exclude<ParserAttributeTypeToken, UnsupportedParserAttributeTypeToken>;
+type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
+type ParsedArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
+type UiParameterArgument = Readonly<{ kind: "name"; value: string }> | Readonly<{ kind: "type"; value: AttributeType }>;
+
+const TYPES: Readonly<Record<SupportedParserAttributeTypeToken, AttributeType>> = {
   STRING: "string",
   INTEGER: "integer",
   INT: "integer",
@@ -37,8 +70,16 @@ const ATTRIBUTE_TYPES: Readonly<Record<string, AttributeType>> = {
   TIMESTAMP: "timestamp",
 };
 
-type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
-type RawArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
+const JAVA_ATTRIBUTE_TYPE_NAME_SET = new Set<string>(JAVA_ATTRIBUTE_TYPE_NAMES);
+const PYTHON_ATTRIBUTE_TYPE_NAME_SET = new Set<string>(PYTHON_ATTRIBUTE_TYPE_NAMES);
+const SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES = new Set<AttributeType>([
+  "string",
+  "integer",
+  "long",
+  "double",
+  "boolean",
+  "timestamp",
+]);
 
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersParserService {
@@ -57,7 +98,8 @@ export class UiUdfParametersParserService {
 
     parser.parse(code).iterate({
       enter: ({ name, node }) => {
-        if (!isSupportedUdfClass(name, node, code)) return;
+        const className = node.getChild("VariableName");
+        if (name !== "ClassDefinition" || !className || !CLASSES.has(code.slice(className.from, className.to))) return;
         node.cursor().iterate(ref => {
           if (ref.name !== "CallExpression") return;
           add(readCall(ref.node, code));
@@ -71,11 +113,6 @@ export class UiUdfParametersParserService {
   }
 }
 
-function isSupportedUdfClass(name: string, node: ParserSyntaxNode, code: string): boolean {
-  const className = node.getChild("VariableName");
-  return name === "ClassDefinition" && !!className && UDF_CLASSES.has(code.slice(className.from, className.to));
-}
-
 function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefined {
   const args = call.getChild("ArgList");
   if (!args || code.slice(call.from, args.from).replace(/\s+/g, "") !== "self.UiParameter") return undefined;
@@ -83,32 +120,52 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
   let attributeName: string | undefined;
   let attributeType: AttributeType | undefined;
   let positionalIndex = 0;
+  let sawNamed = false;
 
   for (const arg of readArguments(args, code)) {
-    const key = arg.key;
-    const value = code.slice(arg.value.from, arg.value.to);
-    const isName = key === "name" || (!key && positionalIndex === 0);
-    const isType = key === "type" || key === "attr_type" || (!key && positionalIndex === 1);
+    if (arg.key) {
+      sawNamed = true;
+    } else if (sawNamed) {
+      return undefined;
+    }
 
-    if (isName && arg.value.name === "String" && !attributeName) attributeName = readString(value)?.trim();
-    else if (isType && arg.value.name === "MemberExpression" && !attributeType) attributeType = readType(value);
-    else return undefined;
-    if (!arg.key) positionalIndex++;
+    const parsedArg = readArgument(arg, positionalIndex, code);
+    if (!parsedArg) {
+      return undefined;
+    }
+
+    if (parsedArg.kind === "name") {
+      if (attributeName) {
+        return undefined;
+      }
+      attributeName = parsedArg.value;
+    } else {
+      if (attributeType) {
+        return undefined;
+      }
+      attributeType = parsedArg.value;
+    }
+
+    if (!arg.key) {
+      positionalIndex++;
+    }
   }
 
   return attributeName && attributeType ? { attribute: { attributeName, attributeType }, value: "" } : undefined;
 }
 
-function readArguments(args: ParserSyntaxNode, code: string): RawArgument[] {
-  const result: RawArgument[] = [];
-  const children = childNodes(args).filter(node => !["(", ")", ","].includes(node.name));
+function readArguments(args: ParserSyntaxNode, code: string): ParsedArgument[] {
+  const result: ParsedArgument[] = [];
+  const children = getChildren(args).filter(node => !["(", ")", ","].includes(node.name));
 
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
 
     if (node.name === "VariableName" && children[index + 1]?.name === "AssignOp") {
       const value = children[index + 2];
-      if (!value) return [];
+      if (!value) {
+        return [];
+      }
       result.push({ key: code.slice(node.from, node.to), value });
       index += 2;
     } else if (node.name !== "AssignOp") {
@@ -121,12 +178,32 @@ function readArguments(args: ParserSyntaxNode, code: string): RawArgument[] {
   return result;
 }
 
-function childNodes(node: ParserSyntaxNode): ParserSyntaxNode[] {
+function getChildren(node: ParserSyntaxNode): ParserSyntaxNode[] {
   const children: ParserSyntaxNode[] = [];
   for (let child = node.firstChild; child; child = child.nextSibling) {
     children.push(child);
   }
   return children;
+}
+
+function readArgument(arg: ParsedArgument, positionalIndex: number, code: string): UiParameterArgument | undefined {
+  const key = arg.key;
+  const value = code.slice(arg.value.from, arg.value.to);
+
+  if ((key === "name" || (!key && positionalIndex === 0)) && arg.value.name === "String") {
+    const name = readString(value)?.trim();
+    return name ? { kind: "name", value: name } : undefined;
+  }
+
+  if (
+    (key === "type" || key === "attr_type" || (!key && positionalIndex === 1)) &&
+    arg.value.name === "MemberExpression"
+  ) {
+    const type = readType(value);
+    return type ? { kind: "type", value: type } : undefined;
+  }
+
+  return undefined;
 }
 
 function readString(input: string): string | undefined {
@@ -143,6 +220,18 @@ function readType(input: string): AttributeType | undefined {
     .replace(/\s+/g, "")
     .match(/^AttributeType\.([A-Za-z_]\w*)$/)?.[1]
     .toUpperCase();
-  if (!token || token === "BINARY" || token === "LARGE_BINARY") return undefined;
-  return ATTRIBUTE_TYPES[token];
+  if (!token) {
+    return undefined;
+  }
+
+  if (!JAVA_ATTRIBUTE_TYPE_NAME_SET.has(token) && !PYTHON_ATTRIBUTE_TYPE_NAME_SET.has(token)) {
+    return undefined;
+  }
+
+  if (token === "BINARY" || token === "LARGE_BINARY") {
+    return undefined;
+  }
+
+  const canonical = TYPES[token as SupportedParserAttributeTypeToken];
+  return SUPPORTED_UI_PARAMETER_ATTRIBUTE_TYPES.has(canonical) ? canonical : undefined;
 }
