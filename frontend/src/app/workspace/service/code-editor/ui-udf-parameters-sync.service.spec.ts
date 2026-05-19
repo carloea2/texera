@@ -19,22 +19,29 @@
 
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
 import { PYTHON_UDF_V2_OP_TYPE } from "../workflow-graph/model/workflow-graph";
-import { UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import { UiUdfParametersParseError, UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import type { UiUdfParameter } from "./ui-udf-parameters-parser.service";
 import { UiUdfParametersSyncService } from "./ui-udf-parameters-sync.service";
-import { UiUdfParameter } from "../../types/workflow-compiling.interface";
-import { vi } from "vitest";
-import * as Y from "yjs";
+import type { Mock } from "vitest";
+import { vi as vitest } from "vitest";
+import * as Yjs from "yjs";
+
+type MockFunction = Mock;
+
+function createMockFunction(): MockFunction {
+  return vitest.fn();
+}
 
 describe("UiUdfParametersSyncService", () => {
   const operatorId = "operator-1";
   const code = "self.UiParameter(...)";
 
   let service: UiUdfParametersSyncService;
-  let workflowActionServiceSpy: { getTexeraGraph: ReturnType<typeof vi.fn> };
-  let parserServiceSpy: { parse: ReturnType<typeof vi.fn> };
-  let graphSpy: {
-    getOperator: ReturnType<typeof vi.fn>;
-    getSharedOperatorType: ReturnType<typeof vi.fn>;
+  let workflowActionServiceMock: { getTexeraGraph: MockFunction };
+  let parserServiceMock: { parse: MockFunction };
+  let graphMock: {
+    getOperator: MockFunction;
+    getSharedOperatorType: MockFunction;
   };
   let operator: {
     operatorType: string;
@@ -47,37 +54,39 @@ describe("UiUdfParametersSyncService", () => {
       operatorProperties: { uiParameters: [] },
     };
 
-    graphSpy = {
-      getOperator: vi.fn().mockImplementation((id: string) => (id === operatorId ? operator : undefined)),
-      getSharedOperatorType: vi.fn(),
+    graphMock = {
+      getOperator: createMockFunction().mockImplementation((requestedOperatorId: string) =>
+        requestedOperatorId === operatorId ? operator : undefined
+      ),
+      getSharedOperatorType: createMockFunction(),
     };
 
-    workflowActionServiceSpy = {
-      getTexeraGraph: vi.fn().mockReturnValue(graphSpy),
+    workflowActionServiceMock = {
+      getTexeraGraph: createMockFunction().mockReturnValue(graphMock),
     };
 
-    parserServiceSpy = { parse: vi.fn() };
+    parserServiceMock = { parse: createMockFunction() };
 
     service = new UiUdfParametersSyncService(
-      workflowActionServiceSpy as unknown as WorkflowActionService,
-      parserServiceSpy as unknown as UiUdfParametersParserService
+      workflowActionServiceMock as unknown as WorkflowActionService,
+      parserServiceMock as unknown as UiUdfParametersParserService
     );
   });
 
   it("should emit parameters that preserve values from current parameter names", () => {
     operator.operatorProperties.uiParameters = [createParameter("count", "integer", "42")];
-    parserServiceSpy.parse.mockReturnValue([createParameter("count", "integer"), createParameter("name", "string")]);
+    parserServiceMock.parse.mockReturnValue([createParameter("count", "integer"), createParameter("name", "string")]);
 
-    const nextSpy = vi.fn();
-    service.uiParametersChanged$.subscribe(nextSpy);
+    const parametersChangedObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
     service.syncStructureFromCode(operatorId, code);
 
-    expect(nextSpy).toHaveBeenCalledWith({
+    expect(parametersChangedObserver).toHaveBeenCalledWith({
       operatorId,
       parameters: [createParameter("count", "integer", "42"), createParameter("name", "string", "")],
     });
-    expect(nextSpy).toHaveBeenCalledOnce();
+    expect(parametersChangedObserver).toHaveBeenCalledOnce();
   });
 
   it("should emit updated parameters with preserved values and removed stale parameters", () => {
@@ -85,94 +94,114 @@ describe("UiUdfParametersSyncService", () => {
       createParameter("count", "integer", "42"),
       createParameter("removed", "string", "stale"),
     ];
-    parserServiceSpy.parse.mockReturnValue([createParameter("count", "integer"), createParameter("name", "string")]);
+    parserServiceMock.parse.mockReturnValue([createParameter("count", "integer"), createParameter("name", "string")]);
 
-    const nextSpy = vi.fn();
-    service.uiParametersChanged$.subscribe(nextSpy);
+    const parametersChangedObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
     service.syncStructureFromCode(operatorId, code);
 
-    expect(nextSpy).toHaveBeenCalledWith({
+    expect(parametersChangedObserver).toHaveBeenCalledWith({
       operatorId,
       parameters: [createParameter("count", "integer", "42"), createParameter("name", "string", "")],
     });
-    expect(nextSpy).toHaveBeenCalledOnce();
+    expect(parametersChangedObserver).toHaveBeenCalledOnce();
   });
 
   it("should not emit when the merged parameters are unchanged", () => {
     operator.operatorProperties.uiParameters = [createParameter("count", "integer", "42")];
-    parserServiceSpy.parse.mockReturnValue([createParameter("count", "integer")]);
+    parserServiceMock.parse.mockReturnValue([createParameter("count", "integer")]);
 
-    const nextSpy = vi.fn();
-    service.uiParametersChanged$.subscribe(nextSpy);
+    const parametersChangedObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
     service.syncStructureFromCode(operatorId, code);
 
-    expect(nextSpy).not.toHaveBeenCalled();
+    expect(parametersChangedObserver).not.toHaveBeenCalled();
+  });
+
+  it("should emit parser errors without replacing the current parameters", () => {
+    operator.operatorProperties.uiParameters = [createParameter("count", "integer", "42")];
+    parserServiceMock.parse.mockImplementation(() => {
+      throw new UiUdfParametersParseError("Only one Python UDF class can declare UiParameter values.");
+    });
+
+    const parametersChangedObserver = createMockFunction();
+    const parseErrorObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
+    service.uiParametersParseError$.subscribe(parseErrorObserver);
+
+    service.syncStructureFromCode(operatorId, code);
+
+    expect(parametersChangedObserver).not.toHaveBeenCalled();
+    expect(parseErrorObserver).toHaveBeenCalledWith({
+      operatorId,
+      message: "Only one Python UDF class can declare UiParameter values.",
+    });
   });
 
   it("should not parse code for non-Python UDF operators", () => {
     operator.operatorType = "Projection";
 
-    const nextSpy = vi.fn();
-    service.uiParametersChanged$.subscribe(nextSpy);
+    const parametersChangedObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
     service.syncStructureFromCode(operatorId, code);
 
-    expect(parserServiceSpy.parse).not.toHaveBeenCalled();
-    expect(nextSpy).not.toHaveBeenCalled();
+    expect(parserServiceMock.parse).not.toHaveBeenCalled();
+    expect(parametersChangedObserver).not.toHaveBeenCalled();
   });
 
   it("should read code from the shared operator property when editor code is omitted", () => {
     const sharedCode = 'self.UiParameter("count", AttributeType.INT)';
-    graphSpy.getSharedOperatorType.mockReturnValue(createSharedOperatorType(sharedCode));
-    parserServiceSpy.parse.mockReturnValue([createParameter("count", "integer")]);
+    graphMock.getSharedOperatorType.mockReturnValue(createSharedOperatorType(sharedCode));
+    parserServiceMock.parse.mockReturnValue([createParameter("count", "integer")]);
 
-    const nextSpy = vi.fn();
-    service.uiParametersChanged$.subscribe(nextSpy);
+    const parametersChangedObserver = createMockFunction();
+    service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
     service.syncStructureFromCode(operatorId);
 
-    expect(parserServiceSpy.parse).toHaveBeenCalledWith(sharedCode);
-    expect(nextSpy).toHaveBeenCalledWith({
+    expect(parserServiceMock.parse).toHaveBeenCalledWith(sharedCode);
+    expect(parametersChangedObserver).toHaveBeenCalledWith({
       operatorId,
       parameters: [createParameter("count", "integer")],
     });
   });
 
   it("should debounce YText changes and clean up the observer", () => {
-    vi.useFakeTimers();
+    vitest.useFakeTimers();
     try {
-      const yCode = createYText('self.UiParameter("count", AttributeType.INT)');
-      parserServiceSpy.parse.mockReturnValue([createParameter("count", "integer")]);
+      const sharedCodeText = createSharedText('self.UiParameter("count", AttributeType.INT)');
+      parserServiceMock.parse.mockReturnValue([createParameter("count", "integer")]);
 
-      const nextSpy = vi.fn();
-      service.uiParametersChanged$.subscribe(nextSpy);
+      const parametersChangedObserver = createMockFunction();
+      service.uiParametersChanged$.subscribe(parametersChangedObserver);
 
-      const cleanup = service.attachToYCode(operatorId, yCode);
+      const cleanup = service.attachToYCode(operatorId, sharedCodeText);
 
-      expect(parserServiceSpy.parse).toHaveBeenCalledOnce();
-      expect(nextSpy).toHaveBeenCalledOnce();
+      expect(parserServiceMock.parse).toHaveBeenCalledOnce();
+      expect(parametersChangedObserver).toHaveBeenCalledOnce();
 
-      yCode.insert(yCode.length, "\n# changed");
+      sharedCodeText.insert(sharedCodeText.length, "\n# changed");
 
-      vi.advanceTimersByTime(199);
+      vitest.advanceTimersByTime(199);
 
-      expect(parserServiceSpy.parse).toHaveBeenCalledOnce();
+      expect(parserServiceMock.parse).toHaveBeenCalledOnce();
 
-      vi.advanceTimersByTime(1);
+      vitest.advanceTimersByTime(1);
 
-      expect(parserServiceSpy.parse).toHaveBeenCalledTimes(2);
-      expect(nextSpy).toHaveBeenCalledTimes(2);
+      expect(parserServiceMock.parse).toHaveBeenCalledTimes(2);
+      expect(parametersChangedObserver).toHaveBeenCalledTimes(2);
 
       cleanup();
-      yCode.insert(yCode.length, "\n# after cleanup");
-      vi.advanceTimersByTime(200);
+      sharedCodeText.insert(sharedCodeText.length, "\n# after cleanup");
+      vitest.advanceTimersByTime(200);
 
-      expect(parserServiceSpy.parse).toHaveBeenCalledTimes(2);
-      expect(nextSpy).toHaveBeenCalledTimes(2);
+      expect(parserServiceMock.parse).toHaveBeenCalledTimes(2);
+      expect(parametersChangedObserver).toHaveBeenCalledTimes(2);
     } finally {
-      vi.useRealTimers();
+      vitest.useRealTimers();
     }
   });
 });
@@ -187,24 +216,24 @@ function createParameter(name: string, type: UiUdfParameter["attribute"]["attrib
   };
 }
 
-function createSharedOperatorType(code: string): Y.Map<unknown> {
-  const doc = new Y.Doc();
-  const sharedOperator = doc.getMap<unknown>("operator");
-  const operatorProperties = new Y.Map<unknown>();
-  const yCode = new Y.Text();
+function createSharedOperatorType(code: string): Yjs.Map<unknown> {
+  const yjsDocument = new Yjs.Doc();
+  const sharedOperator = yjsDocument.getMap<unknown>("operator");
+  const operatorProperties = new Yjs.Map<unknown>();
+  const sharedCodeText = new Yjs.Text();
 
-  operatorProperties.set("code", yCode);
+  operatorProperties.set("code", sharedCodeText);
   sharedOperator.set("operatorProperties", operatorProperties);
-  yCode.insert(0, code);
+  sharedCodeText.insert(0, code);
 
   return sharedOperator;
 }
 
-function createYText(text: string): Y.Text {
-  const doc = new Y.Doc();
-  const yMap = doc.getMap<unknown>("root");
-  const yText = new Y.Text();
-  yMap.set("code", yText);
-  yText.insert(0, text);
-  return yText;
+function createSharedText(text: string): Yjs.Text {
+  const yjsDocument = new Yjs.Doc();
+  const sharedRootMap = yjsDocument.getMap<unknown>("root");
+  const sharedText = new Yjs.Text();
+  sharedRootMap.set("code", sharedText);
+  sharedText.insert(0, text);
+  return sharedText;
 }

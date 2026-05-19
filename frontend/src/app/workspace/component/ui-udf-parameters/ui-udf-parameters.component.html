@@ -17,18 +17,18 @@
  under the License.
 -->
 <div
-  class="ui-udf-param-list"
+  class="ui-udf-parameter-list"
   *ngIf="(model?.length ?? 0) > 0">
   <!-- Optional header row -->
-  <div class="ui-udf-param-row header">
+  <div class="ui-udf-parameter-row header">
     <div class="field-cell"><span class="col-title">Value</span></div>
     <div class="field-cell"><span class="col-title">Name</span></div>
     <div class="field-cell"><span class="col-title">Type</span></div>
   </div>
 
   <div
-    class="ui-udf-param-row"
-    *ngFor="let param of (model || []); let i = index; trackBy: trackByParamName">
+    class="ui-udf-parameter-row"
+    *ngFor="let parameter of (model || []); let i = index; trackBy: trackByParameterName">
     <ng-container *ngIf="field.fieldGroup?.[i] as rowField">
       <!-- Value -->
       <div class="field-cell">

@@ -54,16 +54,15 @@ describe("UiUdfParametersComponent", () => {
     expect(component.getNameField(rowField)).toBe(nameField);
     expect(component.getTypeField(rowField)).toBe(typeField);
 
-    expect(valueField.props?.disabled).toBe(false);
-    expect((valueField as any).templateOptions?.disabled).toBe(false);
-    expect(valueControl.enabled).toBe(true);
-
-    expect(nameField.props?.disabled).toBe(true);
-    expect((nameField as any).templateOptions?.disabled).toBe(true);
-    expect(nameControl.disabled).toBe(true);
-
-    expect(typeField.props?.disabled).toBe(true);
-    expect((typeField as any).templateOptions?.disabled).toBe(true);
-    expect(typeControl.disabled).toBe(true);
+    // templateOptions is deprecated, but some existing Formly wrappers still read it.
+    [
+      [valueField, valueControl, false],
+      [nameField, nameControl, true],
+      [typeField, typeControl, true],
+    ].forEach(([field, control, disabled]) => {
+      expect((field as FormlyFieldConfig).props?.disabled).toBe(disabled);
+      expect((field as any).templateOptions?.disabled).toBe(disabled);
+      expect((control as FormControl).disabled).toBe(disabled);
+    });
   });
 });

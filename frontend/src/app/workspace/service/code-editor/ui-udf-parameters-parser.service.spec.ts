@@ -17,7 +17,11 @@
  * under the License.
  */
 
-import { UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import {
+  UiUdfParametersParseError,
+  UiUdfParametersParserService,
+  type UiUdfParameter,
+} from "./ui-udf-parameters-parser.service";
 
 describe("UiUdfParametersParserService", () => {
   let service: UiUdfParametersParserService;
@@ -38,11 +42,11 @@ describe("UiUdfParametersParserService", () => {
     `;
 
     expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "count", attributeType: "integer" }, value: "" },
-      { attribute: { attributeName: "name", attributeType: "string" }, value: "" },
-      { attribute: { attributeName: "age", attributeType: "long" }, value: "" },
-      { attribute: { attributeName: "score", attributeType: "double" }, value: "" },
-      { attribute: { attributeName: "created_at", attributeType: "timestamp" }, value: "" },
+      parameter("count", "integer"),
+      parameter("name", "string"),
+      parameter("age", "long"),
+      parameter("score", "double"),
+      parameter("created_at", "timestamp"),
     ]);
   });
 
@@ -53,9 +57,7 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter("count", attr_type=AttributeType.INT)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "count", attributeType: "integer" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("count", "integer")]);
   });
 
   it("should parse multiline UiParameter calls with named arguments split across lines", () => {
@@ -75,10 +77,7 @@ describe("UiUdfParametersParserService", () => {
               )
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
-      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("threshold", "double"), parameter("label", "string")]);
   });
 
   it("should ignore calls where name or type is missing", () => {
@@ -100,9 +99,7 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter(name="valid", type=AttributeType.STRING)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "valid", attributeType: "string" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("valid", "string")]);
   });
 
   it("should ignore legacy key= named argument", () => {
@@ -139,7 +136,7 @@ describe("UiUdfParametersParserService", () => {
     expect(service.parse(code)).toEqual([]);
   });
 
-  it("should parse supported UiParameter calls across multiple classes", () => {
+  it("should parse supported UiParameter calls when unsupported classes are present", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
           def open(self):
@@ -148,16 +145,24 @@ describe("UiUdfParametersParserService", () => {
       class RandomClass(ABC):
           def open(self):
               self.UiParameter("ignored", AttributeType.STRING)
+    `;
+
+    expect(service.parse(code)).toEqual([parameter("threshold", "double")]);
+  });
+
+  it("should raise an error for multiple supported UDF classes because execution expects one concrete operator", () => {
+    const code = `
+      class ProcessTupleOperator(UDFOperatorV2):
+          def open(self):
+              self.UiParameter("threshold", AttributeType.DOUBLE)
 
       class GenerateOperator(UDFSourceOperator):
           def open(self):
               self.UiParameter(name="batch_size", type=AttributeType.INT)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
-      { attribute: { attributeName: "batch_size", attributeType: "integer" }, value: "" },
-    ]);
+    expect(() => service.parse(code)).toThrow(UiUdfParametersParseError);
+    expect(() => service.parse(code)).toThrow("Only one Python UDF class can declare UiParameter values.");
   });
 
   it("should ignore empty and extra positional arguments", () => {
@@ -169,12 +174,10 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter("valid", AttributeType.STRING)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "valid", attributeType: "string" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("valid", "string")]);
   });
 
-  it("should keep the first duplicate parameter name", () => {
+  it("should raise an error for duplicate parameter names", () => {
     const code = `
       class ProcessTupleOperator(UDFOperatorV2):
           def open(self):
@@ -183,10 +186,8 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter("label", AttributeType.STRING)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
-      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
-    ]);
+    expect(() => service.parse(code)).toThrow(UiUdfParametersParseError);
+    expect(() => service.parse(code)).toThrow("UiParameter name 'threshold' is declared more than once.");
   });
 
   it("should ignore commented out UiParameter calls", () => {
@@ -197,9 +198,7 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter("active", AttributeType.INT)  # self.UiParameter("trailing", AttributeType.STRING)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "active", attributeType: "integer" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("active", "integer")]);
   });
 
   it("should ignore commented out multiline UiParameter sections", () => {
@@ -216,9 +215,7 @@ describe("UiUdfParametersParserService", () => {
               )
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "active", attributeType: "string" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("active", "string")]);
   });
 
   it("should ignore UiParameter examples inside triple-quoted strings", () => {
@@ -231,9 +228,7 @@ describe("UiUdfParametersParserService", () => {
               self.UiParameter("active", AttributeType.DOUBLE)
     `;
 
-    expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "active", attributeType: "double" }, value: "" },
-    ]);
+    expect(service.parse(code)).toEqual([parameter("active", "double")]);
   });
 
   it("should reject binary UiParameter types", () => {
@@ -247,3 +242,7 @@ describe("UiUdfParametersParserService", () => {
     expect(service.parse(code)).toEqual([]);
   });
 });
+
+function parameter(attributeName: string, attributeType: UiUdfParameter["attribute"]["attributeType"]): UiUdfParameter {
+  return { attribute: { attributeName, attributeType }, value: "" };
+}

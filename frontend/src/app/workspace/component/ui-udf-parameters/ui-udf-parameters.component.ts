@@ -36,12 +36,12 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
   }
 
   private getField(rowField: FormlyFieldConfig, key: string): FormlyFieldConfig | undefined {
-    return rowField.fieldGroup?.find(f => f.key === key);
+    return rowField.fieldGroup?.find(fieldConfig => fieldConfig.key === key);
   }
 
   private getAttributeChild(rowField: FormlyFieldConfig, childKey: string): FormlyFieldConfig | undefined {
     const attributeGroup = this.getField(rowField, "attribute");
-    return attributeGroup?.fieldGroup?.find(f => f.key === childKey);
+    return attributeGroup?.fieldGroup?.find(fieldConfig => fieldConfig.key === childKey);
   }
 
   private configureDisabledState(field: FormlyFieldConfig | undefined, disabled: boolean): void {
@@ -49,15 +49,15 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
 
     field.props = { ...(field.props ?? {}), disabled };
 
-    // (`as any` so we don't get nagged by the @deprecated JSDoc)
+    // Keep deprecated templateOptions in sync for existing Formly wrappers that still read it.
     (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
 
-    const prevOnInit = field.hooks?.onInit;
+    const previousOnInit = field.hooks?.onInit;
     field.hooks = {
       ...(field.hooks ?? {}),
-      onInit: f => {
-        prevOnInit?.(f);
-        this.applyDisabledState(f, disabled);
+      onInit: initializedField => {
+        previousOnInit?.(initializedField);
+        this.applyDisabledState(initializedField, disabled);
       },
     };
 
@@ -65,31 +65,22 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
   }
 
   private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {
-    if (field.formControl) {
-      if (disabled) {
-        field.formControl.disable({ emitEvent: false });
-      } else {
-        field.formControl.enable({ emitEvent: false });
-      }
-    }
+    disabled ? field.formControl?.disable({ emitEvent: false }) : field.formControl?.enable({ emitEvent: false });
   }
 
-  // Disable Name
   getNameField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
     return this.getAttributeChild(rowField, "attributeName");
   }
 
-  // Disable Type
   getTypeField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
     return this.getAttributeChild(rowField, "attributeType");
   }
 
-  // Value editable
   getValueField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
     return this.getField(rowField, "value");
   }
 
-  trackByParamName = (index: number, param: any): string | number => {
-    return param?.attribute?.attributeName ?? index;
+  trackByParameterName = (index: number, parameter: any): string | number => {
+    return parameter?.attribute?.attributeName ?? index;
   };
 }

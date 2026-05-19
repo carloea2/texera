@@ -21,12 +21,12 @@ import { isEqual } from "lodash-es";
 import { ReplaySubject, Subject } from "rxjs";
 import { debounceTime } from "rxjs/operators";
 import { WorkflowActionService } from "../workflow-graph/model/workflow-action.service";
-import { UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import { UiUdfParametersParseError, UiUdfParametersParserService } from "./ui-udf-parameters-parser.service";
+import type { UiUdfParameter } from "./ui-udf-parameters-parser.service";
 import { isDefined } from "../../../common/util/predicate";
 import { isPythonUdf } from "../workflow-graph/model/workflow-graph";
 import { YType } from "../../types/shared-editing.interface";
 import type { Text as YText } from "yjs";
-import { UiUdfParameter } from "../../types/workflow-compiling.interface";
 
 const UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS = 200;
 
@@ -35,8 +35,10 @@ export class UiUdfParametersSyncService {
   private readonly uiParametersChangedSubject = new ReplaySubject<{ operatorId: string; parameters: UiUdfParameter[] }>(
     1
   );
+  private readonly uiParametersParseErrorSubject = new ReplaySubject<{ operatorId: string; message?: string }>(1);
 
   readonly uiParametersChanged$ = this.uiParametersChangedSubject.asObservable();
+  readonly uiParametersParseError$ = this.uiParametersParseErrorSubject.asObservable();
 
   constructor(
     private workflowActionService: WorkflowActionService,
@@ -81,7 +83,19 @@ export class UiUdfParametersSyncService {
     }
 
     const existingParameters = (operator.operatorProperties?.uiParameters ?? []) as UiUdfParameter[];
-    const mergedUiParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
+    let mergedUiParameters: UiUdfParameter[];
+
+    try {
+      mergedUiParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
+    } catch (error) {
+      if (error instanceof UiUdfParametersParseError) {
+        this.uiParametersParseErrorSubject.next({ operatorId, message: error.message });
+        return;
+      }
+      throw error;
+    }
+
+    this.uiParametersParseErrorSubject.next({ operatorId });
 
     if (isEqual(existingParameters, mergedUiParameters)) {
       return;
