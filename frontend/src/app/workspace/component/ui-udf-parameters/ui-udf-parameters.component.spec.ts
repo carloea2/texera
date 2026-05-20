@@ -50,16 +50,14 @@ describe("UiUdfParametersComponent", () => {
 
     component.ngOnInit();
 
-    expect(component.getValueField(rowField)).toBe(valueField);
-    expect(component.getNameField(rowField)).toBe(nameField);
-    expect(component.getTypeField(rowField)).toBe(typeField);
-
     // templateOptions is deprecated, but some existing Formly wrappers still read it.
     [
-      [valueField, valueControl, false],
-      [nameField, nameControl, true],
-      [typeField, typeControl, true],
-    ].forEach(([field, control, disabled]) => {
+      { column: component.fieldColumns[0], field: valueField, control: valueControl },
+      { column: component.fieldColumns[1], field: nameField, control: nameControl },
+      { column: component.fieldColumns[2], field: typeField, control: typeControl },
+    ].forEach(({ column, field, control }) => {
+      expect(component.getColumnField(rowField, column)).toBe(field);
+      const disabled = column.disabled;
       expect((field as FormlyFieldConfig).props?.disabled).toBe(disabled);
       expect((field as any).templateOptions?.disabled).toBe(disabled);
       expect((control as FormControl).disabled).toBe(disabled);

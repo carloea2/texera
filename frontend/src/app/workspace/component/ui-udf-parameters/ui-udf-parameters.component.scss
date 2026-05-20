@@ -28,12 +28,10 @@
   min-width: 0;
 }
 
-/* Remove Formly/Ant label spacing */
 :host ::ng-deep .ant-form-item {
   margin-bottom: 0;
 }
 
-/* Hide Formly labels*/
 :host ::ng-deep .ant-form-item-label {
   display: none;
 }

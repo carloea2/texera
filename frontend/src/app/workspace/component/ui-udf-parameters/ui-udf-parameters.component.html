@@ -18,37 +18,25 @@
 -->
 <div
   class="ui-udf-parameter-list"
-  *ngIf="(model?.length ?? 0) > 0">
-  <!-- Optional header row -->
+  *ngIf="model?.length">
   <div class="ui-udf-parameter-row header">
-    <div class="field-cell"><span class="col-title">Value</span></div>
-    <div class="field-cell"><span class="col-title">Name</span></div>
-    <div class="field-cell"><span class="col-title">Type</span></div>
+    <div
+      class="field-cell"
+      *ngFor="let column of fieldColumns">
+      <span class="col-title">{{ column.label }}</span>
+    </div>
   </div>
 
   <div
     class="ui-udf-parameter-row"
     *ngFor="let parameter of (model || []); let i = index; trackBy: trackByParameterName">
     <ng-container *ngIf="field.fieldGroup?.[i] as rowField">
-      <!-- Value -->
-      <div class="field-cell">
-        <ng-container *ngIf="getValueField(rowField) as valueField">
-          <formly-field [field]="valueField"></formly-field>
-        </ng-container>
-      </div>
-
-      <!-- Name -->
-      <div class="field-cell">
-        <ng-container *ngIf="getNameField(rowField) as nameField">
-          <formly-field [field]="nameField"></formly-field>
-        </ng-container>
-      </div>
-
-      <!-- Type -->
-      <div class="field-cell">
-        <ng-container *ngIf="getTypeField(rowField) as typeField">
-          <formly-field [field]="typeField"></formly-field>
-        </ng-container>
+      <div
+        class="field-cell"
+        *ngFor="let column of fieldColumns">
+        <formly-field
+          *ngIf="getColumnField(rowField, column) as columnField"
+          [field]="columnField"></formly-field>
       </div>
     </ng-container>
   </div>

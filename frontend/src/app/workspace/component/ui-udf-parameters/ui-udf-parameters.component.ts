@@ -20,6 +20,8 @@ import { Component, OnInit } from "@angular/core";
 import { NgFor, NgIf } from "@angular/common";
 import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
 
+type UiUdfParameterColumn = Readonly<{ label: string; key: string; parentKey?: string; disabled: boolean }>;
+
 @Component({
   selector: "texera-ui-udf-parameters",
   templateUrl: "./ui-udf-parameters.component.html",
@@ -27,21 +29,26 @@ import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/cor
   imports: [NgIf, NgFor, FormlyModule],
 })
 export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
+  readonly fieldColumns: UiUdfParameterColumn[] = [
+    { label: "Value", key: "value", disabled: false },
+    { label: "Name", key: "attributeName", parentKey: "attribute", disabled: true },
+    { label: "Type", key: "attributeType", parentKey: "attribute", disabled: true },
+  ];
+
   ngOnInit(): void {
     this.field.fieldGroup?.forEach(rowField => {
-      this.configureDisabledState(this.getAttributeChild(rowField, "attributeName"), true);
-      this.configureDisabledState(this.getAttributeChild(rowField, "attributeType"), true);
-      this.configureDisabledState(this.getField(rowField, "value"), false);
+      this.fieldColumns.forEach(column => {
+        this.configureDisabledState(this.getColumnField(rowField, column), column.disabled);
+      });
     });
   }
 
-  private getField(rowField: FormlyFieldConfig, key: string): FormlyFieldConfig | undefined {
-    return rowField.fieldGroup?.find(fieldConfig => fieldConfig.key === key);
+  getColumnField(rowField: FormlyFieldConfig, column: UiUdfParameterColumn): FormlyFieldConfig | undefined {
+    return this.getChildField(column.parentKey ? this.getChildField(rowField, column.parentKey) : rowField, column.key);
   }
 
-  private getAttributeChild(rowField: FormlyFieldConfig, childKey: string): FormlyFieldConfig | undefined {
-    const attributeGroup = this.getField(rowField, "attribute");
-    return attributeGroup?.fieldGroup?.find(fieldConfig => fieldConfig.key === childKey);
+  private getChildField(rowField: FormlyFieldConfig | undefined, key: string): FormlyFieldConfig | undefined {
+    return rowField?.fieldGroup?.find(fieldConfig => fieldConfig.key === key);
   }
 
   private configureDisabledState(field: FormlyFieldConfig | undefined, disabled: boolean): void {
@@ -66,18 +73,6 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
 
   private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {
     disabled ? field.formControl?.disable({ emitEvent: false }) : field.formControl?.enable({ emitEvent: false });
-  }
-
-  getNameField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getAttributeChild(rowField, "attributeName");
-  }
-
-  getTypeField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getAttributeChild(rowField, "attributeType");
-  }
-
-  getValueField(rowField: FormlyFieldConfig): FormlyFieldConfig | undefined {
-    return this.getField(rowField, "value");
   }
 
   trackByParameterName = (index: number, parameter: any): string | number => {

@@ -31,7 +31,6 @@ const SUPPORTED_CLASS_NAMES = new Set([
 
 type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 type ParsedArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
-type UiParameterArgument = Readonly<{ kind: "name"; value: string }> | Readonly<{ kind: "type"; value: AttributeType }>;
 
 export type UiUdfParameter = Readonly<{ attribute: SchemaAttribute; value: string }>;
 
@@ -89,13 +88,11 @@ export class UiUdfParametersParserService {
       },
     });
 
-    if (supportedClassCount > 1) {
+    if (supportedClassCount > 1)
       throw new UiUdfParametersParseError("Only one Python UDF class can declare UiParameter values.");
-    }
 
-    if (duplicateName) {
+    if (duplicateName)
       throw new UiUdfParametersParseError(`UiParameter name '${duplicateName}' is declared more than once.`);
-    }
 
     return result;
   }
@@ -112,28 +109,20 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
   let sawNamed = false;
 
   for (const argument of readArguments(argumentList, code)) {
+    const key = argument.key ?? (positionalIndex === 0 ? "name" : positionalIndex === 1 ? "type" : undefined);
+
     if (argument.key) {
       sawNamed = true;
     } else if (sawNamed) {
       return undefined;
     }
 
-    const parsedArgument = readArgument(argument, positionalIndex, code);
-    if (!parsedArgument) {
-      return undefined;
-    }
+    if (key === "name" && !attributeName) attributeName = readName(argument.value, code);
+    else if ((key === "type" || key === "attr_type") && !attributeType) attributeType = readType(argument.value, code);
+    else return undefined;
 
-    if (parsedArgument.kind === "name") {
-      if (attributeName) {
-        return undefined;
-      }
-      attributeName = parsedArgument.value;
-    } else {
-      if (attributeType) {
-        return undefined;
-      }
-      attributeType = parsedArgument.value;
-    }
+    if ((key === "name" && !attributeName) || ((key === "type" || key === "attr_type") && !attributeType))
+      return undefined;
 
     if (!argument.key) {
       positionalIndex++;
@@ -152,9 +141,7 @@ function readArguments(argumentList: ParserSyntaxNode, code: string): ParsedArgu
 
     if (node.name === "VariableName" && children[index + 1]?.name === "AssignOp") {
       const value = children[index + 2];
-      if (!value) {
-        return [];
-      }
+      if (!value) return [];
       result.push({ key: code.slice(node.from, node.to), value });
       index += 2;
     } else if (node.name !== "AssignOp") {
@@ -169,34 +156,24 @@ function readArguments(argumentList: ParserSyntaxNode, code: string): ParsedArgu
 
 function getChildren(node: ParserSyntaxNode): ParserSyntaxNode[] {
   const children: ParserSyntaxNode[] = [];
-  for (let child = node.firstChild; child; child = child.nextSibling) {
-    children.push(child);
-  }
+  for (let child = node.firstChild; child; child = child.nextSibling) children.push(child);
   return children;
 }
 
-function readArgument(
-  argument: ParsedArgument,
-  positionalIndex: number,
-  code: string
-): UiParameterArgument | undefined {
-  const key = argument.key;
-  const value = code.slice(argument.value.from, argument.value.to);
+function readName(value: ParserSyntaxNode, code: string): string | undefined {
+  const name = value.name === "String" ? readString(code.slice(value.from, value.to))?.trim() : undefined;
+  return name || undefined;
+}
 
-  if ((key === "name" || (!key && positionalIndex === 0)) && argument.value.name === "String") {
-    const name = readString(value)?.trim();
-    return name ? { kind: "name", value: name } : undefined;
-  }
-
-  if (
-    (key === "type" || key === "attr_type" || (!key && positionalIndex === 1)) &&
-    argument.value.name === "MemberExpression"
-  ) {
-    const type = readType(value);
-    return type ? { kind: "type", value: type } : undefined;
-  }
-
-  return undefined;
+function readType(value: ParserSyntaxNode, code: string): AttributeType | undefined {
+  if (value.name !== "MemberExpression") return undefined;
+  const token = code
+    .slice(value.from, value.to)
+    .trim()
+    .replace(/\s+/g, "")
+    .match(/^AttributeType\.([A-Za-z_]\w*)$/)?.[1]
+    .toUpperCase();
+  return token ? ATTRIBUTE_TYPES_BY_TOKEN[token] : undefined;
 }
 
 function readString(input: string): string | undefined {
@@ -205,17 +182,4 @@ function readString(input: string): string | undefined {
     .match(/^[rRuU]*(?:"""([\s\S]*)"""|'''([\s\S]*)'''|"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')$/)
     ?.slice(1)
     .find(value => value !== undefined);
-}
-
-function readType(input: string): AttributeType | undefined {
-  const token = input
-    .trim()
-    .replace(/\s+/g, "")
-    .match(/^AttributeType\.([A-Za-z_]\w*)$/)?.[1]
-    .toUpperCase();
-  if (!token) {
-    return undefined;
-  }
-
-  return ATTRIBUTE_TYPES_BY_TOKEN[token];
 }

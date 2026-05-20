@@ -25,7 +25,6 @@ import { UiUdfParametersParseError, UiUdfParametersParserService } from "./ui-ud
 import type { UiUdfParameter } from "./ui-udf-parameters-parser.service";
 import { isDefined } from "../../../common/util/predicate";
 import { isPythonUdf } from "../workflow-graph/model/workflow-graph";
-import { YType } from "../../types/shared-editing.interface";
 import type { Text as YText } from "yjs";
 
 const UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS = 200;
@@ -45,24 +44,16 @@ export class UiUdfParametersSyncService {
     private uiUdfParametersParserService: UiUdfParametersParserService
   ) {}
 
-  /**
-   * Attach directly to YText and sync whenever it changes
-   */
   attachToYCode(operatorId: string, yCode: YText): () => void {
     const codeChanges = new Subject<string>();
-    const subscription = codeChanges.pipe(debounceTime(UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS)).subscribe(latestCode => {
-      this.syncStructureFromCode(operatorId, latestCode);
-    });
-
-    const handler = () => {
-      codeChanges.next(yCode.toString());
-    };
+    const subscription = codeChanges
+      .pipe(debounceTime(UI_PARAMETER_SYNC_DEBOUNCE_TIME_MS))
+      .subscribe(latestCode => this.syncStructureFromCode(operatorId, latestCode));
+    const handler = () => codeChanges.next(yCode.toString());
 
     yCode.observe(handler);
-
     this.syncStructureFromCode(operatorId, yCode.toString());
 
-    // return cleanup function
     return () => {
       yCode.unobserve(handler);
       subscription.unsubscribe();
@@ -73,20 +64,16 @@ export class UiUdfParametersSyncService {
   syncStructureFromCode(operatorId: string, codeFromEditor?: string): void {
     const operator = this.workflowActionService.getTexeraGraph().getOperator(operatorId);
 
-    if (!operator || !isPythonUdf(operator)) {
-      return;
-    }
+    if (!operator || !isPythonUdf(operator)) return;
 
     const code = codeFromEditor ?? this.getSharedCode(operatorId);
-    if (!isDefined(code)) {
-      return;
-    }
+    if (!isDefined(code)) return;
 
     const existingParameters = (operator.operatorProperties?.uiParameters ?? []) as UiUdfParameter[];
-    let mergedUiParameters: UiUdfParameter[];
+    let mergedParameters: UiUdfParameter[];
 
     try {
-      mergedUiParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
+      mergedParameters = this.buildParsedShapeWithPreservedValues(code, existingParameters);
     } catch (error) {
       if (error instanceof UiUdfParametersParseError) {
         this.uiParametersParseErrorSubject.next({ operatorId, message: error.message });
@@ -97,28 +84,16 @@ export class UiUdfParametersSyncService {
 
     this.uiParametersParseErrorSubject.next({ operatorId });
 
-    if (isEqual(existingParameters, mergedUiParameters)) {
-      return;
-    }
+    if (isEqual(existingParameters, mergedParameters)) return;
 
-    // Emit event so UI updates
-    this.uiParametersChangedSubject.next({
-      operatorId,
-      parameters: mergedUiParameters,
-    });
+    this.uiParametersChangedSubject.next({ operatorId, parameters: mergedParameters });
   }
 
   private buildParsedShapeWithPreservedValues(code: string, existingParameters: UiUdfParameter[]): UiUdfParameter[] {
     const parsedParameters = this.uiUdfParametersParserService.parse(code);
-
-    const existingValues = new Map<string, string>();
-    existingParameters.forEach(parameter => {
-      const parameterName = parameter.attribute.attributeName;
-
-      if (isDefined(parameterName) && isDefined(parameter.value)) {
-        existingValues.set(parameterName, parameter.value);
-      }
-    });
+    const existingValues = new Map(
+      existingParameters.map(parameter => [parameter.attribute.attributeName, parameter.value] as const)
+    );
 
     return parsedParameters.map(parameter => ({
       ...parameter,
@@ -130,10 +105,7 @@ export class UiUdfParametersSyncService {
     try {
       const sharedOperatorType = this.workflowActionService.getTexeraGraph().getSharedOperatorType(operatorId);
 
-      const operatorProperties = sharedOperatorType.get("operatorProperties") as YType<
-        Readonly<{ [key: string]: any }>
-      >;
-
+      const operatorProperties = sharedOperatorType.get("operatorProperties") as any;
       const yCode = operatorProperties.get("code") as YText;
       return yCode?.toString();
     } catch {
