@@ -29,6 +29,24 @@ const SUPPORTED_CLASS_NAMES = new Set([
   "GenerateOperator",
 ]);
 
+const PYTHON_NODE = {
+  ARG_LIST: "ArgList",
+  ASSIGN_OP: "AssignOp",
+  CALL_EXPRESSION: "CallExpression",
+  CLASS_DEFINITION: "ClassDefinition",
+  MEMBER_EXPRESSION: "MemberExpression",
+  PROPERTY_NAME: "PropertyName",
+  STRING: "String",
+  VARIABLE_NAME: "VariableName",
+} as const;
+const ARGUMENT_DELIMITER_NODES = new Set(["(", ")", ","]);
+
+const UI_PARAMETER_CALLEE = ["self", "UiParameter"];
+const ATTRIBUTE_TYPE_RECEIVER = "AttributeType";
+const ARGUMENT_NAME = "name";
+const ARGUMENT_TYPE = "type";
+const ARGUMENT_ATTR_TYPE = "attr_type";
+
 type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 type ParsedArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
 
@@ -71,16 +89,16 @@ export class UiUdfParametersParserService {
 
     parser.parse(code).iterate({
       enter: ({ name, node }) => {
-        const className = node.getChild("VariableName");
+        const className = node.getChild(PYTHON_NODE.VARIABLE_NAME);
         if (
-          name !== "ClassDefinition" ||
+          name !== PYTHON_NODE.CLASS_DEFINITION ||
           !className ||
           !SUPPORTED_CLASS_NAMES.has(code.slice(className.from, className.to))
         )
           return;
         supportedClassCount++;
         node.cursor().iterate(cursorReference => {
-          if (cursorReference.name !== "CallExpression") return;
+          if (cursorReference.name !== PYTHON_NODE.CALL_EXPRESSION) return;
           addParameter(readCall(cursorReference.node, code));
           return false;
         });
@@ -99,9 +117,9 @@ export class UiUdfParametersParserService {
 }
 
 function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefined {
-  const argumentList = call.getChild("ArgList");
-  const callee = call.getChild("MemberExpression");
-  if (!argumentList || !isMemberPath(callee, code, ["self", "UiParameter"])) return undefined;
+  const argumentList = call.getChild(PYTHON_NODE.ARG_LIST);
+  const callee = call.getChild(PYTHON_NODE.MEMBER_EXPRESSION);
+  if (!argumentList || !isMemberPath(callee, code, UI_PARAMETER_CALLEE)) return undefined;
 
   let attributeName: string | undefined;
   let attributeType: AttributeType | undefined;
@@ -109,7 +127,8 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
   let sawNamed = false;
 
   for (const argument of readArguments(argumentList, code)) {
-    const key = argument.key ?? (positionalIndex === 0 ? "name" : positionalIndex === 1 ? "type" : undefined);
+    const key =
+      argument.key ?? (positionalIndex === 0 ? ARGUMENT_NAME : positionalIndex === 1 ? ARGUMENT_TYPE : undefined);
 
     if (argument.key) {
       sawNamed = true;
@@ -117,11 +136,15 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
       return undefined;
     }
 
-    if (key === "name" && !attributeName) attributeName = readName(argument.value, code);
-    else if ((key === "type" || key === "attr_type") && !attributeType) attributeType = readType(argument.value, code);
+    if (key === ARGUMENT_NAME && !attributeName) attributeName = readName(argument.value, code);
+    else if ((key === ARGUMENT_TYPE || key === ARGUMENT_ATTR_TYPE) && !attributeType)
+      attributeType = readType(argument.value, code);
     else return undefined;
 
-    if ((key === "name" && !attributeName) || ((key === "type" || key === "attr_type") && !attributeType))
+    if (
+      (key === ARGUMENT_NAME && !attributeName) ||
+      ((key === ARGUMENT_TYPE || key === ARGUMENT_ATTR_TYPE) && !attributeType)
+    )
       return undefined;
 
     if (!argument.key) {
@@ -134,17 +157,17 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
 
 function readArguments(argumentList: ParserSyntaxNode, code: string): ParsedArgument[] {
   const result: ParsedArgument[] = [];
-  const children = getChildren(argumentList).filter(node => !["(", ")", ","].includes(node.name));
+  const children = getChildren(argumentList).filter(node => !ARGUMENT_DELIMITER_NODES.has(node.name));
 
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
 
-    if (node.name === "VariableName" && children[index + 1]?.name === "AssignOp") {
+    if (node.name === PYTHON_NODE.VARIABLE_NAME && children[index + 1]?.name === PYTHON_NODE.ASSIGN_OP) {
       const value = children[index + 2];
       if (!value) return [];
       result.push({ key: code.slice(node.from, node.to), value });
       index += 2;
-    } else if (node.name !== "AssignOp") {
+    } else if (node.name !== PYTHON_NODE.ASSIGN_OP) {
       result.push({ value: node });
     } else {
       return [];
@@ -161,13 +184,13 @@ function getChildren(node: ParserSyntaxNode): ParserSyntaxNode[] {
 }
 
 function readName(value: ParserSyntaxNode, code: string): string | undefined {
-  const name = value.name === "String" ? readString(code.slice(value.from, value.to))?.trim() : undefined;
+  const name = value.name === PYTHON_NODE.STRING ? readString(code.slice(value.from, value.to))?.trim() : undefined;
   return name || undefined;
 }
 
 function readType(value: ParserSyntaxNode, code: string): AttributeType | undefined {
   const parts = readMemberPath(value, code);
-  if (parts?.length !== 2 || parts[0] !== "AttributeType") return undefined;
+  if (parts?.length !== 2 || parts[0] !== ATTRIBUTE_TYPE_RECEIVER) return undefined;
   const token = parts[1].toUpperCase();
   return token ? ATTRIBUTE_TYPES_BY_TOKEN[token] : undefined;
 }
@@ -178,9 +201,9 @@ function isMemberPath(node: ParserSyntaxNode | null, code: string, expectedParts
 }
 
 function readMemberPath(node: ParserSyntaxNode, code: string): string[] | undefined {
-  if (node.name !== "MemberExpression") return undefined;
+  if (node.name !== PYTHON_NODE.MEMBER_EXPRESSION) return undefined;
   const parts = getChildren(node)
-    .filter(child => child.name === "VariableName" || child.name === "PropertyName")
+    .filter(child => child.name === PYTHON_NODE.VARIABLE_NAME || child.name === PYTHON_NODE.PROPERTY_NAME)
     .map(child => code.slice(child.from, child.to));
   return parts.length ? parts : undefined;
 }
