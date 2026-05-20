@@ -97,6 +97,15 @@ describe("UiUdfParametersParserService", () => {
       ],
       ["ignore legacy key= named argument", 'self.UiParameter(type=AttributeType.DOUBLE, key="a")', []],
       [
+        "ignore non-self calls and non-AttributeType members",
+        `
+        some.UiParameter("not_self", AttributeType.INT)
+        self.UiParameter("bad_type", OtherType.INT)
+        self.UiParameter("valid", AttributeType.STRING)
+      `,
+        [parameter("valid", "string")],
+      ],
+      [
         "ignore empty and extra positional arguments",
         `
         self.UiParameter()

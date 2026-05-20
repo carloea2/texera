@@ -100,8 +100,8 @@ export class UiUdfParametersParserService {
 
 function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefined {
   const argumentList = call.getChild("ArgList");
-  if (!argumentList || code.slice(call.from, argumentList.from).replace(/\s+/g, "") !== "self.UiParameter")
-    return undefined;
+  const callee = call.getChild("MemberExpression");
+  if (!argumentList || !isMemberPath(callee, code, ["self", "UiParameter"])) return undefined;
 
   let attributeName: string | undefined;
   let attributeType: AttributeType | undefined;
@@ -166,14 +166,23 @@ function readName(value: ParserSyntaxNode, code: string): string | undefined {
 }
 
 function readType(value: ParserSyntaxNode, code: string): AttributeType | undefined {
-  if (value.name !== "MemberExpression") return undefined;
-  const token = code
-    .slice(value.from, value.to)
-    .trim()
-    .replace(/\s+/g, "")
-    .match(/^AttributeType\.([A-Za-z_]\w*)$/)?.[1]
-    .toUpperCase();
+  const parts = readMemberPath(value, code);
+  if (parts?.length !== 2 || parts[0] !== "AttributeType") return undefined;
+  const token = parts[1].toUpperCase();
   return token ? ATTRIBUTE_TYPES_BY_TOKEN[token] : undefined;
+}
+
+function isMemberPath(node: ParserSyntaxNode | null, code: string, expectedParts: string[]): boolean {
+  const parts = node ? readMemberPath(node, code) : undefined;
+  return parts?.length === expectedParts.length && parts.every((part, index) => part === expectedParts[index]);
+}
+
+function readMemberPath(node: ParserSyntaxNode, code: string): string[] | undefined {
+  if (node.name !== "MemberExpression") return undefined;
+  const parts = getChildren(node)
+    .filter(child => child.name === "VariableName" || child.name === "PropertyName")
+    .map(child => code.slice(child.from, child.to));
+  return parts.length ? parts : undefined;
 }
 
 function readString(input: string): string | undefined {
