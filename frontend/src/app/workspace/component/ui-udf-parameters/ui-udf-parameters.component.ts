@@ -72,7 +72,8 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
   }
 
   private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {
-    disabled ? field.formControl?.disable({ emitEvent: false }) : field.formControl?.enable({ emitEvent: false });
+    if (disabled) field.formControl?.disable({ emitEvent: false });
+    else field.formControl?.enable({ emitEvent: false });
   }
 
   trackByParameterName = (index: number, parameter: any): string | number => {
