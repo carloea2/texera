@@ -46,9 +46,13 @@ const ATTRIBUTE_TYPE_RECEIVER = "AttributeType";
 const ARGUMENT_NAME = "name";
 const ARGUMENT_TYPE = "type";
 const ARGUMENT_ATTR_TYPE = "attr_type";
+const POSITIONAL_ARGUMENT_KEYS = [ARGUMENT_NAME, ARGUMENT_TYPE] as const;
 
 type ParserSyntaxNode = ReturnType<typeof parser.parse>["topNode"];
 type ParsedArgument = Readonly<{ key?: string; value: ParserSyntaxNode }>;
+type UiParameterArgument =
+  | Readonly<{ kind: typeof ARGUMENT_NAME; value: string }>
+  | Readonly<{ kind: typeof ARGUMENT_TYPE; value: AttributeType }>;
 
 export type UiUdfParameter = Readonly<{ attribute: SchemaAttribute; value: string }>;
 
@@ -123,36 +127,50 @@ function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefi
 
   let attributeName: string | undefined;
   let attributeType: AttributeType | undefined;
-  let positionalIndex = 0;
-  let sawNamed = false;
+  const uiParameterArguments = readUiParameterArguments(argumentList, code);
+  if (!uiParameterArguments) return undefined;
 
-  for (const argument of readArguments(argumentList, code)) {
-    const key =
-      argument.key ?? (positionalIndex === 0 ? ARGUMENT_NAME : positionalIndex === 1 ? ARGUMENT_TYPE : undefined);
-
-    if (argument.key) {
-      sawNamed = true;
-    } else if (sawNamed) {
-      return undefined;
-    }
-
-    if (key === ARGUMENT_NAME && !attributeName) attributeName = readName(argument.value, code);
-    else if ((key === ARGUMENT_TYPE || key === ARGUMENT_ATTR_TYPE) && !attributeType)
-      attributeType = readType(argument.value, code);
+  for (const argument of uiParameterArguments) {
+    if (argument.kind === ARGUMENT_NAME && !attributeName) attributeName = argument.value;
+    else if (argument.kind === ARGUMENT_TYPE && !attributeType) attributeType = argument.value;
     else return undefined;
-
-    if (
-      (key === ARGUMENT_NAME && !attributeName) ||
-      ((key === ARGUMENT_TYPE || key === ARGUMENT_ATTR_TYPE) && !attributeType)
-    )
-      return undefined;
-
-    if (!argument.key) {
-      positionalIndex++;
-    }
   }
 
   return attributeName && attributeType ? { attribute: { attributeName, attributeType }, value: "" } : undefined;
+}
+
+function readUiParameterArguments(argumentList: ParserSyntaxNode, code: string): UiParameterArgument[] | undefined {
+  const result: UiParameterArgument[] = [];
+  let positionalIndex = 0;
+  let sawNamedArgument = false;
+
+  for (const argument of readArguments(argumentList, code)) {
+    if (argument.key) sawNamedArgument = true;
+    else if (sawNamedArgument) return undefined;
+
+    const key = argument.key ?? POSITIONAL_ARGUMENT_KEYS[positionalIndex++];
+    const parsedArgument = readUiParameterArgument(key, argument.value, code);
+    if (!parsedArgument) return undefined;
+    result.push(parsedArgument);
+  }
+
+  return result;
+}
+
+function readUiParameterArgument(
+  key: string | undefined,
+  value: ParserSyntaxNode,
+  code: string
+): UiParameterArgument | undefined {
+  if (key === ARGUMENT_NAME) {
+    const attributeName = readName(value, code);
+    return attributeName ? { kind: ARGUMENT_NAME, value: attributeName } : undefined;
+  }
+  if (key === ARGUMENT_TYPE || key === ARGUMENT_ATTR_TYPE) {
+    const attributeType = readType(value, code);
+    return attributeType ? { kind: ARGUMENT_TYPE, value: attributeType } : undefined;
+  }
+  return undefined;
 }
 
 function readArguments(argumentList: ParserSyntaxNode, code: string): ParsedArgument[] {
