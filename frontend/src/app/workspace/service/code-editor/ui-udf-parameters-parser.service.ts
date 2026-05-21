@@ -54,8 +54,10 @@ type UiParameterArgument =
   | Readonly<{ kind: typeof ARGUMENT_NAME; value: string }>
   | Readonly<{ kind: typeof ARGUMENT_TYPE; value: AttributeType }>;
 
+/** UI parameter row inferred from Python code, with backend-compatible attribute metadata and an editable value. */
 export type UiUdfParameter = Readonly<{ attribute: SchemaAttribute; value: string }>;
 
+/** Raised when supported Python UDF code declares UI parameters that cannot be represented safely in the UI. */
 export class UiUdfParametersParseError extends Error {}
 
 // Accept Java enum names (INTEGER, BOOLEAN) and Python enum aliases (INT, BOOL).
@@ -70,8 +72,13 @@ const ATTRIBUTE_TYPES_BY_TOKEN: Readonly<Record<string, AttributeType>> = {
   TIMESTAMP: "timestamp",
 };
 
+/** Parses Python UDF source code and infers supported self.UiParameter(...) declarations for the property panel. */
 @Injectable({ providedIn: "root" })
 export class UiUdfParametersParserService {
+  /**
+   * Returns UI parameters from the single supported Python UDF class in the source.
+   * Throws UiUdfParametersParseError for duplicate parameter names or multiple supported UDF classes.
+   */
   parse(code: string): UiUdfParameter[] {
     if (!code) return [];
 

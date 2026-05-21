@@ -16,48 +16,74 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Component, OnInit } from "@angular/core";
+import { Component } from "@angular/core";
 import { NgFor, NgIf } from "@angular/common";
 import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
 
 type UiUdfParameterColumn = Readonly<{ label: string; key: string; parentKey?: string; disabled: boolean }>;
 
+/** Renders inferred Python UDF UI parameters with editable values and locked name/type columns. */
 @Component({
   selector: "texera-ui-udf-parameters",
   templateUrl: "./ui-udf-parameters.component.html",
   styleUrls: ["./ui-udf-parameters.component.scss"],
   imports: [NgIf, NgFor, FormlyModule],
 })
-export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
+export class UiUdfParametersComponent extends FieldArrayType<FormlyFieldConfig> {
+  private readonly disabledStateConfigured = new WeakMap<FormlyFieldConfig, boolean>();
+
   readonly fieldColumns: UiUdfParameterColumn[] = [
     { label: "Value", key: "value", disabled: false },
     { label: "Name", key: "attributeName", parentKey: "attribute", disabled: true },
     { label: "Type", key: "attributeType", parentKey: "attribute", disabled: true },
   ];
 
-  ngOnInit(): void {
-    this.field.fieldGroup?.forEach(rowField => {
-      this.fieldColumns.forEach(column => {
-        this.configureDisabledState(this.getColumnField(rowField, column), column.disabled);
-      });
-    });
+  override onPopulate(field: FormlyFieldConfig): void {
+    this.configureRowTemplate(this.getFieldArrayTemplate(field));
+    super.onPopulate(field);
+    field.fieldGroup?.forEach(rowField => this.configureRowFields(rowField));
   }
 
+  /** Finds the Formly field config that backs one visible column in a parameter row. */
   getColumnField(rowField: FormlyFieldConfig, column: UiUdfParameterColumn): FormlyFieldConfig | undefined {
     return this.getChildField(column.parentKey ? this.getChildField(rowField, column.parentKey) : rowField, column.key);
+  }
+
+  private getFieldArrayTemplate(field: FormlyFieldConfig): FormlyFieldConfig | undefined {
+    return typeof field.fieldArray === "function" ? undefined : field.fieldArray;
+  }
+
+  private configureRowTemplate(rowField: FormlyFieldConfig | undefined): void {
+    this.configureRowColumns(rowField, this.setDisabledMetadata.bind(this));
+  }
+
+  private configureRowFields(rowField: FormlyFieldConfig | undefined): void {
+    this.configureRowColumns(rowField, this.configureDisabledState.bind(this));
+  }
+
+  private configureRowColumns(
+    rowField: FormlyFieldConfig | undefined,
+    configureColumn: (field: FormlyFieldConfig | undefined, disabled: boolean) => void
+  ): void {
+    if (!rowField) return;
+
+    this.fieldColumns.forEach(column => configureColumn(this.getColumnField(rowField, column), column.disabled));
   }
 
   private getChildField(rowField: FormlyFieldConfig | undefined, key: string): FormlyFieldConfig | undefined {
     return rowField?.fieldGroup?.find(fieldConfig => fieldConfig.key === key);
   }
 
+  /** Sets Formly disabled metadata and keeps controls created later in sync through an onInit hook. */
   private configureDisabledState(field: FormlyFieldConfig | undefined, disabled: boolean): void {
     if (!field) return;
 
-    field.props = { ...(field.props ?? {}), disabled };
+    this.setDisabledMetadata(field, disabled);
 
-    // Keep deprecated templateOptions in sync for existing Formly wrappers that still read it.
-    (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
+    if (this.disabledStateConfigured.get(field) === disabled) {
+      this.applyDisabledState(field, disabled);
+      return;
+    }
 
     const previousOnInit = field.hooks?.onInit;
     field.hooks = {
@@ -68,7 +94,17 @@ export class UiUdfParametersComponent extends FieldArrayType implements OnInit {
       },
     };
 
+    this.disabledStateConfigured.set(field, disabled);
     this.applyDisabledState(field, disabled);
+  }
+
+  private setDisabledMetadata(field: FormlyFieldConfig | undefined, disabled: boolean): void {
+    if (!field) return;
+
+    field.props = { ...(field.props ?? {}), disabled };
+
+    // Keep deprecated templateOptions in sync for existing Formly wrappers that still read it.
+    (field as any).templateOptions = { ...((field as any).templateOptions ?? {}), disabled };
   }
 
   private applyDisabledState(field: FormlyFieldConfig, disabled: boolean): void {

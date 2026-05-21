@@ -136,6 +136,26 @@ describe("UiUdfParametersSyncService", () => {
     });
   });
 
+  it("should warn and skip sync when shared code cannot be read", () => {
+    const sharedCodeError = new Error("missing shared operator");
+    const consoleWarnSpy = vitest.spyOn(console, "warn").mockImplementation(() => undefined);
+    graphMock.getSharedOperatorType.mockImplementation(() => {
+      throw sharedCodeError;
+    });
+
+    try {
+      service.syncStructureFromCode(operatorId);
+
+      expect(parserServiceMock.parse).not.toHaveBeenCalled();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "Unable to read Python UDF code from shared operator properties.",
+        sharedCodeError
+      );
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+  });
+
   it("should debounce YText changes and clean up the observer", () => {
     vitest.useFakeTimers();
     try {

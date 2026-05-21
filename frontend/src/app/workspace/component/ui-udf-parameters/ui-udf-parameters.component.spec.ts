@@ -33,28 +33,33 @@ describe("UiUdfParametersComponent", () => {
     const nameControl = new FormControl("threshold");
     const typeControl = new FormControl("double");
 
-    const valueField: FormlyFieldConfig = { key: "value", formControl: valueControl };
-    const nameField: FormlyFieldConfig = { key: "attributeName", formControl: nameControl };
-    const typeField: FormlyFieldConfig = { key: "attributeType", formControl: typeControl };
-    const rowField: FormlyFieldConfig = {
-      fieldGroup: [
-        valueField,
-        {
-          key: "attribute",
-          fieldGroup: [nameField, typeField],
-        },
-      ],
-    };
+    const rowField = rowConfig([
+      { key: "value", formControl: valueControl },
+      { key: "attributeName", formControl: nameControl },
+      { key: "attributeType", formControl: typeControl },
+    ]);
 
-    (component as any).field = { fieldGroup: [rowField] } as FormlyFieldConfig;
+    (component as any).field = { model: [{}], fieldGroup: [rowField] } as FormlyFieldConfig;
 
-    component.ngOnInit();
+    component.onPopulate((component as any).field);
 
     // templateOptions is deprecated, but some existing Formly wrappers still read it.
     [
-      { column: component.fieldColumns[0], field: valueField, control: valueControl },
-      { column: component.fieldColumns[1], field: nameField, control: nameControl },
-      { column: component.fieldColumns[2], field: typeField, control: typeControl },
+      {
+        column: component.fieldColumns[0],
+        field: component.getColumnField(rowField, component.fieldColumns[0]),
+        control: valueControl,
+      },
+      {
+        column: component.fieldColumns[1],
+        field: component.getColumnField(rowField, component.fieldColumns[1]),
+        control: nameControl,
+      },
+      {
+        column: component.fieldColumns[2],
+        field: component.getColumnField(rowField, component.fieldColumns[2]),
+        control: typeControl,
+      },
     ].forEach(({ column, field, control }) => {
       expect(component.getColumnField(rowField, column)).toBe(field);
       const disabled = column.disabled;
@@ -63,4 +68,50 @@ describe("UiUdfParametersComponent", () => {
       expect((control as FormControl).disabled).toBe(disabled);
     });
   });
+
+  it("should apply disabled state to rows generated from the field array template", () => {
+    const field: FormlyFieldConfig = {
+      model: [{ value: "42", attribute: { attributeName: "threshold", attributeType: "double" } }],
+      fieldArray: rowConfig([{ key: "value" }, { key: "attributeName" }, { key: "attributeType" }]),
+      fieldGroup: [],
+    };
+
+    component.onPopulate(field);
+
+    const generatedRow = field.fieldGroup?.[0] as FormlyFieldConfig;
+    const valueControl = new FormControl({ value: "42", disabled: true });
+    const nameControl = new FormControl("threshold");
+    const typeControl = new FormControl("double");
+
+    [
+      { column: component.fieldColumns[0], control: valueControl },
+      { column: component.fieldColumns[1], control: nameControl },
+      { column: component.fieldColumns[2], control: typeControl },
+    ].forEach(({ column, control }) => {
+      const columnField = component.getColumnField(generatedRow, column) as FormlyFieldConfig;
+      Object.assign(columnField, { formControl: control });
+      columnField.hooks?.onInit?.(columnField);
+
+      expect(columnField.props?.disabled).toBe(column.disabled);
+      expect((columnField as any).templateOptions?.disabled).toBe(column.disabled);
+      expect(control.disabled).toBe(column.disabled);
+    });
+  });
 });
+
+function rowConfig(fields: ReadonlyArray<{ key: string; formControl?: FormControl }>): FormlyFieldConfig {
+  const [valueField, nameField, typeField] = fields.map(field => ({
+    key: field.key,
+    formControl: field.formControl,
+  }));
+
+  return {
+    fieldGroup: [
+      valueField,
+      {
+        key: "attribute",
+        fieldGroup: [nameField, typeField],
+      },
+    ],
+  };
+}
