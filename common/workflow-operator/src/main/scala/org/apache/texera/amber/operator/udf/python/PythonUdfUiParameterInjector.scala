@@ -19,7 +19,6 @@
 package org.apache.texera.amber.operator.udf.python
 
 import org.apache.texera.amber.core.tuple.{Attribute, AttributeType}
-import org.apache.texera.amber.pybuilder.PyStringTypes.{EncodableString, EncodableStringFactory}
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder.PythonTemplateBuilderStringContext
 
@@ -72,8 +71,7 @@ object PythonUdfUiParameterInjector {
   }
 
   private def buildInjectedParameterEntry(parameter: UiUDFParameter): PythonTemplateBuilder = {
-    val parameterName: EncodableString = EncodableStringFactory(parameter.attribute.getName)
-    pyb"$parameterName: ${parameter.value}"
+    pyb"${parameter.attribute.getName}: ${parameter.value}"
   }
 
   private def buildInjectedParametersMap(
