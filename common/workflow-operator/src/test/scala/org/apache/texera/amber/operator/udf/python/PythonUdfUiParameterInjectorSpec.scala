@@ -24,16 +24,25 @@ import org.scalatest.matchers.should.Matchers
 
 class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
 
-  private def createParameter(
-      key: String,
+  private def uiParameter(
+      attributeName: String,
       attributeType: AttributeType,
       value: String
   ): UiUDFParameter = {
     val parameter = new UiUDFParameter
-    parameter.attribute = new Attribute(key, attributeType)
+    parameter.attribute = new Attribute(attributeName, attributeType)
     parameter.value = value
     parameter
   }
+
+  private def inject(parameters: UiUDFParameter*): String =
+    PythonUdfUiParameterInjector.inject(baseUdfCode, parameters.toList)
+
+  private def inject(code: String, parameters: UiUDFParameter*): String =
+    PythonUdfUiParameterInjector.inject(code, parameters.toList)
+
+  private def decoderCallCount(code: String): Int =
+    code.sliding("self.decode_python_template".length).count(_ == "self.decode_python_template")
 
   private val baseUdfCode: String =
     """from pytexera import *
@@ -48,8 +57,8 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
       |        yield tuple_
       |""".stripMargin
 
-  it should "return encoded user code unchanged when there are no ui parameters" in {
-    val injectedCode = PythonUdfUiParameterInjector.inject(baseUdfCode, Nil)
+  it should "return encoded user code unchanged when there are no UI parameters" in {
+    val injectedCode = inject()
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
     injectedCode should include("""print("open")""")
@@ -58,18 +67,14 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     injectedCode should not include ("import typing")
   }
 
-  it should "inject ui parameter hook into supported UDF class using Dict and Any from pytexera" in {
-    val injectedCode = PythonUdfUiParameterInjector.inject(
-      baseUdfCode,
-      List(
-        createParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z")
-      )
-    )
+  it should "inject UI parameter hook into supported UDF class using Dict and Any from pytexera" in {
+    val injectedCode = inject(uiParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z"))
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
     injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
     injectedCode should include("return {")
     injectedCode should include("self.decode_python_template")
+    decoderCallCount(injectedCode) shouldBe 2
     injectedCode should include("""print("open")""")
     injectedCode should not include ("import typing")
     injectedCode should not include ("typing.Dict")
@@ -93,10 +98,8 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
         |    return "outside"
         |""".stripMargin
 
-    val injectedCode = PythonUdfUiParameterInjector.inject(
-      udfCodeWithSiblingDefinition,
-      List(createParameter("k", AttributeType.STRING, "v"))
-    )
+    val injectedCode =
+      inject(udfCodeWithSiblingDefinition, uiParameter("k", AttributeType.STRING, "v"))
 
     val hookIndex = injectedCode.indexOf("def _texera_injected_ui_parameters(self)")
     val processTupleIndex =
@@ -108,20 +111,17 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     helperIndex should be > hookIndex
   }
 
-  it should "preserve multiple ui parameters in the injected map" in {
-    val injectedCode = PythonUdfUiParameterInjector.inject(
-      baseUdfCode,
-      List(
-        createParameter("param1", AttributeType.DOUBLE, "12.5"),
-        createParameter("param2", AttributeType.INTEGER, "1"),
-        createParameter("param3", AttributeType.STRING, "Hola"),
-        createParameter("param4", AttributeType.TIMESTAMP, "2026-02-28T03:15:00Z")
-      )
+  it should "preserve multiple UI parameters in the injected map" in {
+    val injectedCode = inject(
+      uiParameter("param1", AttributeType.DOUBLE, "12.5"),
+      uiParameter("param2", AttributeType.INTEGER, "1"),
+      uiParameter("param3", AttributeType.STRING, "Hola"),
+      uiParameter("param4", AttributeType.TIMESTAMP, "2026-02-28T03:15:00Z")
     )
 
     injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
     injectedCode should include("self.decode_python_template")
-    injectedCode.count(_ == ':') should be > 0
+    decoderCallCount(injectedCode) shouldBe 8
     injectedCode should not include ("import typing")
   }
 
@@ -131,44 +131,32 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     invalidParameter.value = "anything"
 
     val exception = the[RuntimeException] thrownBy {
-      PythonUdfUiParameterInjector.inject(baseUdfCode, List(invalidParameter))
+      inject(invalidParameter)
     }
 
     exception.getMessage should include("UiParameter attribute is required")
   }
 
-  it should "throw when a key is declared with conflicting attribute types" in {
-    val conflictingParameters = List(
-      createParameter("date", AttributeType.STRING, "2024-01-01"),
-      createParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z")
-    )
-
+  it should "throw when a UI parameter name is duplicated" in {
     val exception = the[RuntimeException] thrownBy {
-      PythonUdfUiParameterInjector.inject(baseUdfCode, conflictingParameters)
-    }
-
-    exception.getMessage should include("UiParameter key 'date' has multiple types")
-  }
-
-  it should "throw when a ui parameter uses a binary type" in {
-    val exception = the[RuntimeException] thrownBy {
-      PythonUdfUiParameterInjector.inject(
-        baseUdfCode,
-        List(createParameter("payload", AttributeType.BINARY, "68656c6c6f"))
+      inject(
+        uiParameter("date", AttributeType.STRING, "2024-01-01"),
+        uiParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z")
       )
     }
 
-    exception.getMessage should include("UiParameter type 'BINARY' is not supported")
+    exception.getMessage should include("UiParameter name 'date' is declared more than once")
   }
 
-  it should "allow duplicate keys when the attribute type is the same" in {
-    val sameTypeParameters = List(
-      createParameter("date", AttributeType.TIMESTAMP, "2024-01-01"),
-      createParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z")
-    )
+  Seq(AttributeType.BINARY, AttributeType.LARGE_BINARY).foreach { unsupportedType =>
+    it should s"throw when a UI parameter uses ${unsupportedType.name()} type" in {
+      val exception = the[RuntimeException] thrownBy {
+        inject(uiParameter("payload", unsupportedType, "68656c6c6f"))
+      }
 
-    noException should be thrownBy {
-      PythonUdfUiParameterInjector.inject(baseUdfCode, sameTypeParameters)
+      exception.getMessage should include(
+        s"UiParameter type '${unsupportedType.name()}' is not supported"
+      )
     }
   }
 
@@ -185,10 +173,7 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
         |""".stripMargin
 
     val exception = the[RuntimeException] thrownBy {
-      PythonUdfUiParameterInjector.inject(
-        udfWithReservedHook,
-        List(createParameter("k", AttributeType.STRING, "v"))
-      )
+      inject(udfWithReservedHook, uiParameter("k", AttributeType.STRING, "v"))
     }
 
     exception.getMessage should include(
@@ -205,10 +190,7 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
         |        pass
         |""".stripMargin
 
-    val injectedCode = PythonUdfUiParameterInjector.inject(
-      nonSupportedCode,
-      List(createParameter("k", AttributeType.STRING, "v"))
-    )
+    val injectedCode = inject(nonSupportedCode, uiParameter("k", AttributeType.STRING, "v"))
 
     injectedCode should not include ("_texera_injected_ui_parameters")
     injectedCode should include("class SomethingElse:")

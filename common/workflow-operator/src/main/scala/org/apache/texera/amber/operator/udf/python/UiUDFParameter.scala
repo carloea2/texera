@@ -27,6 +27,12 @@ import org.apache.texera.amber.pybuilder.PyStringTypes.EncodableString
 import javax.validation.Valid
 import javax.validation.constraints.NotNull
 
+/**
+  * Serialized operator property for one Python UDF UI parameter.
+  *
+  * `attribute` carries the inferred parameter name and type. `value` is user-entered text and is marked as
+  * [[EncodableString]] so Python code generation decodes it at runtime instead of embedding raw text into generated code.
+  */
 class UiUDFParameter {
 
   @JsonProperty(required = true)
