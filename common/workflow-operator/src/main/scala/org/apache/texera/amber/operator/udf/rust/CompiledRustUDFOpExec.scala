@@ -23,12 +23,18 @@ import org.apache.texera.amber.core.executor.OperatorExecutor
 import org.apache.texera.amber.core.tuple.{Attribute, AttributeType, Schema, Tuple, TupleLike}
 import org.apache.texera.amber.util.JSONUtils.objectMapper
 
-import java.io.{BufferedWriter, IOException, OutputStreamWriter}
+import java.io.{
+  BufferedReader,
+  BufferedWriter,
+  IOException,
+  InputStreamReader,
+  OutputStreamWriter
+}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.sql.Timestamp
 import java.util.Base64
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit, TimeoutException}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.SeqHasAsJava
 
@@ -37,12 +43,23 @@ class CompiledRustUDFOpExec(descString: String) extends OperatorExecutor {
     objectMapper.readValue(descString, classOf[CompiledRustUDFOpDesc])
   private var executablePath: Path = _
   private var executionMode: String = _
+  private var process: Process = _
+  private var processInput: BufferedWriter = _
+  private var processOutput: BufferedReader = _
+  private var stderrPath: Path = _
+  private var schemaInitialized = false
+  private val readExecutor = Executors.newSingleThreadExecutor { runnable =>
+    val thread = new Thread(runnable, "compiled-rust-udf-reader")
+    thread.setDaemon(true)
+    thread
+  }
   private val pendingTuples = ArrayBuffer.empty[Tuple]
 
   override def open(): Unit = {
     desc.validateBasicConfig()
     executionMode = desc.normalizedExecutionMode
     executablePath = CompiledRustUDFCompiler.compile(desc.compileRequest)
+    startWorkerProcess()
   }
 
   override def processTuple(tuple: Tuple, port: Int): Iterator[TupleLike] = {
@@ -52,7 +69,11 @@ class CompiledRustUDFOpExec(descString: String) extends OperatorExecutor {
 
   override def onFinish(port: Int): Iterator[TupleLike] = flushPendingTuples()
 
-  override def close(): Unit = pendingTuples.clear()
+  override def close(): Unit = {
+    pendingTuples.clear()
+    closeWorkerProcess()
+    readExecutor.shutdownNow()
+  }
 
   private def shouldFlush: Boolean =
     executionMode match {
@@ -97,70 +118,170 @@ class CompiledRustUDFOpExec(descString: String) extends OperatorExecutor {
       inputAttributes: List[Attribute],
       rows: Seq[List[String]]
   ): Seq[Array[Any]] = {
-    val executable = ensureExecutable()
-    val stdoutPath = Files.createTempFile("texera-rust-udf-runtime", ".out")
-    val stderrPath = Files.createTempFile("texera-rust-udf-runtime", ".err")
+    ensureWorkerReady(inputAttributes)
     try {
-      val process =
-        try {
-          new ProcessBuilder(Seq(executable.toString).asJava)
-            .redirectOutput(stdoutPath.toFile)
-            .redirectError(stderrPath.toFile)
-            .start()
-        } catch {
-          case e: IOException =>
-            throw runtimeException(
-              s"Unable to start compiled Rust UDF executable '$executable': ${e.getMessage}",
-              e
-            )
+      processInput.write(executionMode)
+      processInput.newLine()
+      processInput.write(rows.size.toString)
+      processInput.newLine()
+      rows.foreach { values =>
+        processInput.write(values.mkString("\t"))
+        processInput.newLine()
+      }
+      processInput.flush()
+
+      val outputRowCount = parseOutputRowCount(readProtocolLine())
+      (0 until outputRowCount).map { _ =>
+        val line = readProtocolLine()
+        if (line == null) {
+          throw workerExitedException("Compiled Rust UDF worker exited while streaming output rows.")
         }
-
-      val writer = new BufferedWriter(
-        new OutputStreamWriter(process.getOutputStream, StandardCharsets.UTF_8)
-      )
-      try {
-        writer.write(inputAttributes.size.toString)
-        writer.newLine()
-        writer.write(inputAttributes.map(attribute => base64(attribute.getName)).mkString("\t"))
-        writer.newLine()
-        writer.write(inputAttributes.map(attribute => typeTag(attribute.getType)).mkString("\t"))
-        writer.newLine()
-        rows.foreach { values =>
-          writer.write(values.mkString("\t"))
-          writer.newLine()
-        }
-      } finally {
-        writer.close()
+        parseOutputRow(line)
       }
-
-      if (!process.waitFor(desc.timeoutMs.toLong, TimeUnit.MILLISECONDS)) {
-        process.destroyForcibly()
-        throw runtimeException(s"Timed out after ${desc.timeoutMs} ms.")
-      }
-
-      val stderr = Files.readString(stderrPath, StandardCharsets.UTF_8).trim
-      if (process.exitValue() != 0) {
-        val message =
-          if (stderr.nonEmpty) stderr else s"Executable exited with status ${process.exitValue()}."
-        throw runtimeException(message)
-      }
-
-      Files
-        .readString(stdoutPath, StandardCharsets.UTF_8)
-        .replace("\r\n", "\n")
-        .replace('\r', '\n')
-        .split("\n", -1)
-        .toSeq match {
-        case Seq("") => Seq.empty
-        case lines if lines.lastOption.contains("") =>
-          lines.dropRight(1).map(parseOutputRow).toList
-        case lines => lines.map(parseOutputRow).toList
-      }
-    } finally {
-      Files.deleteIfExists(stdoutPath)
-      Files.deleteIfExists(stderrPath)
+    } catch {
+      case e: IOException =>
+        throw runtimeException(s"Unable to communicate with compiled Rust UDF worker: ${e.getMessage}", e)
     }
   }
+
+  private def ensureWorkerReady(inputAttributes: List[Attribute]): Unit = {
+    ensureExecutable()
+    if (process == null) {
+      startWorkerProcess()
+    } else if (!process.isAlive) {
+      throw workerExitedException("Compiled Rust UDF worker is not running.")
+    }
+    if (!schemaInitialized) {
+      try {
+        processInput.write(inputAttributes.size.toString)
+        processInput.newLine()
+        processInput.write(inputAttributes.map(attribute => base64(attribute.getName)).mkString("\t"))
+        processInput.newLine()
+        processInput.write(inputAttributes.map(attribute => typeTag(attribute.getType)).mkString("\t"))
+        processInput.newLine()
+        processInput.flush()
+        schemaInitialized = true
+      } catch {
+        case e: IOException =>
+          throw runtimeException(
+            s"Unable to initialize compiled Rust UDF worker schema: ${e.getMessage}",
+            e
+          )
+      }
+    }
+  }
+
+  private def startWorkerProcess(): Unit = {
+    val executable = ensureExecutable()
+    closeWorkerProcess()
+    stderrPath = Files.createTempFile("texera-rust-udf-runtime", ".err")
+    try {
+      process = new ProcessBuilder(Seq(executable.toString).asJava)
+        .redirectError(stderrPath.toFile)
+        .start()
+      processInput = new BufferedWriter(
+        new OutputStreamWriter(process.getOutputStream, StandardCharsets.UTF_8)
+      )
+      processOutput = new BufferedReader(
+        new InputStreamReader(process.getInputStream, StandardCharsets.UTF_8)
+      )
+      schemaInitialized = false
+    } catch {
+      case e: IOException =>
+        throw runtimeException(
+          s"Unable to start compiled Rust UDF executable '$executable': ${e.getMessage}",
+          e
+        )
+    }
+  }
+
+  private def closeWorkerProcess(): Unit = {
+    Option(processInput).foreach(writer =>
+      try writer.close()
+      catch { case _: IOException => () }
+    )
+    Option(processOutput).foreach(reader =>
+      try reader.close()
+      catch { case _: IOException => () }
+    )
+    if (process != null && process.isAlive) {
+      try {
+        if (!process.waitFor(250, TimeUnit.MILLISECONDS)) {
+          process.destroyForcibly()
+        }
+      } catch {
+        case _: InterruptedException =>
+          Thread.currentThread().interrupt()
+          process.destroyForcibly()
+      }
+    }
+    Option(stderrPath).foreach(path => Files.deleteIfExists(path))
+    process = null
+    processInput = null
+    processOutput = null
+    stderrPath = null
+    schemaInitialized = false
+  }
+
+  private def readProtocolLine(): String = {
+    val future = readExecutor.submit(new Callable[String] {
+      override def call(): String = processOutput.readLine()
+    })
+    try {
+      val line = future.get(desc.timeoutMs.toLong, TimeUnit.MILLISECONDS)
+      if (line == null) {
+        throw workerExitedException("Compiled Rust UDF worker exited before producing output.")
+      }
+      line
+    } catch {
+      case _: TimeoutException =>
+        future.cancel(true)
+        destroyWorkerProcess()
+        throw runtimeException(s"Timed out after ${desc.timeoutMs} ms.")
+      case e: ExecutionException =>
+        throw runtimeException(
+          s"Unable to read compiled Rust UDF worker output: ${Option(e.getCause).map(_.getMessage).getOrElse(e.getMessage)}",
+          e.getCause
+        )
+      case e: InterruptedException =>
+        Thread.currentThread().interrupt()
+        throw runtimeException("Interrupted while waiting for compiled Rust UDF worker output.", e)
+    }
+  }
+
+  private def parseOutputRowCount(line: String): Int =
+    try {
+      Integer.parseInt(line)
+    } catch {
+      case e: NumberFormatException =>
+        throw runtimeException(
+          s"Invalid Rust UDF protocol response '$line'. Avoid writing to stdout outside process_tuple/process_batch/process_table; write logs to stderr instead.",
+          e
+        )
+    }
+
+  private def destroyWorkerProcess(): Unit =
+    if (process != null && process.isAlive) {
+      process.destroyForcibly()
+    }
+
+  private def workerExitedException(message: String): RuntimeException = {
+    val stderr = readWorkerStderr
+    val status =
+      if (process != null && !process.isAlive) s" Exit status: ${process.exitValue()}." else ""
+    runtimeException(
+      Seq(message + status, stderr.trim)
+        .filter(_.nonEmpty)
+        .mkString("\n")
+    )
+  }
+
+  private def readWorkerStderr: String =
+    if (stderrPath != null && Files.exists(stderrPath)) {
+      Files.readString(stderrPath, StandardCharsets.UTF_8)
+    } else {
+      ""
+    }
 
   private def parseOutputRow(line: String): Array[Any] = {
     val tokens = if (line.isEmpty) Array.empty[String] else line.split("\t", -1)

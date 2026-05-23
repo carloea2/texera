@@ -38,6 +38,7 @@ case class CompiledRustUDFCompileRequest(
 object CompiledRustUDFCompiler {
   private val CacheRoot =
     Paths.get(System.getProperty("java.io.tmpdir"), "texera-compiled-rust-udf")
+  private val WrapperProtocolVersion = "persistent-worker-v1"
 
   def compile(request: CompiledRustUDFCompileRequest): Path = {
     val compiler = sys.env.getOrElse("RUSTC", "rustc")
@@ -49,7 +50,8 @@ object CompiledRustUDFCompiler {
         request.retainInputColumns.toString,
         request.outputColumns.mkString("\u0000"),
         request.compilerFlags,
-        compilerVersionText
+        compilerVersionText,
+        WrapperProtocolVersion
       ).mkString("\u0001")
     )
     val cacheDir = CacheRoot.resolve(cacheKey)
@@ -142,7 +144,7 @@ object CompiledRustUDFCompiler {
   }
 
   private def generatedSource(code: String): String =
-    s"""use std::io::{self, BufRead};
+    s"""use std::io::{self, BufRead, Write};
        |use std::process;
        |
        |pub mod texera {
@@ -582,33 +584,59 @@ object CompiledRustUDFCompiler {
        |        column_types.push(texera::type_from_tag(type_tag)?);
        |    }
        |
-       |    let mut table = Vec::new();
-       |    for line in lines {
-       |        let line = line.map_err(|error| error.to_string())?;
-       |        let fields = texera::split_tab(&line);
-       |        if fields.len() != column_count {
-       |            return Err(format!(
-       |                "Expected {} input values, got {}",
-       |                column_count,
-       |                fields.len()
-       |            ));
-       |        }
-       |
-       |        let mut values = Vec::with_capacity(column_count);
-       |        for field in fields {
-       |            values.push(texera::parse_wire_value(&field)?);
-       |        }
-       |        table.push(texera::Tuple::new(&column_names, &column_types, values));
-       |    }
-       |
        |    let mut op = TexeraUDFOperator::default();
-       |    let output = texera::UDFOperator::process_table(&mut op, &table, 0)?;
-       |    for tuple_like in output {
-       |        let encoded = tuple_like
-       |            .iter()
-       |            .map(texera::serialize_wire_value)
-       |            .collect::<Vec<_>>();
-       |        println!("{}", encoded.join("\\t"));
+       |    let stdout = io::stdout();
+       |    let mut protocol_out = stdout.lock();
+       |
+       |    while let Some(mode_line) = lines.next() {
+       |        let mode = mode_line.map_err(|error| error.to_string())?;
+       |        let row_count_line = read_required_line(&mut lines, "Missing Rust UDF frame row count")?;
+       |        let row_count = row_count_line
+       |            .parse::<usize>()
+       |            .map_err(|error| error.to_string())?;
+       |
+       |        let mut table = Vec::with_capacity(row_count);
+       |        for _ in 0..row_count {
+       |            let line = read_required_line(&mut lines, "Missing Rust UDF input row")?;
+       |            let fields = texera::split_tab(&line);
+       |            if fields.len() != column_count {
+       |                return Err(format!(
+       |                    "Expected {} input values, got {}",
+       |                    column_count,
+       |                    fields.len()
+       |                ));
+       |            }
+       |
+       |            let mut values = Vec::with_capacity(column_count);
+       |            for field in fields {
+       |                values.push(texera::parse_wire_value(&field)?);
+       |            }
+       |            table.push(texera::Tuple::new(&column_names, &column_types, values));
+       |        }
+       |
+       |        let output = match mode.as_str() {
+       |            "tuple" => {
+       |                let mut output = Vec::new();
+       |                for tuple in &table {
+       |                    output.extend(texera::UDFOperator::process_tuple(&mut op, tuple, 0)?);
+       |                }
+       |                output
+       |            }
+       |            "batch" => texera::UDFOperator::process_batch(&mut op, &table, 0)?,
+       |            "table" => texera::UDFOperator::process_table(&mut op, &table, 0)?,
+       |            _ => return Err(format!("unknown Rust UDF execution mode: {}", mode)),
+       |        };
+       |
+       |        writeln!(&mut protocol_out, "{}", output.len()).map_err(|error| error.to_string())?;
+       |        for tuple_like in output {
+       |            let encoded = tuple_like
+       |                .iter()
+       |                .map(texera::serialize_wire_value)
+       |                .collect::<Vec<_>>();
+       |            writeln!(&mut protocol_out, "{}", encoded.join("\\t"))
+       |                .map_err(|error| error.to_string())?;
+       |        }
+       |        protocol_out.flush().map_err(|error| error.to_string())?;
        |    }
        |    Ok(())
        |}

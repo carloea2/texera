@@ -122,6 +122,20 @@ class CompiledRustUDFOpDescSpec extends AnyFlatSpec with Matchers {
       |}
       |type TexeraUDFOperator = RetainOnlyOperator;""".stripMargin
 
+  private val statefulCode =
+    """#[derive(Default)]
+      |struct StatefulOperator {
+      |    seen: i32,
+      |}
+      |
+      |impl texera::UDFOperator for StatefulOperator {
+      |    fn process_tuple(&mut self, _tuple: &texera::Tuple, _port: i32) -> Result<texera::TupleOutput, String> {
+      |        self.seen += 1;
+      |        Ok(vec![vec![texera::Value::double_value(self.seen as f64)]])
+      |    }
+      |}
+      |type TexeraUDFOperator = StatefulOperator;""".stripMargin
+
   private def compileRequest(
       source: String = validCode,
       columns: List[String] = List("age", "income")
@@ -256,6 +270,28 @@ class CompiledRustUDFOpDescSpec extends AnyFlatSpec with Matchers {
     val output = enforceOutput(exec.processTuple(tuple(20, 50000.0), 0).next(), outputSchema)
 
     output.getField[Double]("score") shouldBe (50000.0 / 21.0 +- 0.000001)
+  }
+
+  it should "reuse the compiled worker process across tuple calls" in {
+    assume(CompiledRustUDFCompiler.isCompilerAvailable)
+
+    val desc = configuredDesc
+    desc.code = statefulCode
+    desc.outputColumns = List(new Attribute("seen", AttributeType.DOUBLE))
+    desc.executionMode = CompiledRustUDFOpDesc.TupleMode
+    val exec = new CompiledRustUDFOpExec(objectMapper.writeValueAsString(desc))
+    exec.open()
+
+    try {
+      val outputSchema = numericSchema.add(new Attribute("seen", AttributeType.DOUBLE))
+      val first = enforceOutput(exec.processTuple(tuple(20, 50000.0), 0).next(), outputSchema)
+      val second = enforceOutput(exec.processTuple(tuple(40, 90000.0), 0).next(), outputSchema)
+
+      first.getField[Double]("seen") shouldBe 1.0
+      second.getField[Double]("seen") shouldBe 2.0
+    } finally {
+      exec.close()
+    }
   }
 
   it should "support the Rust process_batch API" in {
