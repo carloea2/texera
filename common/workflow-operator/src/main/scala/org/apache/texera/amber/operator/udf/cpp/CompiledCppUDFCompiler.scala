@@ -38,6 +38,7 @@ case class CompiledCppUDFCompileRequest(
 object CompiledCppUDFCompiler {
   private val CacheRoot =
     Paths.get(System.getProperty("java.io.tmpdir"), "texera-compiled-cpp-udf")
+  private val WrapperProtocolVersion = "persistent-worker-v1"
 
   def compile(request: CompiledCppUDFCompileRequest): Path = {
     val compiler = sys.env.getOrElse("CXX", "g++")
@@ -49,7 +50,8 @@ object CompiledCppUDFCompiler {
         request.retainInputColumns.toString,
         request.outputColumns.mkString("\u0000"),
         request.compilerFlags,
-        compilerVersionText
+        compilerVersionText,
+        WrapperProtocolVersion
       ).mkString("\u0001")
     )
     val cacheDir = CacheRoot.resolve(cacheKey)
@@ -564,6 +566,9 @@ object CompiledCppUDFCompiler {
        |$code
        |
        |int main() {
+       |  std::streambuf* protocol_buffer = std::cout.rdbuf();
+       |  std::ostream protocol_out(protocol_buffer);
+       |
        |  try {
        |    std::string column_count_line;
        |    if (!std::getline(std::cin, column_count_line)) {
@@ -599,37 +604,84 @@ object CompiledCppUDFCompiler {
        |      column_types.push_back(texera::type_from_tag(encoded_types[i][0]));
        |    }
        |
-       |    texera::Table table;
-       |    std::string line;
-       |    while (std::getline(std::cin, line)) {
-       |      std::vector<std::string> fields = texera::split_tab(line);
-       |      if (fields.size() != column_count) {
-       |        std::cerr << "Expected " << column_count << " input values, got " << fields.size()
-       |                  << std::endl;
+       |    TexeraUDFOperator op;
+       |    std::string mode;
+       |    while (std::getline(std::cin, mode)) {
+       |      std::string row_count_line;
+       |      if (!std::getline(std::cin, row_count_line)) {
+       |        std::cerr << "Missing C++ UDF frame row count" << std::endl;
        |        return 5;
        |      }
-       |      std::vector<texera::Value> values;
-       |      values.reserve(column_count);
-       |      for (const std::string& field : fields) {
-       |        values.push_back(texera::parse_wire_value(field));
-       |      }
-       |      table.emplace_back(column_names, column_types, std::move(values));
-       |    }
+       |      const std::size_t row_count =
+       |          static_cast<std::size_t>(std::stoul(row_count_line));
        |
-       |    TexeraUDFOperator op;
-       |    texera::TableLike output = op.process_table(table, 0);
-       |    for (const auto& tuple_like : output) {
-       |      for (std::size_t i = 0; i < tuple_like.size(); ++i) {
-       |        if (i > 0) {
-       |          std::cout << '\\t';
+       |      texera::Table table;
+       |      table.reserve(row_count);
+       |      for (std::size_t row = 0; row < row_count; ++row) {
+       |        std::string line;
+       |        if (!std::getline(std::cin, line)) {
+       |          std::cerr << "Missing C++ UDF input row" << std::endl;
+       |          return 6;
        |        }
-       |        std::cout << texera::serialize_wire_value(tuple_like[i]);
+       |        std::vector<std::string> fields = texera::split_tab(line);
+       |        if (fields.size() != column_count) {
+       |          std::cerr << "Expected " << column_count << " input values, got " << fields.size()
+       |                    << std::endl;
+       |          return 7;
+       |        }
+       |        std::vector<texera::Value> values;
+       |        values.reserve(column_count);
+       |        for (const std::string& field : fields) {
+       |          values.push_back(texera::parse_wire_value(field));
+       |        }
+       |        table.emplace_back(column_names, column_types, std::move(values));
        |      }
-       |      std::cout << std::endl;
+       |
+       |      texera::TableLike output;
+       |      std::ostringstream captured_stdout;
+       |      std::streambuf* previous_stdout = std::cout.rdbuf(captured_stdout.rdbuf());
+       |      try {
+       |        if (mode == "tuple") {
+       |          for (const auto& tuple : table) {
+       |            texera::TupleOutput tuple_output = op.process_tuple(tuple, 0);
+       |            output.insert(output.end(), tuple_output.begin(), tuple_output.end());
+       |          }
+       |        } else if (mode == "batch") {
+       |          output = op.process_batch(table, 0);
+       |        } else if (mode == "table") {
+       |          output = op.process_table(table, 0);
+       |        } else {
+       |          throw std::runtime_error("unknown C++ UDF execution mode: " + mode);
+       |        }
+       |      } catch (...) {
+       |        std::cout.rdbuf(previous_stdout);
+       |        throw;
+       |      }
+       |      std::cout.rdbuf(previous_stdout);
+       |
+       |      const std::string user_stdout = captured_stdout.str();
+       |      if (!user_stdout.empty()) {
+       |        std::cerr << user_stdout;
+       |        if (user_stdout.back() != '\\n') {
+       |          std::cerr << std::endl;
+       |      }
+       |      }
+       |
+       |      protocol_out << output.size() << '\\n';
+       |      for (const auto& tuple_like : output) {
+       |        for (std::size_t i = 0; i < tuple_like.size(); ++i) {
+       |          if (i > 0) {
+       |            protocol_out << '\\t';
+       |          }
+       |          protocol_out << texera::serialize_wire_value(tuple_like[i]);
+       |        }
+       |        protocol_out << '\\n';
+       |      }
+       |      protocol_out.flush();
        |    }
        |  } catch (const std::exception& e) {
        |    std::cerr << "C++ UDF threw an exception: " << e.what() << std::endl;
-       |    return 6;
+       |    return 8;
        |  }
        |  return 0;
        |}

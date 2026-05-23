@@ -110,6 +110,18 @@ class CompiledCppUDFOpDescSpec extends AnyFlatSpec with Matchers {
       |};
       |using TexeraUDFOperator = RetainOnlyOperator;""".stripMargin
 
+  private val statefulCode =
+    """class StatefulOperator : public texera::UDFOperator {
+      |public:
+      |    int seen = 0;
+      |
+      |    texera::TupleOutput process_tuple(const texera::Tuple& tuple, int port) override {
+      |        seen += 1;
+      |        return { texera::TupleLike{ texera::Value::double_value(seen) } };
+      |    }
+      |};
+      |using TexeraUDFOperator = StatefulOperator;""".stripMargin
+
   private def compileRequest(
       source: String = validCode,
       columns: List[String] = List("age", "income")
@@ -241,6 +253,28 @@ class CompiledCppUDFOpDescSpec extends AnyFlatSpec with Matchers {
     val output = enforceOutput(exec.processTuple(tuple(20, 50000.0), 0).next(), outputSchema)
 
     output.getField[Double]("score") shouldBe (50000.0 / 21.0 +- 0.000001)
+  }
+
+  it should "reuse the compiled worker process across tuple calls" in {
+    assume(CompiledCppUDFCompiler.isCompilerAvailable)
+
+    val desc = configuredDesc
+    desc.code = statefulCode
+    desc.outputColumns = List(new Attribute("seen", AttributeType.DOUBLE))
+    desc.executionMode = CompiledCppUDFOpDesc.TupleMode
+    val exec = new CompiledCppUDFOpExec(objectMapper.writeValueAsString(desc))
+    exec.open()
+
+    try {
+      val outputSchema = numericSchema.add(new Attribute("seen", AttributeType.DOUBLE))
+      val first = enforceOutput(exec.processTuple(tuple(20, 50000.0), 0).next(), outputSchema)
+      val second = enforceOutput(exec.processTuple(tuple(40, 90000.0), 0).next(), outputSchema)
+
+      first.getField[Double]("seen") shouldBe 1.0
+      second.getField[Double]("seen") shouldBe 2.0
+    } finally {
+      exec.close()
+    }
   }
 
   it should "support the C++ process_batch API" in {
