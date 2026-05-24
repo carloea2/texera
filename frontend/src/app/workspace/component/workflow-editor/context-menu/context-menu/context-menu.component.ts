@@ -31,6 +31,7 @@ import { NzMenuDirective, NzMenuItemComponent } from "ng-zorro-antd/menu";
 import { NgIf } from "@angular/common";
 import { ɵNzTransitionPatchDirective } from "ng-zorro-antd/core/transition-patch";
 import { NzIconDirective } from "ng-zorro-antd/icon";
+import { JointGraphWrapper } from "src/app/workspace/service/workflow-graph/model/joint-graph-wrapper";
 
 @UntilDestroy()
 @Component({
@@ -90,6 +91,13 @@ export class ContextMenuComponent {
     return this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedLinkIDs().length > 0;
   }
 
+  public hasHighlightedMacroNode(): boolean {
+    return this.workflowActionService
+      .getJointGraphWrapper()
+      .getCurrentHighlightedOperatorIDs()
+      .some(operatorID => JointGraphWrapper.isMacroNodeID(operatorID));
+  }
+
   public onCopy(): void {
     this.operatorMenuService.saveHighlightedElements();
   }
@@ -107,7 +115,12 @@ export class ContextMenuComponent {
     // Capture all highlighted IDs before starting deletion to avoid modification during iteration
     const highlightedOperatorIDs = Array.from(
       this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()
-    );
+    ).filter(operatorID => !JointGraphWrapper.isMacroNodeID(operatorID));
+    const highlightedMacroIDs = Array.from(
+      this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()
+    )
+      .filter(operatorID => JointGraphWrapper.isMacroNodeID(operatorID))
+      .map(operatorID => JointGraphWrapper.getMacroIDFromNodeID(operatorID));
     const highlightedCommentBoxIDs = Array.from(
       this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedCommentBoxIDs()
     );
@@ -117,6 +130,8 @@ export class ContextMenuComponent {
 
     // Bundle all deletions together for proper undo/redo support
     this.workflowActionService.getTexeraGraph().bundleActions(() => {
+      this.workflowActionService.deleteMacros(highlightedMacroIDs);
+
       // Delete operators and their connected links
       this.workflowActionService.deleteOperatorsAndLinks(highlightedOperatorIDs);
 

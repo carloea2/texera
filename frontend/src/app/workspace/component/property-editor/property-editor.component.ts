@@ -45,6 +45,8 @@ import { CdkDrag, CdkDragHandle } from "@angular/cdk/drag-drop";
 import { NzSpaceCompactItemDirective } from "ng-zorro-antd/space";
 import { NzButtonComponent } from "ng-zorro-antd/button";
 import { FormlyRepeatDndComponent } from "../../../common/formly/repeat-dnd/repeat-dnd.component";
+import { JointGraphWrapper } from "../../service/workflow-graph/model/joint-graph-wrapper";
+import { MacroPropertyEditFrameComponent } from "./macro-property-edit-frame/macro-property-edit-frame.component";
 
 /**
  * PropertyEditorComponent is the panel that allows user to edit operator properties.
@@ -74,6 +76,7 @@ import { FormlyRepeatDndComponent } from "../../../common/formly/repeat-dnd/repe
     NgComponentOutlet,
     NzResizeHandlesComponent,
     FormlyRepeatDndComponent,
+    MacroPropertyEditFrameComponent,
   ],
 })
 export class PropertyEditorComponent implements OnInit, OnDestroy {
@@ -165,7 +168,15 @@ export class PropertyEditorComponent implements OnInit, OnDestroy {
         this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedCommentBoxIDs();
         const highlightedPorts = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedPortIDs();
 
-        if (highlightedOperators.length === 1 && highlightLinks.length === 0 && highlightedPorts.length === 0) {
+        if (
+          highlightedOperators.length === 1 &&
+          highlightLinks.length === 0 &&
+          highlightedPorts.length === 0 &&
+          JointGraphWrapper.isMacroNodeID(highlightedOperators[0])
+        ) {
+          this.currentComponent = MacroPropertyEditFrameComponent;
+          this.componentInputs = { macroNodeId: highlightedOperators[0] };
+        } else if (highlightedOperators.length === 1 && highlightLinks.length === 0 && highlightedPorts.length === 0) {
           this.currentComponent = OperatorPropertyEditFrameComponent;
           this.componentInputs = { currentOperatorId: highlightedOperators[0] };
         } else if (highlightedPorts.length === 1 && highlightLinks.length === 0) {

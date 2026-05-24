@@ -27,8 +27,9 @@ import { ExecuteWorkflowService } from "../../service/execute-workflow/execute-w
 import { fromJointPaperEvent, JointUIService, linkPathStrokeColor } from "../../service/joint-ui/joint-ui.service";
 import { ValidationWorkflowService } from "../../service/validation/validation-workflow.service";
 import { WorkflowActionService } from "../../service/workflow-graph/model/workflow-action.service";
+import { JointGraphWrapper } from "../../service/workflow-graph/model/joint-graph-wrapper";
 import { WorkflowStatusService } from "../../service/workflow-status/workflow-status.service";
-import { ExecutionState, OperatorState } from "../../types/execute-workflow.interface";
+import { ExecutionState, OperatorState, OperatorStatistics } from "../../types/execute-workflow.interface";
 import { LogicalPort, OperatorLink, OperatorPredicate } from "../../types/workflow-common.interface";
 import { auditTime, filter, map, takeUntil, withLatestFrom } from "rxjs/operators";
 import { UntilDestroy, untilDestroyed } from "@ngneat/until-destroy";
@@ -333,6 +334,7 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
               this.isSink(op.operatorID)
             );
           });
+        this.updateCollapsedMacroStates(status);
       });
 
     this.executeWorkflowService
@@ -355,9 +357,46 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
             .getAllOperators()
             .forEach(op => {
               this.jointUIService.changeOperatorState(this.paper, op.operatorID, operatorState);
-            });
+          });
         }
       });
+
+    this.workflowActionService
+      .getMacroVisualRefreshStream()
+      .pipe(untilDestroyed(this))
+      .subscribe(() => this.updateCollapsedMacroStates(this.workflowStatusService.getCurrentStatus()));
+  }
+
+  private updateCollapsedMacroStates(status: Record<string, OperatorStatistics>): void {
+    if (!this.paper) return;
+    const operators = this.workflowActionService.getTexeraGraph().getAllOperators();
+    this.workflowActionService
+      .getWorkflowMacros()
+      .filter(macro => macro.collapsed)
+      .forEach(macro => {
+        const internalStates = operators
+          .filter(operator => operator.macroIdParent === macro.macroID)
+          .map(operator => status[operator.operatorID]?.operatorState);
+        const macroNodeID = JointGraphWrapper.getMacroNodeID(macro.macroID);
+        if (this.paper.getModelById(macroNodeID)) {
+          this.jointUIService.changeOperatorState(this.paper, macroNodeID, this.getMacroAggregateState(internalStates));
+        }
+      });
+  }
+
+  private getMacroAggregateState(states: readonly (OperatorState | undefined)[]): OperatorState {
+    const knownStates = states.filter((state): state is OperatorState => state !== undefined);
+    if (!knownStates.length) return OperatorState.Uninitialized;
+    if (knownStates.includes(OperatorState.Running)) return OperatorState.Running;
+    if (knownStates.includes(OperatorState.Paused)) return OperatorState.Paused;
+    if (knownStates.includes(OperatorState.Pausing)) return OperatorState.Pausing;
+    if (knownStates.includes(OperatorState.Recovering)) return OperatorState.Recovering;
+    if (knownStates.includes(OperatorState.Resuming)) return OperatorState.Resuming;
+    if (knownStates.includes(OperatorState.Initializing)) return OperatorState.Initializing;
+    if (knownStates.includes(OperatorState.Ready)) return OperatorState.Ready;
+    return knownStates.every(state => state === OperatorState.Completed)
+      ? OperatorState.Completed
+      : OperatorState.Uninitialized;
   }
 
   private handleRegionEvents(): void {
@@ -592,7 +631,8 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
         filter(
           event =>
             this.workflowActionService.getTexeraGraph().hasOperator(event[0].model.id.toString()) ||
-            this.workflowActionService.getTexeraGraph().hasCommentBox(event[0].model.id.toString())
+            this.workflowActionService.getTexeraGraph().hasCommentBox(event[0].model.id.toString()) ||
+            JointGraphWrapper.isMacroNodeID(event[0].model.id.toString())
         )
       )
       .pipe(untilDestroyed(this))
@@ -642,6 +682,8 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
           // else only highlight a single operator or group
           if (this.workflowActionService.getTexeraGraph().hasOperator(elementID)) {
             this.workflowActionService.highlightOperators(<boolean>event[1].shiftKey, elementID);
+          } else if (JointGraphWrapper.isMacroNodeID(elementID)) {
+            this.wrapper.highlightOperators(elementID);
           } else if (this.workflowActionService.getTexeraGraph().hasCommentBox(elementID)) {
             this.wrapper.highlightCommentBoxes(elementID);
           }
@@ -678,7 +720,12 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
       .pipe(untilDestroyed(this))
       .subscribe(elementIDs =>
         elementIDs.forEach(elementID => {
-          this.paper.findViewByModel(elementID).highlight("rect.body", { highlighter: highlightOptions });
+          const elementView = this.paper.findViewByModel(elementID);
+          if (JointGraphWrapper.isMacroNodeID(elementID)) {
+            elementView?.$el.children(".joint-highlight-stroke").remove();
+          } else {
+            elementView.highlight("rect.body", { highlighter: highlightOptions });
+          }
         })
       );
 
@@ -911,7 +958,10 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
 
     // Handle right-click on links
     fromJointPaperEvent(this.paper, "link:contextmenu")
-      .pipe(untilDestroyed(this))
+      .pipe(
+        filter(event => !JointGraphWrapper.isMacroProxyLinkID(event[0].model.id.toString())),
+        untilDestroyed(this)
+      )
       .subscribe(event => {
         const linkID = event[0].model.id.toString();
         // Highlight the link when right-clicked
@@ -940,7 +990,8 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
     fromJointPaperEvent(this.paper, "tool:remove")
       .pipe(
         filter(() => this.interactive),
-        map(value => value[0])
+        map(value => value[0]),
+        filter(elementView => !JointGraphWrapper.isMacroProxyLinkID(elementView.model.id.toString()))
       )
       .pipe(untilDestroyed(this))
       .subscribe(elementView => {
@@ -1063,12 +1114,19 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
 
   private deleteElements(): void {
     // Capture all highlighted IDs before starting deletion to avoid modification during iteration
-    const highlightedOperatorIDs = Array.from(this.wrapper.getCurrentHighlightedOperatorIDs());
+    const highlightedOperatorIDs = Array.from(this.wrapper.getCurrentHighlightedOperatorIDs()).filter(
+      operatorID => !JointGraphWrapper.isMacroNodeID(operatorID)
+    );
+    const highlightedMacroIDs = Array.from(this.wrapper.getCurrentHighlightedOperatorIDs())
+      .filter(operatorID => JointGraphWrapper.isMacroNodeID(operatorID))
+      .map(operatorID => JointGraphWrapper.getMacroIDFromNodeID(operatorID));
     const highlightedCommentBoxIDs = Array.from(this.wrapper.getCurrentHighlightedCommentBoxIDs());
     const highlightedLinkIDs = Array.from(this.wrapper.getCurrentHighlightedLinkIDs());
 
     // Bundle all deletions together for proper undo/redo support
     this.workflowActionService.getTexeraGraph().bundleActions(() => {
+      this.workflowActionService.deleteMacros(highlightedMacroIDs);
+
       // Delete operators and their connected links
       this.workflowActionService.deleteOperatorsAndLinks(highlightedOperatorIDs);
 
@@ -1187,7 +1245,10 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
   private handleLinkCursorHover(): void {
     // When the cursor hovers over a link, the delete button and the breakpoint button appear
     fromJointPaperEvent(this.paper, "link:mouseenter")
-      .pipe(map(value => value[0]))
+      .pipe(
+        map(value => value[0]),
+        filter(linkView => !JointGraphWrapper.isMacroProxyLinkID(linkView.model.id.toString()))
+      )
       .pipe(untilDestroyed(this))
       .subscribe(linkView => {
         // Create an array to hold the tools
@@ -1208,7 +1269,10 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
      * otherwise, the breakpoint button is not changed.
      */
     fromJointPaperEvent(this.paper, "link:mouseleave")
-      .pipe(map(value => value[0]))
+      .pipe(
+        map(value => value[0]),
+        filter(elementView => !JointGraphWrapper.isMacroProxyLinkID(elementView.model.id.toString()))
+      )
       .pipe(untilDestroyed(this))
       .subscribe(elementView => {
         // ensure that the link element exists
@@ -1238,7 +1302,11 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
   private handleLinkBreakpointToolAttachment(): void {
     this.wrapper
       .getJointLinkCellAddStream()
-      .pipe(this.wrapper.jointGraphContext.bufferWhileAsync, untilDestroyed(this))
+      .pipe(
+        filter(link => !JointGraphWrapper.isMacroProxyLinkID(link.id.toString())),
+        this.wrapper.jointGraphContext.bufferWhileAsync,
+        untilDestroyed(this)
+      )
       .subscribe(link => {
         const linkView = link.findView(this.paper);
         const breakpointButtonTool = this.breakpointButton;

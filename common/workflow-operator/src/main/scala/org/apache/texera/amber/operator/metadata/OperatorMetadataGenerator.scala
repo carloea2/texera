@@ -118,26 +118,24 @@ object OperatorMetadataGenerator {
 
   def generateOperatorJsonSchema(opDescClass: Class[_ <: LogicalOp]): JsonNode = {
     val jsonSchema = jsonSchemaGenerator.generateJsonSchema(opDescClass).asInstanceOf[ObjectNode]
-    // remove operatorID from json schema
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("operatorID")
-    // remove operatorId from json schema
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("operatorId")
-    // remove operatorType from json schema
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("operatorType")
-    // remove operatorVersion from json schema
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("operatorVersion")
-    // remove inputPorts/outputPorts from json schema
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("inputPorts")
-    jsonSchema.get("properties").asInstanceOf[ObjectNode].remove("outputPorts")
-    // remove operatorType from required list
-    val operatorTypeIndex =
-      jsonSchema
-        .get("required")
-        .asInstanceOf[ArrayNode]
-        .elements()
-        .asScala
-        .indexWhere(p => p.asText().equals("operatorType"))
-    jsonSchema.get("required").asInstanceOf[ArrayNode].remove(operatorTypeIndex)
+    val hiddenProperties = Seq(
+      "operatorID",
+      "operatorId",
+      "operatorType",
+      "operatorVersion",
+      "macroIdParent",
+      "inputPorts",
+      "outputPorts"
+    )
+    val properties = jsonSchema.get("properties").asInstanceOf[ObjectNode]
+    val required = jsonSchema.get("required").asInstanceOf[ArrayNode]
+    hiddenProperties.foreach { propertyName =>
+      properties.remove(propertyName)
+      val requiredIndex = required.elements().asScala.indexWhere(_.asText() == propertyName)
+      if (requiredIndex >= 0) {
+        required.remove(requiredIndex)
+      }
+    }
     // remove "title" for the operator - frontend uses userFriendlyName to show operator title
     jsonSchema.remove("title")
     jsonSchema

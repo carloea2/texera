@@ -40,6 +40,7 @@ import { WorkflowActionService } from "./workflow-action.service";
 import { OperatorPredicate } from "../../../types/workflow-common.interface";
 import { WorkflowUtilService } from "../util/workflow-util.service";
 import { commonTestProviders } from "../../../../common/testing/test-utils";
+import { JointGraphWrapper } from "./joint-graph-wrapper";
 
 describe("WorkflowActionService", () => {
   let service: WorkflowActionService;
@@ -248,6 +249,104 @@ describe("WorkflowActionService", () => {
 
     expect(texeraGraph.getAllOperators().length).toEqual(2);
     expect(texeraGraph.getAllLinks().length).toEqual(0);
+  });
+
+  it("should adopt an external operator only when its edges are fully internal to one macro", () => {
+    const macroID = "macro-1";
+    const internalSource = { ...mockScanPredicate, operatorID: "internal-source", macroIdParent: macroID };
+    const candidate = { ...mockSentimentPredicate, operatorID: "candidate" };
+    const internalSink = { ...mockResultPredicate, operatorID: "internal-sink", macroIdParent: macroID };
+
+    service.addOperator(internalSource, mockPoint);
+    service.addOperator(candidate, mockPoint);
+    service.addOperator(internalSink, mockPoint);
+
+    service.addLink({
+      linkID: "macro-link-1",
+      source: { operatorID: internalSource.operatorID, portID: internalSource.outputPorts[0].portID },
+      target: { operatorID: candidate.operatorID, portID: candidate.inputPorts[0].portID },
+    });
+    expect(texeraGraph.getOperator(candidate.operatorID)?.macroIdParent).toBeUndefined();
+
+    service.addLink({
+      linkID: "macro-link-2",
+      source: { operatorID: candidate.operatorID, portID: candidate.outputPorts[0].portID },
+      target: { operatorID: internalSink.operatorID, portID: internalSink.inputPorts[0].portID },
+    });
+    expect(texeraGraph.getOperator(candidate.operatorID)?.macroIdParent).toBe(macroID);
+  });
+
+  it("should not adopt macro boundary source or sink operators", () => {
+    const macroID = "macro-1";
+    const internalSource = { ...mockScanPredicate, operatorID: "internal-source", macroIdParent: macroID };
+    const internalSink = { ...mockResultPredicate, operatorID: "internal-sink", macroIdParent: macroID };
+    const externalSource = { ...mockScanPredicate, operatorID: "external-source" };
+    const externalSink = { ...mockResultPredicate, operatorID: "external-sink" };
+
+    service.addOperator(internalSource, mockPoint);
+    service.addOperator(internalSink, mockPoint);
+    service.addOperator(externalSource, mockPoint);
+    service.addOperator(externalSink, mockPoint);
+
+    service.addLink({
+      linkID: "boundary-link-1",
+      source: { operatorID: externalSource.operatorID, portID: externalSource.outputPorts[0].portID },
+      target: { operatorID: internalSink.operatorID, portID: internalSink.inputPorts[0].portID },
+    });
+    service.addLink({
+      linkID: "boundary-link-2",
+      source: { operatorID: internalSource.operatorID, portID: internalSource.outputPorts[0].portID },
+      target: { operatorID: externalSink.operatorID, portID: externalSink.inputPorts[0].portID },
+    });
+
+    expect(texeraGraph.getOperator(externalSource.operatorID)?.macroIdParent).toBeUndefined();
+    expect(texeraGraph.getOperator(externalSink.operatorID)?.macroIdParent).toBeUndefined();
+  });
+
+  it("should move expanded macro internals from the current frame position when dragging the macro tab", () => {
+    const macroID = service.createMacroAt({ x: 100, y: 100 }, "Macro 1");
+    const internalSource = { ...mockScanPredicate, operatorID: "internal-source", macroIdParent: macroID };
+    const internalSink = { ...mockResultPredicate, operatorID: "internal-sink", macroIdParent: macroID };
+
+    service.addOperator(internalSource, { x: 500, y: 300 });
+    service.addOperator(internalSink, { x: 650, y: 300 });
+    service.addLink({
+      linkID: "macro-internal-link",
+      source: { operatorID: internalSource.operatorID, portID: internalSource.outputPorts[0].portID },
+      target: { operatorID: internalSink.operatorID, portID: internalSink.inputPorts[0].portID },
+    });
+
+    const framePosition = service.getJointGraphWrapper().getMacroFramePosition(macroID) as { x: number; y: number };
+    const sourcePosition = service.getJointGraphWrapper().getElementPosition(internalSource.operatorID);
+    const macroNode = jointGraph.getCell(JointGraphWrapper.getMacroNodeID(macroID)) as joint.dia.Element;
+    macroNode.position(framePosition.x - 120, framePosition.y + 40);
+
+    expect(service.getJointGraphWrapper().getElementPosition(internalSource.operatorID)).toEqual({
+      x: sourcePosition.x - 120,
+      y: sourcePosition.y + 40,
+    });
+  });
+
+  it("should keep macro dragging enabled after centering an empty workflow", () => {
+    service.calculateTopLeftOperatorPosition();
+
+    const macroID = service.createMacroAt({ x: 100, y: 100 }, "Macro 1");
+    const internalSource = { ...mockScanPredicate, operatorID: "internal-source", macroIdParent: macroID };
+    const internalSink = { ...mockResultPredicate, operatorID: "internal-sink", macroIdParent: macroID };
+
+    service.addOperator(internalSource, { x: 500, y: 300 });
+    service.addOperator(internalSink, { x: 650, y: 300 });
+
+    const framePosition = service.getJointGraphWrapper().getMacroFramePosition(macroID) as { x: number; y: number };
+    const sourcePosition = service.getJointGraphWrapper().getElementPosition(internalSource.operatorID);
+    const macroNode = jointGraph.getCell(JointGraphWrapper.getMacroNodeID(macroID)) as joint.dia.Element;
+    macroNode.position(framePosition.x - 80, framePosition.y + 30);
+
+    expect(undoRedo.listenJointCommand).toBeTruthy();
+    expect(service.getJointGraphWrapper().getElementPosition(internalSource.operatorID)).toEqual({
+      x: sourcePosition.x - 80,
+      y: sourcePosition.y + 30,
+    });
   });
 
   it("should reformat the workflow", () => {

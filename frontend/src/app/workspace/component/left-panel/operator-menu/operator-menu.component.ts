@@ -36,6 +36,8 @@ import { FormsModule } from "@angular/forms";
 import { NgFor, NgTemplateOutlet } from "@angular/common";
 import { OperatorLabelComponent } from "./operator-label/operator-label.component";
 import { NzCollapseComponent, NzCollapsePanelComponent } from "ng-zorro-antd/collapse";
+import { WORKFLOW_MACRO_OPERATOR_TYPE } from "../../../service/operator-metadata/operator-metadata.service";
+import { JointGraphWrapper } from "../../../service/workflow-graph/model/joint-graph-wrapper";
 
 @UntilDestroy()
 @Component({
@@ -138,6 +140,12 @@ export class OperatorMenuComponent {
     // add the operator to the graph on select (position relative to the current viewpoint)
     const origin = this.workflowActionService.getJointGraphWrapper().getMainJointPaper()?.translate();
     const point = { x: 400 - (origin?.tx ?? 0), y: 200 - (origin?.ty ?? 0) };
+    if (selectSchema.operatorType === WORKFLOW_MACRO_OPERATOR_TYPE) {
+      const macroID = this.workflowActionService.createMacroAt(point);
+      this.workflowActionService.getJointGraphWrapper().highlightOperators(JointGraphWrapper.getMacroNodeID(macroID));
+      this.clearSearch();
+      return;
+    }
     this.workflowActionService.addOperator(
       this.workflowUtilService.getNewOperatorPredicate(selectSchema.operatorType),
       point
@@ -145,6 +153,10 @@ export class OperatorMenuComponent {
 
     // asynchronously immediately clear the search input and suggestions
     // because ng-zorro shows the selected value if it's synchronously
+    this.clearSearch();
+  }
+
+  private clearSearch(): void {
     setTimeout(() => {
       this.searchInputValue = "";
       this.autocompleteOptions = [];

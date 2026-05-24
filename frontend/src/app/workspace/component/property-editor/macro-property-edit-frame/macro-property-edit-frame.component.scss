@@ -1,0 +1,23 @@
+.macro-field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+nz-select {
+  width: 100%;
+}
+
+.macro-selected-workflow {
+  margin-top: 10px;
+  color: #666;
+  font-size: 12px;
+}
+
+.macro-actions {
+  margin-top: 14px;
+}
+
+.macro-actions button {
+  width: 100%;
+}

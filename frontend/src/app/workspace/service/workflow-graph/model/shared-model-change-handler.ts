@@ -44,6 +44,7 @@ import { GuiConfigService } from "../../../../common/service/gui-config.service"
 
 export class SharedModelChangeHandler {
   private config: GuiConfigService | null = null;
+  private macroFrameRefreshScheduled = false;
 
   constructor(
     private texeraGraph: WorkflowGraph,
@@ -137,6 +138,10 @@ export class SharedModelChangeHandler {
         this.jointGraphWrapper.setMultiSelectMode(newOpIDs.length > 1);
         this.jointGraphWrapper.highlightOperators(...newOpIDs);
       }
+      this.refreshMacroFrames();
+      if (newOpIDs.length > 0) {
+        this.scheduleMacroFrameRefresh();
+      }
     });
   }
 
@@ -200,6 +205,10 @@ export class SharedModelChangeHandler {
       //   // Only highlight when this is added by current user.
       //   this.jointGraphWrapper.highlightLinks(...linksToAdd.map(link => link.linkID));
       // }
+      if (linksToAdd.length > 0 || linksToDelete.length > 0) {
+        this.refreshMacroFrames();
+        this.scheduleMacroFrameRefresh();
+      }
     });
   }
 
@@ -236,6 +245,7 @@ export class SharedModelChangeHandler {
    */
   private handleElementPositionChange(): void {
     this.texeraGraph.sharedModel.elementPositionMap?.observe((event: Y.YMapEvent<Point>) => {
+      let shouldRefreshMacroFrames = false;
       event.changes.keys.forEach((change, key) => {
         if (change.action === "update") {
           this.texeraGraph.setSyncTexeraGraph(false);
@@ -244,10 +254,15 @@ export class SharedModelChangeHandler {
             this.jointGraphWrapper.setListenPositionChange(false);
             this.jointGraphWrapper.setAbsolutePosition(key, newPosition.x, newPosition.y);
             this.jointGraphWrapper.setListenPositionChange(true);
+            shouldRefreshMacroFrames = true;
           }
           this.texeraGraph.setSyncTexeraGraph(true);
         }
       });
+      if (shouldRefreshMacroFrames) {
+        this.refreshMacroFrames();
+        this.scheduleMacroFrameRefresh();
+      }
     });
   }
 
@@ -336,6 +351,9 @@ export class SharedModelChangeHandler {
                 }
               } else if (contentKey === "operatorProperties") {
                 this.onOperatorPropertyChanged(operatorID, event.transaction.local);
+              } else if (contentKey === "macroIdParent") {
+                this.refreshMacroFrames();
+                this.scheduleMacroFrameRefresh();
               }
             }
           } else if (event.path[event.path.length - 1] === "customDisplayName") {
@@ -426,6 +444,30 @@ export class SharedModelChangeHandler {
         this.texeraGraph.updateSharedModelAwareness("changed", operatorID);
         this.texeraGraph.updateSharedModelAwareness("changed", undefined);
       }
+    }
+  }
+
+  private refreshMacroFrames(): void {
+    this.jointGraphWrapper.refreshMacroFrames(
+      this.texeraGraph.getAllOperators(),
+      undefined,
+      this.texeraGraph.getAllLinks()
+    );
+  }
+
+  private scheduleMacroFrameRefresh(): void {
+    if (this.macroFrameRefreshScheduled) {
+      return;
+    }
+    this.macroFrameRefreshScheduled = true;
+    const refresh = () => {
+      this.macroFrameRefreshScheduled = false;
+      this.refreshMacroFrames();
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(refresh);
+    } else {
+      setTimeout(refresh, 0);
     }
   }
 

@@ -40,6 +40,7 @@ import { map, share, tap } from "rxjs/operators";
 import { commonTestProviders } from "../../../../common/testing/test-utils";
 import { GuiConfigService } from "../../../../common/service/gui-config.service";
 import { MockGuiConfigService } from "../../../../common/service/gui-config.service.mock";
+import { OperatorState } from "../../../types/execute-workflow.interface";
 
 describe("JointGraphWrapperService", () => {
   let jointGraph: joint.dia.Graph;
@@ -566,6 +567,116 @@ describe("JointGraphWrapperService", () => {
     // expect both operators to be in the new position
     expect(localJointGraphWrapper.getElementPosition(mockScanPredicate.operatorID)).toEqual(expectedPosition);
     expect(localJointGraphWrapper.getElementPosition(mockResultPredicate.operatorID)).toEqual(expectedPosition);
+  });
+
+  it("should anchor expanded macro tab and keep collapsed boundary ports", () => {
+    const macroID = "macro-1";
+    const externalSource = { ...mockScanPredicate };
+    const internalOperator = { ...mockSentimentPredicate, macroIdParent: macroID };
+    const secondInternalOperator = { ...mockResultPredicate, operatorID: "internal-output", macroIdParent: macroID };
+    const externalSink = { ...mockResultPredicate };
+    const operators = [externalSource, internalOperator, secondInternalOperator, externalSink];
+    const links = [mockScanSentimentLink, mockSentimentResultLink];
+
+    jointGraph.addCell(jointUIService.getJointOperatorElement(externalSource, { x: 100, y: 180 }));
+    jointGraph.addCell(jointUIService.getJointOperatorElement(internalOperator, { x: 300, y: 180 }));
+    jointGraph.addCell(jointUIService.getJointOperatorElement(secondInternalOperator, { x: 450, y: 180 }));
+    jointGraph.addCell(jointUIService.getJointOperatorElement(externalSink, { x: 500, y: 180 }));
+    links.forEach(link => jointGraph.addCell(JointUIService.getJointLinkCell(link)));
+
+    jointGraphWrapper.refreshMacroFrames(operators, [{ macroID, name: "Macro 1", position: { x: 0, y: 0 } }], links);
+
+    const frame = jointGraph.getCell(JointGraphWrapper.getMacroFrameID(macroID)) as joint.dia.Element;
+    const node = jointGraph.getCell(JointGraphWrapper.getMacroNodeID(macroID)) as joint.dia.Element;
+    expect(node.position()).toEqual(frame.position());
+    expect(
+      (jointGraph.getCell(internalOperator.operatorID) as joint.dia.Element).position().y - frame.position().y
+    ).toBe(85);
+    expect(node.getPorts()).toEqual([]);
+
+    const originalFramePosition = frame.position();
+    const originalFrameSize = frame.size();
+    (jointGraph.getCell(internalOperator.operatorID) as joint.dia.Element).position(220, 180);
+    jointGraphWrapper.refreshMacroFrames(operators, [{ macroID, name: "Macro 1", position: node.position() }], links);
+    expect(frame.position().x).toBeLessThan(originalFramePosition.x);
+    expect(frame.size().width).toBeGreaterThan(originalFrameSize.width);
+    expect(node.position()).toEqual(frame.position());
+    expect(
+      (jointGraph.getCell(internalOperator.operatorID) as joint.dia.Element).position().y - frame.position().y
+    ).toBe(85);
+
+    jointGraphWrapper.refreshMacroFrames(
+      operators,
+      [{ macroID, name: "Macro 1", position: node.position(), collapsed: true }],
+      links
+    );
+
+    const collapsedNode = jointGraph.getCell(JointGraphWrapper.getMacroNodeID(macroID)) as joint.dia.Element;
+    expect(jointGraph.getCell(JointGraphWrapper.getMacroFrameID(macroID))).toBeUndefined();
+    expect(collapsedNode.size()).toEqual({
+      width: JointUIService.DEFAULT_OPERATOR_WIDTH,
+      height: JointUIService.DEFAULT_OPERATOR_HEIGHT,
+    });
+    expect(collapsedNode.attr(".texera-operator-friendly-name/text")).toBe("Workflow Macro");
+    expect(collapsedNode.attr("rect.body/stroke")).toBe("#CFCFCF");
+    expect(collapsedNode.getPorts().map(port => port.group)).toEqual(["in", "out"]);
+    jointUIService.changeOperatorState(
+      jointGraphWrapper.getMainJointPaper() ?? ({ getModelById: (id: string) => jointGraph.getCell(id) } as any),
+      collapsedNode.id.toString(),
+      OperatorState.Running
+    );
+    expect(collapsedNode.attr("rect.body/stroke")).toBe("orange");
+    expect(jointGraph.getLinks().filter(link => JointGraphWrapper.isMacroProxyLinkID(link.id.toString())).length).toBe(
+      2
+    );
+    expect(jointGraph.getCell(internalOperator.operatorID).attr("root/display")).toBe("none");
+  });
+
+  it("should route collapsed macro boundary links only through visible endpoints", () => {
+    const sourceMacroID = "macro-source";
+    const targetMacroID = "macro-target";
+    const sourceOperator = { ...mockSentimentPredicate, macroIdParent: sourceMacroID };
+    const targetOperator = { ...mockResultPredicate, macroIdParent: targetMacroID };
+    const crossMacroLink = {
+      linkID: "macro-cross-link",
+      source: {
+        operatorID: sourceOperator.operatorID,
+        portID: sourceOperator.outputPorts[0].portID,
+      },
+      target: {
+        operatorID: targetOperator.operatorID,
+        portID: targetOperator.inputPorts[0].portID,
+      },
+    };
+
+    jointGraph.addCell(jointUIService.getJointOperatorElement(sourceOperator, { x: 100, y: 100 }));
+    jointGraph.addCell(jointUIService.getJointOperatorElement(targetOperator, { x: 300, y: 100 }));
+    jointGraph.addCell(JointUIService.getJointLinkCell(crossMacroLink));
+
+    jointGraphWrapper.refreshMacroFrames(
+      [sourceOperator, targetOperator],
+      [
+        { macroID: sourceMacroID, name: "Source Macro", position: { x: 20, y: 20 }, collapsed: true },
+        { macroID: targetMacroID, name: "Target Macro", position: { x: 250, y: 20 }, collapsed: true },
+      ],
+      [crossMacroLink]
+    );
+
+    const proxyLinks = jointGraph.getLinks().filter(link => JointGraphWrapper.isMacroProxyLinkID(link.id.toString()));
+    expect(proxyLinks.length).toBe(1);
+    expect(proxyLinks[0].source()).toEqual({
+      id: JointGraphWrapper.getMacroNodeID(sourceMacroID),
+      port: "macro-out-macro-cross-link",
+    });
+    expect(proxyLinks[0].target()).toEqual({
+      id: JointGraphWrapper.getMacroNodeID(targetMacroID),
+      port: "macro-in-macro-cross-link",
+    });
+    expect((jointGraph.getCell(JointGraphWrapper.getMacroNodeID(sourceMacroID)) as joint.dia.Element).getPorts().length)
+      .toBe(1);
+    expect((jointGraph.getCell(JointGraphWrapper.getMacroNodeID(targetMacroID)) as joint.dia.Element).getPorts().length)
+      .toBe(1);
+    expect(jointGraph.getCell(crossMacroLink.linkID).attr("root/display")).toBe("none");
   });
 
   describe("when linkBreakpoint is enabled", () => {

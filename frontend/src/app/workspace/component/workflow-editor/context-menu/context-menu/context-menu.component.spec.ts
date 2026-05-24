@@ -65,6 +65,7 @@ describe("ContextMenuComponent", () => {
       getJointGraphWrapper: vi.fn(),
       getWorkflowModificationEnabledStream: vi.fn(),
       deleteOperatorsAndLinks: vi.fn(),
+      deleteMacros: vi.fn(),
       deleteCommentBox: vi.fn(),
       getWorkflowMetadata: vi.fn(),
       getTexeraGraph: vi.fn(),
@@ -74,6 +75,7 @@ describe("ContextMenuComponent", () => {
     workflowActionServiceSpy.getWorkflowModificationEnabledStream.mockReturnValue(of(true));
     workflowActionServiceSpy.getTexeraGraph.mockReturnValue(texeraGraphSpy);
     workflowActionServiceSpy.deleteOperatorsAndLinks.mockReturnValue(undefined);
+    workflowActionServiceSpy.deleteMacros.mockReturnValue(undefined);
     workflowActionServiceSpy.deleteCommentBox.mockReturnValue(undefined);
     workflowActionServiceSpy.deleteLinkWithID.mockReturnValue(undefined);
     workflowActionServiceSpy.getWorkflowMetadata.mockReturnValue({ name: "Test Workflow" }); // Mock return value
@@ -101,6 +103,10 @@ describe("ContextMenuComponent", () => {
       viewResultHighlightedOperators: vi.fn(),
       reuseResultHighlightedOperator: vi.fn(),
       executeUpToOperator: vi.fn(),
+      canCreateMacroFromHighlightedOperators: vi.fn().mockReturnValue(false),
+      canRemoveHighlightedOperatorsFromMacro: vi.fn().mockReturnValue(false),
+      createMacroFromHighlightedOperators: vi.fn(),
+      removeHighlightedOperatorsFromMacro: vi.fn(),
     } as unknown as Mocked<OperatorMenuService>;
 
     const validationWorkflowServiceSpy = { validateOperator: vi.fn() };

@@ -32,6 +32,34 @@
   </li>
   <li
     nz-menu-item
+    *ngIf="highlightedOperatorIds.length > 0 &&
+  highlightedCommentBoxIds.length === 0 &&
+  !hasHighlightedLinks() &&
+  isWorkflowModifiable &&
+  operatorMenuService.canCreateMacroFromHighlightedOperators()"
+    (click)="operatorMenuService.createMacroFromHighlightedOperators()">
+    <span
+      nz-icon
+      nzType="apartment"
+      nzTheme="outline"></span>
+    create macro
+  </li>
+  <li
+    nz-menu-item
+    *ngIf="highlightedOperatorIds.length > 0 &&
+  highlightedCommentBoxIds.length === 0 &&
+  !hasHighlightedLinks() &&
+  isWorkflowModifiable &&
+  operatorMenuService.canRemoveHighlightedOperatorsFromMacro()"
+    (click)="operatorMenuService.removeHighlightedOperatorsFromMacro()">
+    <span
+      nz-icon
+      nzType="disconnect"
+      nzTheme="outline"></span>
+    remove from macro
+  </li>
+  <li
+    nz-menu-item
     *ngIf="(highlightedOperatorIds.length > 0 ||
   highlightedCommentBoxIds.length > 0) &&
   !hasHighlightedLinks() &&
@@ -45,9 +73,10 @@
   </li>
   <li
     nz-menu-item
-    *ngIf="(highlightedOperatorIds.length === 0 &&
+    *ngIf="highlightedOperatorIds.length === 0 &&
   highlightedCommentBoxIds.length === 0 &&
-  !hasHighlightedLinks()) &&
+  !hasHighlightedLinks() &&
+  !hasHighlightedMacroNode() &&
   isWorkflowModifiable"
     (click)="onPaste()">
     <span
@@ -126,7 +155,8 @@
   <li
     nz-menu-item
     *ngIf="(highlightedOperatorIds.length > 0 ||
-  highlightedCommentBoxIds.length > 0) &&
+  highlightedCommentBoxIds.length > 0 ||
+  hasHighlightedMacroNode()) &&
   isWorkflowModifiable"
     (click)="onDelete()">
     <span

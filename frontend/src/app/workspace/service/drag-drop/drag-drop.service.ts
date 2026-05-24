@@ -26,6 +26,8 @@ import { Injectable } from "@angular/core";
 import { filter, first, map } from "rxjs/operators";
 import TinyQueue from "tinyqueue";
 import * as joint from "jointjs";
+import { WORKFLOW_MACRO_OPERATOR_TYPE } from "../operator-metadata/operator-metadata.service";
+import { JointGraphWrapper } from "../workflow-graph/model/joint-graph-wrapper";
 
 @Injectable({
   providedIn: "root",
@@ -62,6 +64,14 @@ export class DragDropService {
       .getJointGraphWrapper()
       .getMainJointPaper()
       ?.pageToLocalPoint(dropPoint.x, dropPoint.y)!;
+
+    if (this.op.operatorType === WORKFLOW_MACRO_OPERATOR_TYPE) {
+      const macroID = this.workflowActionService.createMacroAt(coordinates);
+      this.workflowActionService.getJointGraphWrapper().highlightOperators(JointGraphWrapper.getMacroNodeID(macroID));
+      this.resetSuggestions();
+      this.operatorDroppedSubject.next();
+      return;
+    }
 
     // Check if the operator is dropped on top of an existing edge
     const intersectedLink = this.findIntersectedLink(coordinates);

@@ -45,6 +45,8 @@ import { UserService } from "src/app/common/service/user/user.service";
 import { StubUserService } from "src/app/common/service/user/stub-user.service";
 import { MockComputingUnitStatusService } from "../../../common/service/computing-unit/computing-unit-status/mock-computing-unit-status.service";
 import { commonTestProviders } from "../../../common/testing/test-utils";
+import { WorkflowGraph } from "../workflow-graph/model/workflow-graph";
+import { mockScanPredicate } from "../workflow-graph/model/mock-workflow-data";
 
 class StubHttpClient {
   public post(): Observable<string> {
@@ -95,6 +97,14 @@ describe("ExecuteWorkflowService", () => {
   it("should generate a logical plan request based on the workflow graph that is passed to the function", () => {
     const newLogicalPlan: LogicalPlan = ExecuteWorkflowService.getLogicalPlanRequest(mockWorkflowPlan_scan_result);
     expect(newLogicalPlan).toEqual(mockLogicalPlan_scan_result);
+  });
+
+  it("should keep macro parent metadata out of the logical execution plan", () => {
+    const graph = new WorkflowGraph([{ ...mockScanPredicate, macroIdParent: "macro-1" }], []);
+
+    const plan = ExecuteWorkflowService.getLogicalPlanRequest(graph);
+
+    expect((plan.operators[0] as any).macroIdParent).toBeUndefined();
   });
 
   it("should msg backend when executing workflow", fakeAsync(() => {

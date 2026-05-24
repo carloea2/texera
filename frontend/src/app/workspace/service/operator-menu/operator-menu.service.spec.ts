@@ -184,4 +184,42 @@ describe("OperatorMenuService", () => {
       expect(service.isToViewResult).toBe(false);
     });
   });
+
+  it("groups highlighted operators under a macro parent and can remove them", () => {
+    workflowActionService.addOperatorsAndLinks(
+      [
+        { op: mockScanPredicate, pos: mockPoint },
+        { op: mockSentimentPredicate, pos: mockPoint },
+      ],
+      []
+    );
+    const wrapper = workflowActionService.getJointGraphWrapper();
+    wrapper.unhighlightOperators(...wrapper.getCurrentHighlightedOperatorIDs());
+    wrapper.highlightOperators(mockScanPredicate.operatorID, mockSentimentPredicate.operatorID);
+
+    service.createMacroFromHighlightedOperators();
+
+    const scanMacroId = workflowActionService.getTexeraGraph().getOperator(mockScanPredicate.operatorID).macroIdParent;
+    const sentimentMacroId = workflowActionService
+      .getTexeraGraph()
+      .getOperator(mockSentimentPredicate.operatorID).macroIdParent;
+    expect(scanMacroId).toBeTruthy();
+    expect(sentimentMacroId).toBe(scanMacroId);
+    expect(workflowActionService.getWorkflowContent().macros).toEqual([
+      expect.objectContaining({ macroID: scanMacroId, name: "Macro" }),
+    ]);
+    expect(service.canRemoveHighlightedOperatorsFromMacro()).toBe(true);
+
+    service.removeHighlightedOperatorsFromMacro();
+
+    expect(
+      workflowActionService.getTexeraGraph().getOperator(mockScanPredicate.operatorID).macroIdParent
+    ).toBeUndefined();
+    expect(
+      workflowActionService.getTexeraGraph().getOperator(mockSentimentPredicate.operatorID).macroIdParent
+    ).toBeUndefined();
+    expect(workflowActionService.getWorkflowContent().macros).toEqual([
+      expect.objectContaining({ macroID: scanMacroId, name: "Macro" }),
+    ]);
+  });
 });

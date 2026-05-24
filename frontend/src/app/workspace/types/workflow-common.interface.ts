@@ -76,6 +76,7 @@ export interface OperatorPredicate
     viewResult?: boolean;
     markedForReuse?: boolean;
     customDisplayName?: string;
+    macroIdParent?: string;
   }> {}
 
 export interface Comment
@@ -91,6 +92,16 @@ export interface CommentBox {
   comments: Comment[];
   commentBoxPosition: Point;
 }
+
+export interface WorkflowMacro
+  extends Readonly<{
+    macroID: string;
+    name: string;
+    position: Point;
+    workflowId?: number;
+    workflowName?: string;
+    collapsed?: boolean;
+  }> {}
 
 export interface OperatorLink
   extends Readonly<{

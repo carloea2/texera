@@ -18,7 +18,13 @@
  */
 
 import { WorkflowMetadata } from "../../dashboard/type/workflow-metadata.interface";
-import { CommentBox, OperatorLink, OperatorPredicate, Point } from "../../workspace/types/workflow-common.interface";
+import {
+  CommentBox,
+  OperatorLink,
+  OperatorPredicate,
+  Point,
+  WorkflowMacro,
+} from "../../workspace/types/workflow-common.interface";
 
 export enum ExecutionMode {
   PIPELINED = "PIPELINED",
@@ -49,6 +55,7 @@ export interface WorkflowContent
     links: OperatorLink[];
     commentBoxes: CommentBox[];
     settings: WorkflowSettings;
+    macros?: WorkflowMacro[];
   }> {}
 
 export type Workflow = { content: WorkflowContent } & WorkflowMetadata;

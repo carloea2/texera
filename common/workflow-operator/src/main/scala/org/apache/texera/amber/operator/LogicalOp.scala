@@ -439,6 +439,9 @@ abstract class LogicalOp extends PortDescriptor with Serializable {
   @JsonProperty(PropertyNameConstants.OPERATOR_VERSION)
   var operatorVersion: String = getOperatorVersion
 
+  @JsonProperty(PropertyNameConstants.MACRO_ID_PARENT)
+  var macroIdParent: String = _
+
   def operatorIdentifier: OperatorIdentity = OperatorIdentity(operatorId)
 
   def getPhysicalOp(

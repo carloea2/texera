@@ -92,7 +92,9 @@ export class OperatorMenuService {
     )
       .pipe(untilDestroyed(this))
       .subscribe(() => {
-        this._highlightedOperators$.next(jointGraphWrapper.getCurrentHighlightedOperatorIDs());
+        this._highlightedOperators$.next(
+          jointGraphWrapper.getCurrentHighlightedOperatorIDs().filter(operatorID => texeraGraph.hasOperator(operatorID))
+        );
         this.recomputeMenuState();
       });
 
@@ -262,6 +264,31 @@ export class OperatorMenuService {
 
     const targetOperatorId = highlightedOperatorIds[0];
     this.executeWorkflowService.executeWorkflow("", targetOperatorId);
+  }
+
+  public canCreateMacroFromHighlightedOperators(): boolean {
+    return this._highlightedOperators$.value.length > 0;
+  }
+
+  public canRemoveHighlightedOperatorsFromMacro(): boolean {
+    const texeraGraph = this.workflowActionService.getTexeraGraph();
+    return this._highlightedOperators$.value.some(operatorID =>
+      Boolean(texeraGraph.getOperator(operatorID).macroIdParent)
+    );
+  }
+
+  public createMacroFromHighlightedOperators(): void {
+    const operatorIDs = this._highlightedOperators$.value;
+    if (!operatorIDs.length) return;
+    this.workflowActionService.createMacroForOperators(operatorIDs);
+    this.notificationService.info("Created macro for selected operators.");
+  }
+
+  public removeHighlightedOperatorsFromMacro(): void {
+    const operatorIDs = this._highlightedOperators$.value;
+    if (!operatorIDs.length) return;
+    this.workflowActionService.setOperatorsMacroParent(operatorIDs, undefined);
+    this.notificationService.info("Removed selected operators from macro.");
   }
 
   public performPasteOperation() {

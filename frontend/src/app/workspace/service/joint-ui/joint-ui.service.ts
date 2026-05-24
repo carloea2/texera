@@ -269,6 +269,10 @@ export class JointUIService {
     this.operatorMetadataService.getOperatorMetadata().subscribe(value => (this.operatorSchemas = value.operators));
   }
 
+  public static getOperatorElementMarkup(dynamicInputPorts = false, dynamicOutputPorts = false): string {
+    return TexeraCustomJointElement.getMarkup(dynamicInputPorts, dynamicOutputPorts);
+  }
+
   /**
    * Gets the JointJS UI Element object based on the operator predicate.
    * A JointJS Element could be added to the JointJS graph to let JointJS display the operator accordingly.
@@ -465,6 +469,10 @@ export class JointUIService {
   }
 
   public changeOperatorState(jointPaper: joint.dia.Paper, operatorID: string, operatorState: OperatorState): void {
+    const element = jointPaper.getModelById(operatorID) as joint.shapes.devs.Model | undefined;
+    if (!element) {
+      return;
+    }
     let fillColor: string;
     switch (operatorState) {
       case OperatorState.Ready:
@@ -484,13 +492,12 @@ export class JointUIService {
         fillColor = "gray";
         break;
     }
-    jointPaper.getModelById(operatorID).attr({
+    element.attr({
       [`.${operatorStateClass}`]: { text: operatorState.toString(), fill: fillColor },
       "rect.body": { stroke: fillColor },
       [`.${operatorPortMetricsClass}`]: { fill: fillColor },
       [`.${operatorWorkerCountClass}`]: { fill: fillColor },
     });
-    const element = jointPaper.getModelById(operatorID) as joint.shapes.devs.Model;
     const allPorts = element.getPorts();
     const inPorts = allPorts.filter(p => p.group === "in");
     inPorts.forEach(p => {
@@ -944,7 +951,7 @@ export class JointUIService {
         visibility: "hidden",
       },
       ".texera-operator-icon": {
-        "xlink:href": "assets/operator_images/" + operatorType + ".png",
+        "xlink:href": `assets/operator_images/${operatorType}.png`,
         width: 35,
         height: 35,
         "ref-x": 0.5,

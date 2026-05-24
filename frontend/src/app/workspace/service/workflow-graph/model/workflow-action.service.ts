@@ -31,6 +31,7 @@ import {
   OperatorPredicate,
   Point,
   PortDescription,
+  WorkflowMacro,
 } from "../../../types/workflow-common.interface";
 import { JointUIService } from "../../joint-ui/joint-ui.service";
 import { OperatorMetadataService } from "../../operator-metadata/operator-metadata.service";
@@ -96,7 +97,10 @@ export class WorkflowActionService {
   public readonly resultPanelOpen$: Observable<boolean> = this.resultPanelOpenSubject.asObservable();
 
   private workflowSettings: WorkflowSettings;
+  private workflowMacros: WorkflowMacro[] = [];
   private workflowResetSubject = new Subject<void>();
+  private macroChangeSubject = new Subject<void>();
+  private macroVisualRefreshSubject = new Subject<void>();
 
   constructor(
     private operatorMetadataService: OperatorMetadataService,
@@ -122,6 +126,7 @@ export class WorkflowActionService {
     this.undoRedoService.setUndoManager(this.texeraGraph.sharedModel.undoManager);
 
     this.handleJointElementDrag();
+    this.handleMacroNodeDrag();
   }
 
   private getDefaultSettings(): WorkflowSettings {
@@ -354,6 +359,7 @@ export class WorkflowActionService {
         this.deleteOperator(operatorID);
       });
     });
+    this.refreshMacroVisuals();
   }
 
   /**
@@ -390,27 +396,29 @@ export class WorkflowActionService {
   public calculateTopLeftOperatorPosition(): void {
     this.texeraGraph.bundleActions(() => {
       this.undoRedoService.setListenJointCommand(false);
-      const allOperators = this.getTexeraGraph().getAllOperators();
-      if (allOperators.length === 0) return;
+      try {
+        const allOperators = this.getTexeraGraph().getAllOperators();
+        if (allOperators.length === 0) return;
 
-      let minX = Infinity;
-      let minY = Infinity;
+        let minX = Infinity;
+        let minY = Infinity;
 
-      for (const operator of allOperators) {
-        const operatorID = operator.operatorID;
-        const position = this.jointGraphWrapper.getElementPosition(operatorID);
+        for (const operator of allOperators) {
+          const operatorID = operator.operatorID;
+          const position = this.jointGraphWrapper.getElementPosition(operatorID);
 
-        if (position.x < minX) {
-          minX = position.x;
+          if (position.x < minX) {
+            minX = position.x;
+          }
+          if (position.y < minY) {
+            minY = position.y;
+          }
         }
-        if (position.y < minY) {
-          minY = position.y;
-        }
+
+        this.centerPoint = { x: minX, y: minY };
+      } finally {
+        this.undoRedoService.setListenJointCommand(true);
       }
-
-      this.centerPoint = { x: minX, y: minY };
-
-      this.undoRedoService.setListenJointCommand(true);
     });
   }
 
@@ -423,6 +431,10 @@ export class WorkflowActionService {
     this.texeraGraph.assertLinkNotExists(link);
     this.texeraGraph.assertLinkIsValid(link);
     this.texeraGraph.addLink(link);
+    if (this.adoptFullyInternalMacroOperators(link)) {
+      this.refreshMacroVisuals();
+      this.macroChangeSubject.next();
+    }
   }
 
   /**
@@ -455,6 +467,150 @@ export class WorkflowActionService {
     this.texeraGraph.bundleActions(() => {
       this.texeraGraph.setOperatorProperty(operatorID, newProperty);
     });
+  }
+
+  public createMacroForOperators(operatorIDs: readonly string[], name = "Macro"): string {
+    const macroID = this.workflowUtilService.getGroupRandomUUID().replace(/^group-/, "macro-");
+    this.workflowMacros = [
+      ...this.workflowMacros.filter(macro => macro.macroID !== macroID),
+      { macroID, name, position: this.getMacroNodePositionForOperators(operatorIDs) },
+    ];
+    this.setOperatorsMacroParent(operatorIDs, macroID);
+    return macroID;
+  }
+
+  public setOperatorsMacroParent(operatorIDs: readonly string[], macroIdParent?: string): void {
+    this.texeraGraph.bundleActions(() => {
+      operatorIDs.forEach(operatorID => {
+        this.texeraGraph.assertOperatorExists(operatorID);
+        const sharedOperator = this.texeraGraph.getSharedOperatorType(operatorID) as any;
+        if (macroIdParent) {
+          sharedOperator.set("macroIdParent", macroIdParent);
+        } else {
+          sharedOperator.delete("macroIdParent");
+        }
+      });
+    });
+    this.refreshMacroVisuals();
+    this.macroChangeSubject.next();
+  }
+
+  public createMacroAt(position: Point, name = "Workflow Macro"): string {
+    const macroID = this.workflowUtilService.getGroupRandomUUID().replace(/^group-/, "macro-");
+    this.workflowMacros = [...this.workflowMacros, { macroID, name, position }];
+    this.refreshMacroVisuals();
+    this.macroChangeSubject.next();
+    return macroID;
+  }
+
+  public getWorkflowMacro(macroID: string): WorkflowMacro | undefined {
+    return this.workflowMacros.find(macro => macro.macroID === macroID);
+  }
+
+  public getWorkflowMacros(): readonly WorkflowMacro[] {
+    return this.workflowMacros;
+  }
+
+  public getMacroVisualRefreshStream(): Observable<void> {
+    return this.macroVisualRefreshSubject.asObservable();
+  }
+
+  public setMacroCollapsed(macroID: string, collapsed: boolean): void {
+    const visiblePosition = collapsed ? this.getCurrentMacroNodePosition(macroID) : undefined;
+    this.workflowMacros = this.workflowMacros.map(macro =>
+      macro.macroID === macroID ? { ...macro, collapsed, position: visiblePosition ?? macro.position } : macro
+    );
+    this.refreshMacroVisuals();
+    this.macroChangeSubject.next();
+  }
+
+  public deleteMacros(macroIDs: readonly string[]): void {
+    if (!macroIDs.length) return;
+    const macroIDSet = new Set(macroIDs);
+    const operatorIDs = this.texeraGraph
+      .getAllOperators()
+      .filter(operator => operator.macroIdParent !== undefined && macroIDSet.has(operator.macroIdParent))
+      .map(operator => operator.operatorID);
+    if (operatorIDs.length) {
+      this.deleteOperatorsAndLinks(operatorIDs);
+    }
+    this.workflowMacros = this.workflowMacros.filter(macro => !macroIDSet.has(macro.macroID));
+    this.refreshMacroVisuals();
+    this.macroChangeSubject.next();
+  }
+
+  public replaceMacroWorkflow(
+    macroID: string,
+    workflowContent: WorkflowContent,
+    workflowId?: number,
+    workflowName?: string
+  ): void {
+    this.deleteOperatorsAndLinks(
+      this.texeraGraph
+        .getAllOperators()
+        .filter(operator => operator.macroIdParent === macroID)
+        .map(operator => operator.operatorID)
+    );
+    this.workflowMacros = this.workflowMacros.map(macro =>
+      macro.macroID === macroID
+        ? {
+            ...macro,
+            name: workflowName ?? macro.name,
+            workflowId,
+            workflowName,
+          }
+        : macro
+    );
+    this.addWorkflowContentToMacro(
+      macroID,
+      workflowContent,
+      this.getWorkflowMacro(macroID)?.position ?? this.centerPoint
+    );
+    this.refreshMacroVisuals();
+    this.macroChangeSubject.next();
+  }
+
+  private addWorkflowContentToMacro(macroID: string, workflowContent: WorkflowContent, origin: Point): void {
+    const idMap = new Map<string, string>();
+    const sourcePositions = Object.values(workflowContent.operatorPositions ?? {});
+    const minX = Math.min(...sourcePositions.map(pos => pos.x), 0);
+    const minY = Math.min(...sourcePositions.map(pos => pos.y), 0);
+
+    const operatorsAndPositions = workflowContent.operators.map(operator => {
+      const operatorID = `${operator.operatorType}-${this.workflowUtilService.getOperatorRandomUUID()}`;
+      idMap.set(operator.operatorID, operatorID);
+      const sourcePosition = workflowContent.operatorPositions[operator.operatorID] ?? { x: minX, y: minY };
+      return {
+        op: this.workflowUtilService.updateOperatorVersion({
+          ...operator,
+          operatorID,
+          macroIdParent: macroID,
+        }),
+        pos: {
+          x: origin.x + sourcePosition.x - minX,
+          y: origin.y + sourcePosition.y - minY + 80,
+        },
+      };
+    });
+
+    const links = workflowContent.links
+      .filter(link => idMap.has(link.source.operatorID) && idMap.has(link.target.operatorID))
+      .map(link => ({
+        linkID: this.workflowUtilService.getLinkRandomUUID(),
+        source: { ...link.source, operatorID: idMap.get(link.source.operatorID) as string },
+        target: { ...link.target, operatorID: idMap.get(link.target.operatorID) as string },
+      }));
+
+    const commentBoxes = (workflowContent.commentBoxes ?? []).map(commentBox => ({
+      ...commentBox,
+      commentBoxID: this.workflowUtilService.getCommentBoxRandomUUID(),
+      commentBoxPosition: {
+        x: origin.x + commentBox.commentBoxPosition.x - minX,
+        y: origin.y + commentBox.commentBoxPosition.y - minY + 80,
+      },
+    }));
+
+    this.addOperatorsAndLinks(operatorsAndPositions, links, commentBoxes);
   }
 
   public setPortProperty(operatorPortID: LogicalPort, newProperty: object) {
@@ -641,12 +797,14 @@ export class WorkflowActionService {
       this.jointGraphWrapper.jointGraph.clear();
 
       if (workflow === undefined) {
+        this.workflowMacros = [];
         this.setNewSharedModel();
         return;
       }
 
       const workflowContent: WorkflowContent = workflow.content;
       this.workflowSettings = workflowContent.settings || this.getDefaultSettings();
+      this.workflowMacros = workflowContent.macros ?? [];
 
       let operatorsAndPositions: { op: OperatorPredicate; pos: Point }[] = [];
       workflowContent.operators.forEach(op => {
@@ -664,6 +822,7 @@ export class WorkflowActionService {
       operatorsAndPositions = this.updateOperatorVersions(operatorsAndPositions);
 
       this.addOperatorsAndLinks(operatorsAndPositions, links, commentBoxes);
+      this.refreshMacroVisuals();
 
       // restore the view point
       if (restoreViewport) {
@@ -701,6 +860,7 @@ export class WorkflowActionService {
       this.getTexeraGraph().getOperatorVersionChangedStream(),
       this.getTexeraGraph().getPortDisplayNameChangedSubject(),
       this.getTexeraGraph().getPortPropertyChangedStream(),
+      this.macroChangeSubject.asObservable(),
       this.workflowResetSubject.asObservable()
     );
   }
@@ -748,6 +908,7 @@ export class WorkflowActionService {
     const operatorPositions: { [key: string]: Point } = {};
     const commentBoxes = texeraGraph.getAllCommentBoxes();
     const settings = this.workflowSettings;
+    const macros = this.workflowMacros;
 
     texeraGraph
       .getAllOperators()
@@ -763,6 +924,7 @@ export class WorkflowActionService {
       links,
       commentBoxes,
       settings,
+      macros,
     };
   }
 
@@ -859,54 +1021,197 @@ export class WorkflowActionService {
       .pipe(
         filter(() => this.jointGraphWrapper.getListenPositionChange()),
         filter(() => this.undoRedoService.listenJointCommand),
-        filter(() => this.texeraGraph.getSyncTexeraGraph()),
-        filter(movedElement =>
-          this.jointGraphWrapper
-            .getCurrentHighlightedOperatorIDs()
-            .concat(this.jointGraphWrapper.getCurrentHighlightedCommentBoxIDs())
-            .includes(movedElement.elementID)
-        )
+        filter(() => this.texeraGraph.getSyncTexeraGraph())
       )
       .subscribe(movedElement => {
-        this.texeraGraph.bundleActions(() => {
-          if (
-            this.texeraGraph.sharedModel.elementPositionMap.get(movedElement.elementID) !== movedElement.newPosition
-          ) {
-            // For syncing ops/comment boxes in shared editing
+        const movedOperator = this.texeraGraph.sharedModel.operatorIDMap.has(movedElement.elementID)
+          ? this.texeraGraph.getOperator(movedElement.elementID)
+          : undefined;
+        const selectedElements = this.jointGraphWrapper
+          .getCurrentHighlightedOperatorIDs()
+          .concat(this.jointGraphWrapper.getCurrentHighlightedCommentBoxIDs());
+
+        if (selectedElements.includes(movedElement.elementID)) {
+          this.texeraGraph.bundleActions(() => {
+            if (
+              this.texeraGraph.sharedModel.elementPositionMap.get(movedElement.elementID) !== movedElement.newPosition
+            ) {
+              // For syncing ops/comment boxes in shared editing
+              this.texeraGraph.sharedModel.elementPositionMap.set(movedElement.elementID, movedElement.newPosition);
+              // For moving all highlighted operators
+              const selectedElements = this.jointGraphWrapper
+                .getCurrentHighlightedOperatorIDs()
+                .concat(this.jointGraphWrapper.getCurrentHighlightedCommentBoxIDs());
+              const offsetX = movedElement.newPosition.x - movedElement.oldPosition.x;
+              const offsetY = movedElement.newPosition.y - movedElement.oldPosition.y;
+              this.jointGraphWrapper.setListenPositionChange(false);
+              this.undoRedoService.setListenJointCommand(false);
+              // Persistence and shared-editing syncing for comment boxes have different interfaces.
+              // Setting positions inside commentBoxes here only for persistence.
+              // Syncing uses elementPositionMap.
+              selectedElements
+                .filter(elementID => elementID.includes("commentBox"))
+                .forEach(elementID => {
+                  this.texeraGraph.sharedModel.commentBoxMap
+                    .get(elementID)
+                    ?.set("commentBoxPosition", this.jointGraphWrapper.getElementPosition(elementID));
+                });
+              // Move other highlighted operators.
+              selectedElements
+                .filter(elementID => elementID !== movedElement.elementID)
+                .forEach(elementID => {
+                  this.jointGraphWrapper.setElementPosition(elementID, offsetX, offsetY);
+                  this.texeraGraph.sharedModel.elementPositionMap.set(
+                    elementID,
+                    this.jointGraphWrapper.getElementPosition(elementID)
+                  );
+                });
+              this.jointGraphWrapper.setListenPositionChange(true);
+              this.undoRedoService.setListenJointCommand(true);
+            }
+          });
+        } else {
+          if (movedOperator && this.texeraGraph.sharedModel.elementPositionMap.has(movedElement.elementID)) {
             this.texeraGraph.sharedModel.elementPositionMap.set(movedElement.elementID, movedElement.newPosition);
-            // For moving all highlighted operators
-            const selectedElements = this.jointGraphWrapper
-              .getCurrentHighlightedOperatorIDs()
-              .concat(this.jointGraphWrapper.getCurrentHighlightedCommentBoxIDs());
-            const offsetX = movedElement.newPosition.x - movedElement.oldPosition.x;
-            const offsetY = movedElement.newPosition.y - movedElement.oldPosition.y;
+          }
+        }
+
+        if (movedOperator?.macroIdParent) {
+          this.refreshMacroVisuals();
+        }
+      });
+  }
+
+  private handleMacroNodeDrag(): void {
+    this.jointGraphWrapper
+      .getMacroNodePositionChangeEvent()
+      .pipe(
+        filter(() => this.jointGraphWrapper.getListenPositionChange()),
+        filter(() => this.undoRedoService.listenJointCommand)
+      )
+      .subscribe(({ macroID, oldPosition, newPosition }) => {
+        const macro = this.getWorkflowMacro(macroID);
+        if (!macro) return;
+        const referencePosition =
+          macro.collapsed ?? false ? oldPosition : this.jointGraphWrapper.getMacroFramePosition(macroID) ?? oldPosition;
+        const offsetX = newPosition.x - referencePosition.x;
+        const offsetY = newPosition.y - referencePosition.y;
+
+        this.workflowMacros = this.workflowMacros.map(macro =>
+          macro.macroID === macroID ? { ...macro, position: newPosition } : macro
+        );
+        if ((macro.collapsed ?? false) && (offsetX !== 0 || offsetY !== 0)) {
+          this.refreshMacroVisuals();
+        } else if (offsetX !== 0 || offsetY !== 0) {
+          const internalOperatorIDs = this.texeraGraph
+            .getAllOperators()
+            .filter(operator => operator.macroIdParent === macroID)
+            .map(operator => operator.operatorID);
+          this.texeraGraph.bundleActions(() => {
             this.jointGraphWrapper.setListenPositionChange(false);
             this.undoRedoService.setListenJointCommand(false);
-            // Persistence and shared-editing syncing for comment boxes have different interfaces.
-            // Setting positions inside commentBoxes here only for persistence.
-            // Syncing uses elementPositionMap.
-            selectedElements
-              .filter(elementID => elementID.includes("commentBox"))
-              .forEach(elementID => {
-                this.texeraGraph.sharedModel.commentBoxMap
-                  .get(elementID)
-                  ?.set("commentBoxPosition", this.jointGraphWrapper.getElementPosition(elementID));
-              });
-            // Move other highlighted operators.
-            selectedElements
-              .filter(elementID => elementID !== movedElement.elementID)
-              .forEach(elementID => {
-                this.jointGraphWrapper.setElementPosition(elementID, offsetX, offsetY);
+            try {
+              internalOperatorIDs.forEach(operatorID => {
+                this.jointGraphWrapper.setElementPosition(operatorID, offsetX, offsetY);
                 this.texeraGraph.sharedModel.elementPositionMap.set(
-                  elementID,
-                  this.jointGraphWrapper.getElementPosition(elementID)
+                  operatorID,
+                  this.jointGraphWrapper.getElementPosition(operatorID)
                 );
               });
-            this.jointGraphWrapper.setListenPositionChange(true);
-            this.undoRedoService.setListenJointCommand(true);
-          }
-        });
+            } finally {
+              this.jointGraphWrapper.setListenPositionChange(true);
+              this.undoRedoService.setListenJointCommand(true);
+            }
+          });
+          this.refreshMacroVisuals();
+        }
+        this.macroChangeSubject.next();
       });
+  }
+
+  private refreshMacroVisuals(): void {
+    this.jointGraphWrapper.refreshMacroFrames(
+      this.texeraGraph.getAllOperators(),
+      this.workflowMacros,
+      this.texeraGraph.getAllLinks()
+    );
+    this.macroVisualRefreshSubject.next();
+  }
+
+  private adoptFullyInternalMacroOperators(link: OperatorLink): boolean {
+    const adoptedOperatorIDs = [link.source.operatorID, link.target.operatorID].filter(
+      (operatorID, index, ids) => ids.indexOf(operatorID) === index && this.getMacroIDForFullyInternalOperator(operatorID)
+    );
+    adoptedOperatorIDs.forEach(operatorID => {
+      const macroID = this.getMacroIDForFullyInternalOperator(operatorID);
+      if (macroID) {
+        (this.texeraGraph.getSharedOperatorType(operatorID) as any).set("macroIdParent", macroID);
+      }
+    });
+    return adoptedOperatorIDs.length > 0;
+  }
+
+  private getMacroIDForFullyInternalOperator(operatorID: string): string | undefined {
+    const operator = this.texeraGraph.getOperator(operatorID);
+    if (!operator || operator.macroIdParent) return undefined;
+
+    const operatorsByID = new Map(this.texeraGraph.getAllOperators().map(operator => [operator.operatorID, operator]));
+    const incidentLinks = this.texeraGraph
+      .getAllLinks()
+      .filter(link => link.source.operatorID === operatorID || link.target.operatorID === operatorID);
+    if (!incidentLinks.length) return undefined;
+
+    const neighborMacroIDs = incidentLinks.map(link => {
+      const neighborID = link.source.operatorID === operatorID ? link.target.operatorID : link.source.operatorID;
+      return operatorsByID.get(neighborID)?.macroIdParent;
+    });
+    const macroIDs = Array.from(new Set(neighborMacroIDs.filter((macroID): macroID is string => Boolean(macroID))));
+    if (macroIDs.length !== 1 || neighborMacroIDs.some(macroID => macroID !== macroIDs[0])) return undefined;
+
+    const macroID = macroIDs[0];
+    const hasInternalInput = incidentLinks.some(
+      link => link.target.operatorID === operatorID && operatorsByID.get(link.source.operatorID)?.macroIdParent === macroID
+    );
+    const hasInternalOutput = incidentLinks.some(
+      link => link.source.operatorID === operatorID && operatorsByID.get(link.target.operatorID)?.macroIdParent === macroID
+    );
+    return hasInternalInput && hasInternalOutput ? macroID : undefined;
+  }
+
+  private getCurrentMacroNodePosition(macroID: string): Point | undefined {
+    try {
+      return this.jointGraphWrapper.getElementPosition(JointGraphWrapper.getMacroNodeID(macroID));
+    } catch {
+      return undefined;
+    }
+  }
+
+  private getMacroNodePositionForOperators(operatorIDs: readonly string[]): Point {
+    return this.getMacroNodePositionFromPositions(
+      operatorIDs.map(operatorID => this.jointGraphWrapper.getElementPosition(operatorID))
+    );
+  }
+
+  private getMacroNodePositionFromPositions(positions: readonly Point[]): Point {
+    if (positions.length === 0) {
+      return this.getNextMacroImportOrigin();
+    }
+    return {
+      x: Math.min(...positions.map(position => position.x)) - 70,
+      y: Math.min(...positions.map(position => position.y)) - 115,
+    };
+  }
+
+  private getNextMacroImportOrigin(): Point {
+    const operators = this.texeraGraph.getAllOperators();
+    if (operators.length === 0) {
+      return this.centerPoint;
+    }
+    const positions = operators.map(operator => this.jointGraphWrapper.getElementPosition(operator.operatorID));
+    return {
+      x: Math.max(...positions.map(position => position.x)) + JointUIService.DEFAULT_OPERATOR_WIDTH + 180,
+      y: Math.min(...positions.map(position => position.y)) - 80,
+    };
   }
 
   private updateOperatorVersions(operatorsAndPositions: { op: OperatorPredicate; pos: Point }[]) {

@@ -22,9 +22,23 @@ import { Injectable } from "@angular/core";
 import { Observable } from "rxjs";
 import { AppSettings } from "../../../common/app-setting";
 import { OperatorMetadata, OperatorSchema } from "../../types/operator-schema.interface";
-import { shareReplay } from "rxjs/operators";
+import { map, shareReplay } from "rxjs/operators";
 
 export const OPERATOR_METADATA_ENDPOINT = "resources/operator-metadata";
+export const WORKFLOW_MACRO_OPERATOR_TYPE = "WorkflowMacro";
+
+export const WORKFLOW_MACRO_OPERATOR_SCHEMA: OperatorSchema = {
+  operatorType: WORKFLOW_MACRO_OPERATOR_TYPE,
+  operatorVersion: "frontend-macro",
+  jsonSchema: { type: "object", properties: {} },
+  additionalMetadata: {
+    userFriendlyName: "Workflow Macro",
+    operatorGroupName: "Workflow",
+    operatorDescription: "Import an existing workflow as a reusable macro",
+    inputPorts: [],
+    outputPorts: [],
+  },
+};
 
 const addDictionaryAPIAddress = "/api/resources/dictionary/";
 const getDictionaryAPIAddress = "/api/upload/dictionary/";
@@ -54,7 +68,10 @@ export class OperatorMetadataService {
 
   private operatorMetadataObservable = this.httpClient
     .get<OperatorMetadata>(`${AppSettings.getApiEndpoint()}/${OPERATOR_METADATA_ENDPOINT}`)
-    .pipe(shareReplay(1));
+    .pipe(
+      map(metadata => this.withWorkflowMacroOperator(metadata)),
+      shareReplay(1)
+    );
 
   constructor(private httpClient: HttpClient) {
     this.getOperatorMetadata().subscribe(data => {
@@ -118,5 +135,19 @@ export class OperatorMetadataService {
       return false;
     }
     return true;
+  }
+
+  private withWorkflowMacroOperator(metadata: OperatorMetadata): OperatorMetadata {
+    if (metadata.operators.some(operator => operator.operatorType === WORKFLOW_MACRO_OPERATOR_TYPE)) {
+      return metadata;
+    }
+    return {
+      operators: [...metadata.operators, WORKFLOW_MACRO_OPERATOR_SCHEMA],
+      groups: metadata.groups.some(
+        group => group.groupName === WORKFLOW_MACRO_OPERATOR_SCHEMA.additionalMetadata.operatorGroupName
+      )
+        ? metadata.groups
+        : [...metadata.groups, { groupName: WORKFLOW_MACRO_OPERATOR_SCHEMA.additionalMetadata.operatorGroupName }],
+    };
   }
 }
