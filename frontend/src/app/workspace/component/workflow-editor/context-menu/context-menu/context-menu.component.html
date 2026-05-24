@@ -36,20 +36,6 @@
   highlightedCommentBoxIds.length === 0 &&
   !hasHighlightedLinks() &&
   isWorkflowModifiable &&
-  operatorMenuService.canCreateMacroFromHighlightedOperators()"
-    (click)="operatorMenuService.createMacroFromHighlightedOperators()">
-    <span
-      nz-icon
-      nzType="apartment"
-      nzTheme="outline"></span>
-    create macro
-  </li>
-  <li
-    nz-menu-item
-    *ngIf="highlightedOperatorIds.length > 0 &&
-  highlightedCommentBoxIds.length === 0 &&
-  !hasHighlightedLinks() &&
-  isWorkflowModifiable &&
   operatorMenuService.canRemoveHighlightedOperatorsFromMacro()"
     (click)="operatorMenuService.removeHighlightedOperatorsFromMacro()">
     <span

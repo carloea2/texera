@@ -469,16 +469,6 @@ export class WorkflowActionService {
     });
   }
 
-  public createMacroForOperators(operatorIDs: readonly string[], name = "Macro"): string {
-    const macroID = this.workflowUtilService.getGroupRandomUUID().replace(/^group-/, "macro-");
-    this.workflowMacros = [
-      ...this.workflowMacros.filter(macro => macro.macroID !== macroID),
-      { macroID, name, position: this.getMacroNodePositionForOperators(operatorIDs) },
-    ];
-    this.setOperatorsMacroParent(operatorIDs, macroID);
-    return macroID;
-  }
-
   public setOperatorsMacroParent(operatorIDs: readonly string[], macroIdParent?: string): void {
     this.texeraGraph.bundleActions(() => {
       operatorIDs.forEach(operatorID => {
@@ -1184,34 +1174,6 @@ export class WorkflowActionService {
     } catch {
       return undefined;
     }
-  }
-
-  private getMacroNodePositionForOperators(operatorIDs: readonly string[]): Point {
-    return this.getMacroNodePositionFromPositions(
-      operatorIDs.map(operatorID => this.jointGraphWrapper.getElementPosition(operatorID))
-    );
-  }
-
-  private getMacroNodePositionFromPositions(positions: readonly Point[]): Point {
-    if (positions.length === 0) {
-      return this.getNextMacroImportOrigin();
-    }
-    return {
-      x: Math.min(...positions.map(position => position.x)) - 70,
-      y: Math.min(...positions.map(position => position.y)) - 115,
-    };
-  }
-
-  private getNextMacroImportOrigin(): Point {
-    const operators = this.texeraGraph.getAllOperators();
-    if (operators.length === 0) {
-      return this.centerPoint;
-    }
-    const positions = operators.map(operator => this.jointGraphWrapper.getElementPosition(operator.operatorID));
-    return {
-      x: Math.max(...positions.map(position => position.x)) + JointUIService.DEFAULT_OPERATOR_WIDTH + 180,
-      y: Math.min(...positions.map(position => position.y)) - 80,
-    };
   }
 
   private updateOperatorVersions(operatorsAndPositions: { op: OperatorPredicate; pos: Point }[]) {

@@ -103,9 +103,7 @@ describe("ContextMenuComponent", () => {
       viewResultHighlightedOperators: vi.fn(),
       reuseResultHighlightedOperator: vi.fn(),
       executeUpToOperator: vi.fn(),
-      canCreateMacroFromHighlightedOperators: vi.fn().mockReturnValue(false),
       canRemoveHighlightedOperatorsFromMacro: vi.fn().mockReturnValue(false),
-      createMacroFromHighlightedOperators: vi.fn(),
       removeHighlightedOperatorsFromMacro: vi.fn(),
     } as unknown as Mocked<OperatorMenuService>;
 

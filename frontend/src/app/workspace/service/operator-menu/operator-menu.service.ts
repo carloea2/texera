@@ -266,22 +266,11 @@ export class OperatorMenuService {
     this.executeWorkflowService.executeWorkflow("", targetOperatorId);
   }
 
-  public canCreateMacroFromHighlightedOperators(): boolean {
-    return this._highlightedOperators$.value.length > 0;
-  }
-
   public canRemoveHighlightedOperatorsFromMacro(): boolean {
     const texeraGraph = this.workflowActionService.getTexeraGraph();
     return this._highlightedOperators$.value.some(operatorID =>
       Boolean(texeraGraph.getOperator(operatorID).macroIdParent)
     );
-  }
-
-  public createMacroFromHighlightedOperators(): void {
-    const operatorIDs = this._highlightedOperators$.value;
-    if (!operatorIDs.length) return;
-    this.workflowActionService.createMacroForOperators(operatorIDs);
-    this.notificationService.info("Created macro for selected operators.");
   }
 
   public removeHighlightedOperatorsFromMacro(): void {

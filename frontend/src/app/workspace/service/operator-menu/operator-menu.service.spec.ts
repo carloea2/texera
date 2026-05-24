@@ -185,7 +185,7 @@ describe("OperatorMenuService", () => {
     });
   });
 
-  it("groups highlighted operators under a macro parent and can remove them", () => {
+  it("clears macroIdParent on highlighted operators via removeHighlightedOperatorsFromMacro", () => {
     workflowActionService.addOperatorsAndLinks(
       [
         { op: mockScanPredicate, pos: mockPoint },
@@ -193,21 +193,16 @@ describe("OperatorMenuService", () => {
       ],
       []
     );
+    const macroID = workflowActionService.createMacroAt(mockPoint);
+    workflowActionService.setOperatorsMacroParent(
+      [mockScanPredicate.operatorID, mockSentimentPredicate.operatorID],
+      macroID
+    );
+
     const wrapper = workflowActionService.getJointGraphWrapper();
     wrapper.unhighlightOperators(...wrapper.getCurrentHighlightedOperatorIDs());
     wrapper.highlightOperators(mockScanPredicate.operatorID, mockSentimentPredicate.operatorID);
 
-    service.createMacroFromHighlightedOperators();
-
-    const scanMacroId = workflowActionService.getTexeraGraph().getOperator(mockScanPredicate.operatorID).macroIdParent;
-    const sentimentMacroId = workflowActionService
-      .getTexeraGraph()
-      .getOperator(mockSentimentPredicate.operatorID).macroIdParent;
-    expect(scanMacroId).toBeTruthy();
-    expect(sentimentMacroId).toBe(scanMacroId);
-    expect(workflowActionService.getWorkflowContent().macros).toEqual([
-      expect.objectContaining({ macroID: scanMacroId, name: "Macro" }),
-    ]);
     expect(service.canRemoveHighlightedOperatorsFromMacro()).toBe(true);
 
     service.removeHighlightedOperatorsFromMacro();
@@ -218,8 +213,6 @@ describe("OperatorMenuService", () => {
     expect(
       workflowActionService.getTexeraGraph().getOperator(mockSentimentPredicate.operatorID).macroIdParent
     ).toBeUndefined();
-    expect(workflowActionService.getWorkflowContent().macros).toEqual([
-      expect.objectContaining({ macroID: scanMacroId, name: "Macro" }),
-    ]);
+    expect(service.canRemoveHighlightedOperatorsFromMacro()).toBe(false);
   });
 });
