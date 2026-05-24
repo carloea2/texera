@@ -698,7 +698,9 @@ export class JointGraphWrapper {
     if (!internalElements.length) return [];
 
     const internalLinks = links
-      .filter(link => internalOperatorIDs.has(link.source.operatorID) && internalOperatorIDs.has(link.target.operatorID))
+      .filter(
+        link => internalOperatorIDs.has(link.source.operatorID) && internalOperatorIDs.has(link.target.operatorID)
+      )
       .map(link => this.jointGraph.getCell(link.linkID))
       .filter((cell): cell is joint.dia.Link => Boolean(cell?.isLink()));
 
@@ -840,11 +842,7 @@ export class JointGraphWrapper {
         x: minX - JointGraphWrapper.MACRO_FRAME_PADDING_X,
         y: minY - JointGraphWrapper.MACRO_FRAME_PADDING_TOP,
         width: maxX - minX + JointGraphWrapper.MACRO_FRAME_PADDING_X * 2,
-        height:
-          maxY -
-          minY +
-          JointGraphWrapper.MACRO_FRAME_PADDING_TOP +
-          JointGraphWrapper.MACRO_FRAME_PADDING_BOTTOM,
+        height: maxY - minY + JointGraphWrapper.MACRO_FRAME_PADDING_TOP + JointGraphWrapper.MACRO_FRAME_PADDING_BOTTOM,
       };
       expandedMacroBounds.set(macroId, bounds);
       const existingFrame = this.jointGraph.getCell(frameID);
@@ -1033,9 +1031,11 @@ export class JointGraphWrapper {
       this.clearMacroSelectionChrome();
       this.mainPaper.updateViews();
       this.jointGraph.getLinks().forEach(link => {
-        const linkView = this.mainPaper.findViewByModel(link) as (joint.dia.LinkView & {
-          requestConnectionUpdate?: () => void;
-        }) | null;
+        const linkView = this.mainPaper.findViewByModel(link) as
+          | (joint.dia.LinkView & {
+              requestConnectionUpdate?: () => void;
+            })
+          | null;
         linkView?.requestConnectionUpdate?.();
       });
     };

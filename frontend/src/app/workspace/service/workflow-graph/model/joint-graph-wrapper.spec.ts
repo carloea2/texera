@@ -672,10 +672,12 @@ describe("JointGraphWrapperService", () => {
       id: JointGraphWrapper.getMacroNodeID(targetMacroID),
       port: "macro-in-macro-cross-link",
     });
-    expect((jointGraph.getCell(JointGraphWrapper.getMacroNodeID(sourceMacroID)) as joint.dia.Element).getPorts().length)
-      .toBe(1);
-    expect((jointGraph.getCell(JointGraphWrapper.getMacroNodeID(targetMacroID)) as joint.dia.Element).getPorts().length)
-      .toBe(1);
+    expect(
+      (jointGraph.getCell(JointGraphWrapper.getMacroNodeID(sourceMacroID)) as joint.dia.Element).getPorts().length
+    ).toBe(1);
+    expect(
+      (jointGraph.getCell(JointGraphWrapper.getMacroNodeID(targetMacroID)) as joint.dia.Element).getPorts().length
+    ).toBe(1);
     expect(jointGraph.getCell(crossMacroLink.linkID).attr("root/display")).toBe("none");
   });
 

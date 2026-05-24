@@ -1130,7 +1130,8 @@ export class WorkflowActionService {
 
   private adoptFullyInternalMacroOperators(link: OperatorLink): boolean {
     const adoptedOperatorIDs = [link.source.operatorID, link.target.operatorID].filter(
-      (operatorID, index, ids) => ids.indexOf(operatorID) === index && this.getMacroIDForFullyInternalOperator(operatorID)
+      (operatorID, index, ids) =>
+        ids.indexOf(operatorID) === index && this.getMacroIDForFullyInternalOperator(operatorID)
     );
     adoptedOperatorIDs.forEach(operatorID => {
       const macroID = this.getMacroIDForFullyInternalOperator(operatorID);
@@ -1160,10 +1161,12 @@ export class WorkflowActionService {
 
     const macroID = macroIDs[0];
     const hasInternalInput = incidentLinks.some(
-      link => link.target.operatorID === operatorID && operatorsByID.get(link.source.operatorID)?.macroIdParent === macroID
+      link =>
+        link.target.operatorID === operatorID && operatorsByID.get(link.source.operatorID)?.macroIdParent === macroID
     );
     const hasInternalOutput = incidentLinks.some(
-      link => link.source.operatorID === operatorID && operatorsByID.get(link.target.operatorID)?.macroIdParent === macroID
+      link =>
+        link.source.operatorID === operatorID && operatorsByID.get(link.target.operatorID)?.macroIdParent === macroID
     );
     return hasInternalInput && hasInternalOutput ? macroID : undefined;
   }

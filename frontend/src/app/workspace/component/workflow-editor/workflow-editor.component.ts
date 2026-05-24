@@ -357,7 +357,7 @@ export class WorkflowEditorComponent implements OnInit, AfterViewInit, OnDestroy
             .getAllOperators()
             .forEach(op => {
               this.jointUIService.changeOperatorState(this.paper, op.operatorID, operatorState);
-          });
+            });
         }
       });
 
