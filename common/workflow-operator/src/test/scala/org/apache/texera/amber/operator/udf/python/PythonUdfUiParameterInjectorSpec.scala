@@ -57,7 +57,7 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
       |        yield tuple_
       |""".stripMargin
 
-  it should "return encoded user code unchanged when there are no UI parameters" in {
+  it should "return user code unchanged when there are no UI parameters" in {
     val injectedCode = inject()
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
@@ -67,10 +67,34 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     injectedCode should not include ("import typing")
   }
 
+  it should "preserve user source lines that look like Scala stripMargin input" in {
+    val udfCodeWithPipeLine =
+      """from pytexera import *
+        |
+        |class ProcessTupleOperator(UDFOperatorV2):
+        |    def open(self):
+        |        pattern = "keep"
+        |        text = '''
+        |    |do not strip this line
+        |'''
+        |
+        |    def process_tuple(self, tuple_: Tuple, port: int):
+        |        yield tuple_
+        |""".stripMargin
+
+    val injectedCode = inject(udfCodeWithPipeLine, uiParameter("k", AttributeType.STRING, "v"))
+
+    injectedCode should include("    |do not strip this line")
+    injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
+  }
+
   it should "inject UI parameter hook into supported UDF class using Dict and Any from pytexera" in {
     val injectedCode = inject(uiParameter("date", AttributeType.TIMESTAMP, "2024-01-01T00:00:00Z"))
 
     injectedCode should include("class ProcessTupleOperator(UDFOperatorV2):")
+    injectedCode should include(
+      "# Follow-up runtime support exports Dict/Any and defines the base hook that @overrides targets."
+    )
     injectedCode should include("def _texera_injected_ui_parameters(self) -> Dict[str, Any]:")
     injectedCode should include("return {")
     injectedCode should include("self.decode_python_template")
@@ -109,6 +133,33 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     hookIndex should be >= 0
     processTupleIndex should be < hookIndex
     helperIndex should be > hookIndex
+  }
+
+  it should "append the reserved hook after triple-quoted strings that contain top-level-looking lines" in {
+    val udfCodeWithTripleQuotedString =
+      """from pytexera import *
+        |
+        |class ProcessTupleOperator(UDFOperatorV2):
+        |    def process_tuple(self, tuple_: Tuple, port: int):
+        |        sql = '''
+        |SELECT * FROM t
+        |'''
+        |        yield tuple_
+        |
+        |def helper():
+        |    return "outside"
+        |""".stripMargin
+
+    val injectedCode =
+      inject(udfCodeWithTripleQuotedString, uiParameter("k", AttributeType.STRING, "v"))
+
+    val hookIndex = injectedCode.indexOf("def _texera_injected_ui_parameters(self)")
+    val stringEndIndex = injectedCode.indexOf("'''\n        yield tuple_")
+    val helperIndex = injectedCode.indexOf("def helper():")
+
+    stringEndIndex should be >= 0
+    stringEndIndex should be < hookIndex
+    hookIndex should be < helperIndex
   }
 
   it should "preserve multiple UI parameters in the injected map" in {
@@ -181,7 +232,7 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "leave code unchanged when no supported user class is present" in {
+  it should "throw when UI parameters are provided but no supported user class is present" in {
     val nonSupportedCode =
       """from pytexera import *
         |
@@ -190,10 +241,10 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
         |        pass
         |""".stripMargin
 
-    val injectedCode = inject(nonSupportedCode, uiParameter("k", AttributeType.STRING, "v"))
+    val exception = the[RuntimeException] thrownBy {
+      inject(nonSupportedCode, uiParameter("k", AttributeType.STRING, "v"))
+    }
 
-    injectedCode should not include ("_texera_injected_ui_parameters")
-    injectedCode should include("class SomethingElse:")
-    injectedCode should not include ("import typing")
+    exception.getMessage should include("no supported Python UDF class was found")
   }
 }

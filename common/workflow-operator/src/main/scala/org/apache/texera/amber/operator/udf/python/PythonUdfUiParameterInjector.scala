@@ -19,6 +19,7 @@
 package org.apache.texera.amber.operator.udf.python
 
 import org.apache.texera.amber.core.tuple.{Attribute, AttributeType}
+import org.apache.texera.amber.pybuilder.PythonLexerUtils.updateTripleQuotedStringState
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder
 import org.apache.texera.amber.pybuilder.PythonTemplateBuilder.PythonTemplateBuilderStringContext
 
@@ -84,7 +85,8 @@ object PythonUdfUiParameterInjector {
   private def buildInjectedHookMethod(uiParameters: List[UiUDFParameter]): String = {
     val injectedParametersMap = buildInjectedParametersMap(uiParameters)
 
-    (pyb"""|@overrides
+    (pyb"""|# Follow-up runtime support exports Dict/Any and defines the base hook that @overrides targets.
+           |@overrides
            |$InjectedUiParametersHookMethodHeader
            |    return {""" +
       injectedParametersMap +
@@ -109,6 +111,7 @@ object PythonUdfUiParameterInjector {
   private def detectClassBlockEnd(code: String, classHeaderStart: Int, classIndent: String): Int = {
     val classLineEnd = lineEndIndex(code, classHeaderStart)
     var lineStart = if (classLineEnd < code.length) classLineEnd + 1 else code.length
+    var tripleQuotedStringDelimiter: Option[String] = None
 
     while (lineStart < code.length) {
       val lineEnd = lineEndIndex(code, lineStart)
@@ -120,9 +123,11 @@ object PythonUdfUiParameterInjector {
       val currentIndentLen = line.segmentLength(ch => ch == ' ' || ch == '\t')
       val classIndentLen = classIndent.length
 
-      if (!isBlank && currentIndentLen <= classIndentLen) {
+      if (tripleQuotedStringDelimiter.isEmpty && !isBlank && currentIndentLen <= classIndentLen) {
         return lineStart
       }
+
+      tripleQuotedStringDelimiter = updateTripleQuotedStringState(line, tripleQuotedStringDelimiter)
 
       lineStart = if (lineEnd < code.length) lineEnd + 1 else code.length
     }
@@ -136,17 +141,20 @@ object PythonUdfUiParameterInjector {
     hookRegex.findFirstIn(classBlock).isDefined
   }
 
-  private def injectHookIntoUserClass(encodedUserCode: String, hookMethod: String): String = {
+  private def injectHookIntoUserClass(userCode: String, hookMethod: String): String = {
     val classHeaderMatch =
-      SupportedPythonUdfClassHeaderRegex.findFirstMatchIn(encodedUserCode).getOrElse {
-        return encodedUserCode
+      SupportedPythonUdfClassHeaderRegex.findFirstMatchIn(userCode).getOrElse {
+        throw new RuntimeException(
+          "UiParameters were provided, but no supported Python UDF class was found. " +
+            "Use one of ProcessTupleOperator, ProcessBatchOperator, ProcessTableOperator, or GenerateOperator."
+        )
       }
 
     val classHeaderStart = classHeaderMatch.start
     val classIndent = classHeaderMatch.group(1)
-    val classBlockEnd = detectClassBlockEnd(encodedUserCode, classHeaderStart, classIndent)
+    val classBlockEnd = detectClassBlockEnd(userCode, classHeaderStart, classIndent)
 
-    val classBlock = encodedUserCode.substring(classHeaderStart, classBlockEnd)
+    val classBlock = userCode.substring(classHeaderStart, classBlockEnd)
 
     if (containsReservedHook(classBlock)) {
       throw new RuntimeException(
@@ -160,9 +168,9 @@ object PythonUdfUiParameterInjector {
       bodyIndent
     )
 
-    encodedUserCode.substring(0, classBlockEnd) +
+    userCode.substring(0, classBlockEnd) +
       indentedHook +
-      encodedUserCode.substring(classBlockEnd)
+      userCode.substring(classBlockEnd)
   }
 
   private def inferClassBodyIndent(classBlock: String, classIndent: String): Option[String] = {
@@ -178,20 +186,20 @@ object PythonUdfUiParameterInjector {
   /**
     * Returns Python code with the UI-parameter hook injected into the supported UDF class.
     *
-    * If `uiParameters` is empty, the code is only passed through normal Python-template encoding. Throws
-    * [[RuntimeException]] when parameter metadata is invalid or the user already defines the reserved hook method.
+    * If `uiParameters` is empty, the code is returned unchanged. Throws [[RuntimeException]] when parameter metadata is
+    * invalid, the user already defines the reserved hook method, or parameters are provided for an unsupported class.
     */
   def inject(code: String, uiParameters: List[UiUDFParameter]): String = {
     val parameters = Option(uiParameters).getOrElse(List.empty)
     validate(parameters)
 
-    val encodedUserCode = pyb"$code".encode
+    val userCode = Option(code).getOrElse("")
 
     if (parameters.isEmpty) {
-      return encodedUserCode
+      return userCode
     }
 
     val hookMethod = buildInjectedHookMethod(parameters)
-    injectHookIntoUserClass(encodedUserCode, hookMethod)
+    injectHookIntoUserClass(userCode, hookMethod)
   }
 }

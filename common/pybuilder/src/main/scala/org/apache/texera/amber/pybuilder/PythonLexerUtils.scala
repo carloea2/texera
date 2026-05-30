@@ -38,6 +38,64 @@ object PythonLexerUtils {
   }
 
   /**
+    * Update triple-quoted-string state after scanning one physical Python source line.
+    *
+    * This is intentionally lightweight. It only tracks whether scanning is inside a `'''` or `"""` string so callers
+    * that reason about indentation can avoid treating string contents as real Python statements.
+    */
+  def updateTripleQuotedStringState(
+      line: String,
+      activeDelimiter: Option[String]
+  ): Option[String] = {
+    var delimiter = activeDelimiter
+    var inSingleQuotedString = false
+    var inDoubleQuotedString = false
+    var escaped = false
+    var index = 0
+
+    while (index < line.length) {
+      delimiter match {
+        case Some(active) =>
+          if (line.startsWith(active, index)) {
+            delimiter = None
+            index += active.length
+          } else {
+            index += 1
+          }
+
+        case None =>
+          val char = line.charAt(index)
+
+          if (escaped) {
+            escaped = false
+            index += 1
+          } else if ((inSingleQuotedString || inDoubleQuotedString) && char == '\\') {
+            escaped = true
+            index += 1
+          } else if (!inSingleQuotedString && !inDoubleQuotedString && char == '#') {
+            return delimiter
+          } else if (!inDoubleQuotedString && line.startsWith("'''", index)) {
+            delimiter = Some("'''")
+            index += 3
+          } else if (!inSingleQuotedString && line.startsWith("\"\"\"", index)) {
+            delimiter = Some("\"\"\"")
+            index += 3
+          } else if (!inDoubleQuotedString && char == '\'') {
+            inSingleQuotedString = !inSingleQuotedString
+            index += 1
+          } else if (!inSingleQuotedString && char == '"') {
+            inDoubleQuotedString = !inDoubleQuotedString
+            index += 1
+          } else {
+            index += 1
+          }
+      }
+    }
+
+    delimiter
+  }
+
+  /**
     * Detect whether the provided line tail contains an unclosed single or double quote.
     *
     * This is not a full Python parser; it is a small state machine tracking quote mode and escapes.
