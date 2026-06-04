@@ -67,6 +67,18 @@ class PythonUdfUiParameterInjectorSpec extends AnyFlatSpec with Matchers {
     injectedCode should not include ("import typing")
   }
 
+  it should "return unsupported user code unchanged when there are no UI parameters" in {
+    val nonSupportedCode =
+      """from pytexera import *
+        |
+        |class SomethingElse:
+        |    def open(self):
+        |        pass
+        |""".stripMargin
+
+    inject(nonSupportedCode) shouldBe nonSupportedCode
+  }
+
   it should "preserve user source lines that look like Scala stripMargin input" in {
     val udfCodeWithPipeLine =
       """from pytexera import *

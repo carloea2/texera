@@ -42,6 +42,10 @@ object PythonLexerUtils {
     *
     * This is intentionally lightweight. It only tracks whether scanning is inside a `'''` or `"""` string so callers
     * that reason about indentation can avoid treating string contents as real Python statements.
+    *
+    * Known limitations: escaped delimiters inside an active triple-quoted string are still treated as closing
+    * delimiters, and delimiter-like runs next to ordinary string boundaries may be detected because this helper does
+    * not fully parse Python string literal adjacency.
     */
   def updateTripleQuotedStringState(
       line: String,
