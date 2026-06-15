@@ -33,7 +33,7 @@ class AttributeType(Enum):
 
     STRING = 1
     INT = 2
-    # Java enum-name aliases accepted by the UI parameter parser.
+    # Attribute access needs Java names; RAW_TYPE_MAPPING handles raw schema strings.
     INTEGER = 2
     LONG = 3
     BOOL = 4
@@ -81,51 +81,39 @@ FROM_ARROW_MAPPING = {
 }
 
 
+def _is_empty_value(v):
+    return v is None or (isinstance(v, str) and v.strip() == "")
+
+
+def _parse_bool(v):
+    if _is_empty_value(v):
+        return False
+
+    normalized_value = str(v).strip().lower()
+    if normalized_value == "true":
+        return True
+    if normalized_value == "false":
+        return False
+    return float(normalized_value) != 0
+
+
+def _parse_timestamp(v):
+    if _is_empty_value(v):
+        return datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+
+    normalized_value = str(v)
+    if normalized_value.endswith("Z"):
+        normalized_value = normalized_value[:-1] + "+00:00"
+    return datetime.datetime.fromisoformat(normalized_value)
+
+
 FROM_STRING_PARSER_MAPPING = {
     AttributeType.STRING: str,
-    AttributeType.INT: lambda v: (
-        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
-    ),
-    AttributeType.LONG: lambda v: (
-        0 if v is None or (isinstance(v, str) and v.strip() == "") else int(v)
-    ),
-    AttributeType.DOUBLE: lambda v: (
-        0.0 if v is None or (isinstance(v, str) and v.strip() == "") else float(v)
-    ),
-    AttributeType.BOOL: lambda v: (
-        False
-        if v is None or (isinstance(v, str) and v.strip() == "")
-        else (
-            True
-            if str(v).strip().lower() == "true"
-            else (
-                False
-                if str(v).strip().lower() == "false"
-                else float(str(v).strip()) != 0
-            )
-        )
-    ),
-    AttributeType.BINARY: lambda v: (
-        (_ for _ in ()).throw(
-            ValueError(
-                "UiParameter does not support BINARY values. "
-                "Use a supported type instead."
-            )
-        )
-    ),
-    AttributeType.TIMESTAMP: lambda v: (
-        datetime.datetime.fromtimestamp(0)
-        if v is None or (isinstance(v, str) and v.strip() == "")
-        else datetime.datetime.fromisoformat(v)
-    ),
-    AttributeType.LARGE_BINARY: lambda v: (
-        (_ for _ in ()).throw(
-            ValueError(
-                "UiParameter does not support LARGE_BINARY values. "
-                "Use a supported type instead."
-            )
-        )
-    ),
+    AttributeType.INT: lambda v: 0 if _is_empty_value(v) else int(v),
+    AttributeType.LONG: lambda v: 0 if _is_empty_value(v) else int(v),
+    AttributeType.DOUBLE: lambda v: 0.0 if _is_empty_value(v) else float(v),
+    AttributeType.BOOL: _parse_bool,
+    AttributeType.TIMESTAMP: _parse_timestamp,
 }
 
 # Only single-directional mapping.

@@ -79,6 +79,46 @@ class SecondIndependentParameterOperator(UDFOperatorV2):
         yield tuple_
 
 
+class MissingParameterOperator(UDFOperatorV2):
+    def _texera_injected_ui_parameters(self):
+        return {"sent": "1"}
+
+    def open(self):
+        self.missing_parameter = self.UiParameter("missing", AttributeType.INT)
+
+    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
+        yield tuple_
+
+
+class SuperOpenParameterOperator(UDFOperatorV2):
+    def __init__(self):
+        self.hook_call_count = 0
+
+    def _texera_injected_ui_parameters(self):
+        self.hook_call_count += 1
+        return {"count": "3"}
+
+    def open(self):
+        super().open()
+        self.count_parameter = self.UiParameter("count", AttributeType.INT)
+
+    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
+        yield tuple_
+
+
+class SuperOpenConflictingParameterOperator(UDFOperatorV2):
+    def _texera_injected_ui_parameters(self):
+        return {"duplicate": "1"}
+
+    def open(self):
+        self.UiParameter("duplicate", AttributeType.INT)
+        super().open()
+        self.UiParameter("duplicate", AttributeType.STRING)
+
+    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
+        yield tuple_
+
+
 class TestUiParameterSupport:
     def test_injected_values_are_applied_before_open(self):
         operator = InjectedParametersOperator()
@@ -112,9 +152,30 @@ class TestUiParameterSupport:
                 AttributeType.TIMESTAMP,
                 datetime.datetime(2024, 1, 1, 0, 0),
             ),
+            (
+                "2024-01-01T00:00:00Z",
+                AttributeType.TIMESTAMP,
+                datetime.datetime(2024, 1, 1, 0, 0, tzinfo=datetime.timezone.utc),
+            ),
         ],
     )
     def test_parse_supported_types(self, raw_value, attr_type, expected):
+        assert _UiParameterSupport._parse(raw_value, attr_type) == expected
+
+    @pytest.mark.parametrize(
+        ("raw_value", "attr_type", "expected"),
+        [
+            ("", AttributeType.INT, 0),
+            ("   ", AttributeType.LONG, 0),
+            ("", AttributeType.DOUBLE, 0.0),
+            (
+                "",
+                AttributeType.TIMESTAMP,
+                datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc),
+            ),
+        ],
+    )
+    def test_parse_empty_values(self, raw_value, attr_type, expected):
         assert _UiParameterSupport._parse(raw_value, attr_type) == expected
 
     def test_java_attribute_type_aliases_parse_like_python_names(self):
@@ -156,6 +217,11 @@ class TestUiParameterSupport:
                 AttributeType.LARGE_BINARY,
                 "UiParameter does not support LARGE_BINARY values",
             ),
+            (
+                None,
+                AttributeType.BINARY,
+                "UiParameter does not support BINARY values",
+            ),
         ],
     )
     def test_parse_binary_types_raise_helpful_error(
@@ -167,6 +233,39 @@ class TestUiParameterSupport:
     def test_parse_unsupported_type_raises_helpful_error(self):
         with pytest.raises(TypeError, match="UiParameter.type .* is not supported"):
             _UiParameterSupport._parse("value", object())
+
+    def test_missing_injected_name_returns_none(self):
+        operator = MissingParameterOperator()
+
+        operator.open()
+
+        assert operator.missing_parameter.value is None
+
+    def test_ui_parameter_argument_errors(self):
+        operator = MissingParameterOperator()
+
+        with pytest.raises(TypeError, match="provided multiple times"):
+            operator.UiParameter("count", AttributeType.INT, type=AttributeType.INT)
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            operator.UiParameter("count", AttributeType.INT, value="1")
+        with pytest.raises(TypeError, match="UiParameter.type is required"):
+            operator.UiParameter("count")
+        with pytest.raises(TypeError, match="must be an AttributeType"):
+            operator.UiParameter("count", object())
+
+    def test_super_open_applies_injected_values_once(self):
+        operator = SuperOpenParameterOperator()
+
+        operator.open()
+
+        assert operator.hook_call_count == 1
+        assert operator.count_parameter.value == 3
+
+    def test_super_open_does_not_reset_duplicate_tracking(self):
+        operator = SuperOpenConflictingParameterOperator()
+
+        with pytest.raises(ValueError, match="Duplicate UiParameter name"):
+            operator.open()
 
     def test_wrapped_open_uses_instance_local_state(self):
         assert (

@@ -58,19 +58,25 @@ class _UiParameterSupport:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        # Wrap the effective open() method once per subclass.
         original_open = getattr(cls, "open", None)
         if original_open is None:
             return
 
-        # Avoid double wrapping
         if getattr(original_open, "__texera_ui_params_wrapped__", False):
             return
 
         @functools.wraps(original_open)
         def wrapped_open(self, *args, **kwargs):
-            self._texera_apply_injected_ui_parameters()
-            return original_open(self, *args, **kwargs)
+            """Apply injected UI parameters once before the outermost open()."""
+            if getattr(self, "_ui_parameter_open_in_progress", False):
+                return original_open(self, *args, **kwargs)
+
+            self._ui_parameter_open_in_progress = True
+            try:
+                self._texera_apply_injected_ui_parameters()
+                return original_open(self, *args, **kwargs)
+            finally:
+                self._ui_parameter_open_in_progress = False
 
         setattr(wrapped_open, "__texera_ui_params_wrapped__", True)
         cls.open = wrapped_open
@@ -116,20 +122,24 @@ class _UiParameterSupport:
 
     @staticmethod
     def _parse(value: Any, attr_type: AttributeType) -> Any:
-        if value is None:
-            return None
+        if attr_type in _UiParameterSupport._unsupported_ui_parameter_types:
+            raise ValueError(
+                f"UiParameter does not support {attr_type.name} values. "
+                "Use a supported type instead."
+            )
 
-        py_type = FROM_STRING_PARSER_MAPPING.get(attr_type)
-        if py_type is None:
+        parser = FROM_STRING_PARSER_MAPPING.get(attr_type)
+        if parser is None:
             raise TypeError(
                 f"UiParameter.type {attr_type!r} is not supported for parsing."
             )
 
+        if value is None:
+            return None
+
         try:
-            return py_type(value)
+            return parser(value)
         except Exception as e:
-            if attr_type in _UiParameterSupport._unsupported_ui_parameter_types:
-                raise ValueError(str(e)) from e
             raise ValueError(
                 f"Failed to parse UiParameter value {value!r} as {attr_type.name}. "
                 f"Please provide a valid {attr_type.name.lower()} value."
