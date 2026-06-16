@@ -16,6 +16,7 @@
 # under the License.
 
 import datetime
+import logging
 from typing import Iterator, Optional
 
 import pytest
@@ -97,6 +98,17 @@ class MissingParameterOperator(UDFOperatorV2):
 
     def open(self):
         self.missing_parameter = self.UiParameter("missing", AttributeType.INT)
+
+    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
+        yield tuple_
+
+
+class UnusedParameterOperator(UDFOperatorV2):
+    def _texera_injected_ui_parameters(self):
+        return {"used": "1", "unused": "2"}
+
+    def open(self):
+        self.used_parameter = self.UiParameter("used", AttributeType.INT)
 
     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
         yield tuple_
@@ -256,12 +268,23 @@ class TestUiParameterSupport:
         with pytest.raises(TypeError, match="UiParameter.type .* is not supported"):
             _UiParameterSupport._parse("value", object())
 
-    def test_missing_injected_name_returns_none(self):
+    def test_missing_injected_name_returns_none_and_warns(self, caplog):
         operator = MissingParameterOperator()
 
-        operator.open()
+        with caplog.at_level(logging.WARNING):
+            operator.open()
 
         assert operator.missing_parameter.value is None
+        assert "No injected UI parameter value found for name 'missing'" in caplog.text
+
+    def test_unused_injected_name_warns(self, caplog):
+        operator = UnusedParameterOperator()
+
+        with caplog.at_level(logging.WARNING):
+            operator.open()
+
+        assert operator.used_parameter.value == 1
+        assert "Injected UI parameter value(s) were not used: unused" in caplog.text
 
     def test_ui_parameter_argument_errors(self):
         operator = MissingParameterOperator()

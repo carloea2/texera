@@ -18,10 +18,13 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 import functools
-from typing import Any, Dict, Iterator, Optional, Union
+import logging
+from typing import Any, Dict, Iterator, Optional, Set, Union
 
 from pyamber import *
 from core.models.schema.attribute_type import AttributeType, FROM_STRING_PARSER_MAPPING
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,7 @@ class _UiParameterValue:
 class _UiParameterSupport:
     _ui_parameter_injected_values: Dict[str, Any]
     _ui_parameter_name_types: Dict[str, AttributeType]
+    _ui_parameter_used_names: Set[str]
     _unsupported_ui_parameter_types = {
         AttributeType.BINARY,
         AttributeType.LARGE_BINARY,
@@ -48,12 +52,25 @@ class _UiParameterSupport:
             self._ui_parameter_injected_values = {}
         if "_ui_parameter_name_types" not in self.__dict__:
             self._ui_parameter_name_types = {}
+        if "_ui_parameter_used_names" not in self.__dict__:
+            self._ui_parameter_used_names = set()
 
     def _texera_apply_injected_ui_parameters(self) -> None:
         self._ensure_ui_parameter_state()
         values = self._texera_injected_ui_parameters()
         self._ui_parameter_injected_values = dict(values or {})
         self._ui_parameter_name_types = {}
+        self._ui_parameter_used_names = set()
+
+    def _warn_unused_injected_ui_parameters(self) -> None:
+        unused_names = sorted(
+            set(self._ui_parameter_injected_values) - self._ui_parameter_used_names
+        )
+        if unused_names:
+            logger.warning(
+                "Injected UI parameter value(s) were not used: %s.",
+                ", ".join(unused_names),
+            )
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -74,7 +91,9 @@ class _UiParameterSupport:
             self._ui_parameter_open_in_progress = True
             try:
                 self._texera_apply_injected_ui_parameters()
-                return original_open(self, *args, **kwargs)
+                result = original_open(self, *args, **kwargs)
+                self._warn_unused_injected_ui_parameters()
+                return result
             finally:
                 self._ui_parameter_open_in_progress = False
 
@@ -120,7 +139,16 @@ class _UiParameterSupport:
             )
 
         self._ui_parameter_name_types[name] = attr_type
-        raw_value = self._ui_parameter_injected_values.get(name)
+        if name in self._ui_parameter_injected_values:
+            self._ui_parameter_used_names.add(name)
+            raw_value = self._ui_parameter_injected_values[name]
+        else:
+            logger.warning(
+                "No injected UI parameter value found for name '%s'.",
+                name,
+            )
+            raw_value = None
+
         return _UiParameterValue(
             name=name,
             type=attr_type,
