@@ -16,10 +16,10 @@
 # under the License.
 
 import datetime
-import logging
 from typing import Iterator, Optional
 
 import pytest
+import pytexera.udf.udf_operator as udf_operator
 
 from pytexera import AttributeType, Tuple, TupleLike, UDFOperatorV2
 from pytexera.udf.udf_operator import _UiParameterSupport
@@ -268,23 +268,38 @@ class TestUiParameterSupport:
         with pytest.raises(TypeError, match="UiParameter.type .* is not supported"):
             _UiParameterSupport._parse("value", object())
 
-    def test_missing_injected_name_returns_none_and_warns(self, caplog):
+    def test_missing_injected_name_returns_none_and_warns(self, monkeypatch):
         operator = MissingParameterOperator()
+        warning_calls = []
+        monkeypatch.setattr(
+            udf_operator.logger,
+            "warning",
+            lambda msg, *args, **kwargs: warning_calls.append(msg.format(*args)),
+        )
 
-        with caplog.at_level(logging.WARNING):
-            operator.open()
+        operator.open()
 
         assert operator.missing_parameter.value is None
-        assert "No injected UI parameter value found for name 'missing'" in caplog.text
+        assert any(
+            "No injected UI parameter value found for name 'missing'" in call
+            for call in warning_calls
+        )
 
-    def test_unused_injected_name_warns(self, caplog):
+    def test_unused_injected_name_warns(self, monkeypatch):
         operator = UnusedParameterOperator()
+        warning_calls = []
+        monkeypatch.setattr(
+            udf_operator.logger,
+            "warning",
+            lambda msg, *args, **kwargs: warning_calls.append(msg.format(*args)),
+        )
 
-        with caplog.at_level(logging.WARNING):
-            operator.open()
+        operator.open()
 
         assert operator.used_parameter.value == 1
-        assert "Injected UI parameter value(s) were not used: unused" in caplog.text
+        assert warning_calls == [
+            "Injected UI parameter value(s) were not used: unused."
+        ]
 
     def test_ui_parameter_argument_errors(self):
         operator = MissingParameterOperator()

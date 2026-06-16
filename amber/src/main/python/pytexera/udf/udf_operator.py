@@ -18,13 +18,11 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 import functools
-import logging
 from typing import Any, Dict, Iterator, Optional, Set, Union
 
 from pyamber import *
 from core.models.schema.attribute_type import AttributeType, FROM_STRING_PARSER_MAPPING
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass(frozen=True)
@@ -68,7 +66,7 @@ class _UiParameterSupport:
         )
         if unused_names:
             logger.warning(
-                "Injected UI parameter value(s) were not used: %s.",
+                "Injected UI parameter value(s) were not used: {}.",
                 ", ".join(unused_names),
             )
 
@@ -144,7 +142,7 @@ class _UiParameterSupport:
             raw_value = self._ui_parameter_injected_values[name]
         else:
             logger.warning(
-                "No injected UI parameter value found for name '%s'.",
+                "No injected UI parameter value found for name '{}'.",
                 name,
             )
             raw_value = None
