@@ -57,6 +57,18 @@ class ConflictingParameterOperator(UDFOperatorV2):
         yield tuple_
 
 
+class RepeatedParameterOperator(UDFOperatorV2):
+    def _texera_injected_ui_parameters(self):
+        return {"duplicate": "1"}
+
+    def open(self):
+        self.first_parameter = self.UiParameter("duplicate", AttributeType.INT)
+        self.second_parameter = self.UiParameter("duplicate", AttributeType.INT)
+
+    def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:
+        yield tuple_
+
+
 class FirstIndependentParameterOperator(UDFOperatorV2):
     def _texera_injected_ui_parameters(self):
         return {"count": "1"}
@@ -138,6 +150,16 @@ class TestUiParameterSupport:
             operator.open()
 
         assert "Duplicate UiParameter name 'duplicate'" in str(exc_info.value)
+
+    def test_duplicate_parameter_names_with_same_type_succeed(self):
+        operator = RepeatedParameterOperator()
+
+        operator.open()
+
+        assert operator.first_parameter.value == 1
+        assert operator.second_parameter.value == 1
+        assert operator.first_parameter.type is AttributeType.INT
+        assert operator.second_parameter.type is AttributeType.INT
 
     @pytest.mark.parametrize(
         ("raw_value", "attr_type", "expected"),

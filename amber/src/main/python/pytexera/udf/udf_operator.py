@@ -84,6 +84,13 @@ class _UiParameterSupport:
     def UiParameter(
         self, name: str, attr_type: Optional[AttributeType] = None, **kwargs: Any
     ) -> _UiParameterValue:
+        """
+        Return the current UI parameter value parsed as attr_type.
+
+        Re-reading the same name with the same type is idempotent. Reusing a
+        name with a different type is rejected because the parsed value would be
+        ambiguous.
+        """
         if "type" in kwargs:
             if attr_type is not None:
                 raise TypeError("UiParameter.type was provided multiple times.")
