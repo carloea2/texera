@@ -152,7 +152,7 @@ class TestUiParameterSupport:
         assert operator.count_parameter.value == 7
         assert operator.enabled_parameter.value is True
         assert operator.created_at_parameter.value == datetime.datetime(
-            2024, 1, 1, 0, 0
+            2024, 1, 1, 0, 0, tzinfo=datetime.timezone.utc
         )
 
     def test_duplicate_parameter_names_with_conflicting_types_raise(self):
@@ -184,7 +184,7 @@ class TestUiParameterSupport:
             (
                 "2024-01-01T00:00:00",
                 AttributeType.TIMESTAMP,
-                datetime.datetime(2024, 1, 1, 0, 0),
+                datetime.datetime(2024, 1, 1, 0, 0, tzinfo=datetime.timezone.utc),
             ),
             (
                 "2024-01-01T00:00:00Z",

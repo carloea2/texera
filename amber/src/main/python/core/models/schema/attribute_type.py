@@ -104,7 +104,13 @@ def _parse_timestamp(v):
     normalized_value = str(v)
     if normalized_value.endswith("Z"):
         normalized_value = normalized_value[:-1] + "+00:00"
-    return datetime.datetime.fromisoformat(normalized_value)
+    parsed_value = datetime.datetime.fromisoformat(normalized_value)
+    if (
+        parsed_value.tzinfo is None
+        or parsed_value.tzinfo.utcoffset(parsed_value) is None
+    ):
+        return parsed_value.replace(tzinfo=datetime.timezone.utc)
+    return parsed_value
 
 
 FROM_STRING_PARSER_MAPPING = {
