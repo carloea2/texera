@@ -404,6 +404,83 @@ class DatasetResourceSpec
     dashboardDataset.size should be >= 0L
   }
 
+  "findExistingUploadFiles" should "match committed and staged files by path and size" in {
+    val repoName = s"existing-upload-${System.nanoTime()}"
+    val dataset = new Dataset
+    dataset.setName(repoName)
+    dataset.setRepositoryName(repoName)
+    dataset.setDescription("existing upload checks")
+    dataset.setOwnerUid(ownerUser.getUid)
+    dataset.setIsPublic(true)
+    dataset.setIsDownloadable(true)
+    datasetDao.insert(dataset)
+    LakeFSStorageClient.initRepo(repoName)
+
+    val committed = "committed".getBytes(StandardCharsets.UTF_8)
+    LakeFSStorageClient.writeFileToRepo(
+      repoName,
+      "committed.csv",
+      new ByteArrayInputStream(committed)
+    )
+    val commit = LakeFSStorageClient.createCommit(repoName, "main", "commit existing file")
+    val version = new DatasetVersion()
+    version.setDid(dataset.getDid)
+    version.setCreatorUid(ownerUser.getUid)
+    version.setName("v1")
+    version.setVersionHash(commit.getId)
+    new DatasetVersionDao(getDSLContext.configuration()).insert(version)
+
+    val staged = "staged".getBytes(StandardCharsets.UTF_8)
+    LakeFSStorageClient.writeFileToRepo(repoName, "staged.csv", new ByteArrayInputStream(staged))
+
+    val resp = datasetResource.findExistingUploadFiles(
+      dataset.getDid,
+      DatasetResource.ExistingUploadFilesRequest(
+        List(
+          DatasetResource.ExistingUploadFile("committed.csv", committed.length),
+          DatasetResource.ExistingUploadFile("staged.csv", staged.length),
+          DatasetResource.ExistingUploadFile("wrong-size.csv", staged.length + 1),
+          DatasetResource.ExistingUploadFile("missing.csv", 1L)
+        )
+      ),
+      sessionUser
+    )
+
+    resp.getStatus shouldEqual 200
+    mapListOfStrings(entityAsScalaMap(resp)("filePaths")) should contain theSameElementsAs List(
+      "committed.csv",
+      "staged.csv"
+    )
+  }
+
+  it should "reject negative file sizes" in {
+    val ex = intercept[BadRequestException] {
+      datasetResource.findExistingUploadFiles(
+        baseDataset.getDid,
+        DatasetResource.ExistingUploadFilesRequest(
+          List(DatasetResource.ExistingUploadFile("bad-size.csv", -1L))
+        ),
+        sessionUser
+      )
+    }
+
+    ex.getMessage should include("sizeBytes")
+  }
+
+  it should "reject users without write access" in {
+    val ex = intercept[ForbiddenException] {
+      datasetResource.findExistingUploadFiles(
+        multipartDataset.getDid,
+        DatasetResource.ExistingUploadFilesRequest(
+          List(DatasetResource.ExistingUploadFile("private.csv", 1L))
+        ),
+        multipartNoWriteSessionUser
+      )
+    }
+
+    assertStatus(ex, 403)
+  }
+
   it should "surface a LakeFS 404 as NotFoundException when the dataset repo is missing" in {
     val dataset = new Dataset
     dataset.setName("get-ds-no-repo")

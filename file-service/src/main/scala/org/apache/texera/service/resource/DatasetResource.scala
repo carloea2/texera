@@ -202,6 +202,10 @@ object DatasetResource {
       sizeBytes: Option[Long] // Size of the changed file (None for directories)
   )
 
+  case class ExistingUploadFile(path: String, sizeBytes: Long)
+
+  case class ExistingUploadFilesRequest(files: List[ExistingUploadFile])
+
   case class DatasetDescriptionModification(did: Integer, description: String)
 
   case class DatasetNameModification(did: Integer, name: String)
@@ -1027,6 +1031,55 @@ class DatasetResource extends LazyLogging {
           Option(d.getSizeBytes).map(_.longValue())
         )
       )
+    }
+  }
+
+  @POST
+  @RolesAllowed(Array("REGULAR", "ADMIN"))
+  @Path("/{did}/existing-upload-files")
+  @Consumes(Array(MediaType.APPLICATION_JSON))
+  def findExistingUploadFiles(
+      @PathParam("did") did: Integer,
+      request: ExistingUploadFilesRequest,
+      @Auth user: SessionUser
+  ): Response = {
+    val uid = user.getUid
+    withTransaction(context) { ctx =>
+      if (!userHasWriteAccess(ctx, did, uid)) {
+        throw new ForbiddenException(ERR_USER_HAS_NO_ACCESS_TO_DATASET_MESSAGE)
+      }
+
+      val requested = Option(request)
+        .map(_.files)
+        .getOrElse(List.empty)
+        .map { file =>
+          val path = validateAndNormalizeFilePathOrThrow(file.path)
+          if (file.sizeBytes < 0L) throw new BadRequestException("sizeBytes must be >= 0")
+          path -> file.sizeBytes
+        }
+        .toMap
+
+      val dataset = getDatasetByID(ctx, did)
+      val committed = getLatestDatasetVersion(ctx, did)
+        .map(v =>
+          LakeFSStorageClient
+            .retrieveObjectsOfVersion(dataset.getRepositoryName, v.getVersionHash)
+            .map(obj => obj.getPath -> obj.getSizeBytes.longValue())
+        )
+        .getOrElse(List.empty)
+
+      val staged = LakeFSStorageClient
+        .retrieveUncommittedObjects(dataset.getRepositoryName)
+        .filterNot(diff => Option(diff.getType).exists(_.getValue.equalsIgnoreCase("removed")))
+        .flatMap(diff => Option(diff.getSizeBytes).map(size => diff.getPath -> size.longValue()))
+
+      val existing = (committed ++ staged).toMap
+      val matches = requested
+        .collect { case (path, size) if existing.get(path).contains(size) => path }
+        .toList
+        .sorted
+
+      Response.ok(Map("filePaths" -> matches.asJava)).build()
     }
   }
 
