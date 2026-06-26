@@ -1050,7 +1050,7 @@ class DatasetResource extends LazyLogging {
       }
 
       val requested = Option(request)
-        .map(_.files)
+        .flatMap(request => Option(request.files))
         .getOrElse(List.empty)
         .map { file =>
           val path = validateAndNormalizeFilePathOrThrow(file.path)
@@ -1061,15 +1061,22 @@ class DatasetResource extends LazyLogging {
 
       val dataset = getDatasetByID(ctx, did)
       val committed = getLatestDatasetVersion(ctx, did)
-        .map(v =>
-          LakeFSStorageClient
-            .retrieveObjectsOfVersion(dataset.getRepositoryName, v.getVersionHash)
-            .map(obj => obj.getPath -> obj.getSizeBytes.longValue())
-        )
+        .map { v =>
+          withLakeFSErrorHandling(
+            s"retrieving committed files of dataset '${dataset.getName}'"
+          ) {
+            LakeFSStorageClient
+              .retrieveObjectsOfVersion(dataset.getRepositoryName, v.getVersionHash)
+              .map(obj => obj.getPath -> obj.getSizeBytes.longValue())
+          }
+        }
         .getOrElse(List.empty)
 
-      val staged = LakeFSStorageClient
-        .retrieveUncommittedObjects(dataset.getRepositoryName)
+      val staged = withLakeFSErrorHandling(
+        s"retrieving staged files of dataset '${dataset.getName}'"
+      ) {
+        LakeFSStorageClient.retrieveUncommittedObjects(dataset.getRepositoryName)
+      }
         .filterNot(diff => Option(diff.getType).exists(_.getValue.equalsIgnoreCase("removed")))
         .flatMap(diff => Option(diff.getSizeBytes).map(size => diff.getPath -> size.longValue()))
 

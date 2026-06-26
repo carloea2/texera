@@ -453,6 +453,28 @@ class DatasetResourceSpec
     )
   }
 
+  it should "treat a missing files list as empty" in {
+    val repoName = s"existing-upload-empty-${System.nanoTime()}"
+    val dataset = new Dataset
+    dataset.setName(repoName)
+    dataset.setRepositoryName(repoName)
+    dataset.setDescription("existing upload empty request check")
+    dataset.setOwnerUid(ownerUser.getUid)
+    dataset.setIsPublic(true)
+    dataset.setIsDownloadable(true)
+    datasetDao.insert(dataset)
+    LakeFSStorageClient.initRepo(repoName)
+
+    val resp = datasetResource.findExistingUploadFiles(
+      dataset.getDid,
+      DatasetResource.ExistingUploadFilesRequest(null),
+      sessionUser
+    )
+
+    resp.getStatus shouldEqual 200
+    mapListOfStrings(entityAsScalaMap(resp)("filePaths")) shouldBe empty
+  }
+
   it should "reject negative file sizes" in {
     val ex = intercept[BadRequestException] {
       datasetResource.findExistingUploadFiles(
@@ -479,6 +501,37 @@ class DatasetResourceSpec
     }
 
     assertStatus(ex, 403)
+  }
+
+  it should "surface a LakeFS 404 as NotFoundException when checking a missing repo" in {
+    val repoName = s"existing-upload-missing-repo-${System.nanoTime()}"
+    val dataset = new Dataset
+    dataset.setName(repoName)
+    dataset.setRepositoryName(repoName)
+    dataset.setDescription("existing upload missing repo check")
+    dataset.setOwnerUid(ownerUser.getUid)
+    dataset.setIsPublic(true)
+    dataset.setIsDownloadable(true)
+    datasetDao.insert(dataset)
+
+    val version = new DatasetVersion()
+    version.setDid(dataset.getDid)
+    version.setCreatorUid(ownerUser.getUid)
+    version.setName("v1")
+    version.setVersionHash("missing-version")
+    new DatasetVersionDao(getDSLContext.configuration()).insert(version)
+
+    val ex = intercept[NotFoundException] {
+      datasetResource.findExistingUploadFiles(
+        dataset.getDid,
+        DatasetResource.ExistingUploadFilesRequest(
+          List(DatasetResource.ExistingUploadFile("missing.csv", 1L))
+        ),
+        sessionUser
+      )
+    }
+
+    assertStatus(ex, 404)
   }
 
   it should "surface a LakeFS 404 as NotFoundException when the dataset repo is missing" in {
