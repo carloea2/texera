@@ -453,6 +453,45 @@ class DatasetResourceSpec
     )
   }
 
+  it should "return the original request path when matching a normalized path" in {
+    val repoName = s"existing-upload-normalized-${System.nanoTime()}"
+    val dataset = new Dataset
+    dataset.setName(repoName)
+    dataset.setRepositoryName(repoName)
+    dataset.setDescription("existing upload normalized path checks")
+    dataset.setOwnerUid(ownerUser.getUid)
+    dataset.setIsPublic(true)
+    dataset.setIsDownloadable(true)
+    datasetDao.insert(dataset)
+    LakeFSStorageClient.initRepo(repoName)
+
+    val committed = "committed".getBytes(StandardCharsets.UTF_8)
+    LakeFSStorageClient.writeFileToRepo(
+      repoName,
+      "committed.csv",
+      new ByteArrayInputStream(committed)
+    )
+    val commit = LakeFSStorageClient.createCommit(repoName, "main", "commit normalized file")
+    val version = new DatasetVersion()
+    version.setDid(dataset.getDid)
+    version.setCreatorUid(ownerUser.getUid)
+    version.setName("v1")
+    version.setVersionHash(commit.getId)
+    new DatasetVersionDao(getDSLContext.configuration()).insert(version)
+
+    val requestPath = "folder/../committed.csv"
+    val resp = datasetResource.findExistingUploadFiles(
+      dataset.getDid,
+      DatasetResource.ExistingUploadFilesRequest(
+        List(DatasetResource.ExistingUploadFile(requestPath, committed.length))
+      ),
+      sessionUser
+    )
+
+    resp.getStatus shouldEqual 200
+    mapListOfStrings(entityAsScalaMap(resp)("filePaths")) shouldEqual List(requestPath)
+  }
+
   it should "treat a missing files list as empty" in {
     val repoName = s"existing-upload-empty-${System.nanoTime()}"
     val dataset = new Dataset

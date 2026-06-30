@@ -1053,11 +1053,11 @@ class DatasetResource extends LazyLogging {
         .flatMap(request => Option(request.files))
         .getOrElse(List.empty)
         .map { file =>
-          val path = validateAndNormalizeFilePathOrThrow(file.path)
+          val originalPath = file.path
+          val path = validateAndNormalizeFilePathOrThrow(originalPath)
           if (file.sizeBytes < 0L) throw new BadRequestException("sizeBytes must be >= 0")
-          path -> file.sizeBytes
+          (path, originalPath, file.sizeBytes)
         }
-        .toMap
 
       val dataset = getDatasetByID(ctx, did)
       val committed = getLatestDatasetVersion(ctx, did)
@@ -1082,8 +1082,11 @@ class DatasetResource extends LazyLogging {
 
       val existing = (committed ++ staged).toMap
       val matches = requested
-        .collect { case (path, size) if existing.get(path).contains(size) => path }
+        .collect {
+          case (path, originalPath, size) if existing.get(path).contains(size) => originalPath
+        }
         .toList
+        .distinct
         .sorted
 
       Response.ok(Map("filePaths" -> matches.asJava)).build()

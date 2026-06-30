@@ -112,6 +112,26 @@ describe("FilesUploaderComponent", () => {
     expect((await emitted).map(item => item.name)).toEqual(["failed.csv"]);
   });
 
+  it("asks both questions when the same file has an active upload session and an existing match", async () => {
+    datasetService.listMultipartUploads.mockReturnValue(of(["same.csv"]));
+    datasetService.findExistingUploadFiles.mockReturnValue(of(["same.csv"]));
+    const emitted = new Promise<FileUploadItem[]>(resolve => component.uploadedFiles.subscribe(resolve));
+
+    component.fileDropped([droppedFile("same.csv", new File(["same"], "same.csv"))]);
+
+    await waitUntil(() => modals.length === 1);
+    expect(modals[0].nzTitle).toBe("Conflicting File");
+    expect(modals[0].nzData.path).toBe("same.csv");
+    modals[0].nzFooter.find(button => button.label === "Resume")?.onClick();
+
+    await waitUntil(() => modals.length === 2);
+    expect(modals[1].nzTitle).toBe("Matching File Found");
+    expect(modals[1].nzData.path).toBe("same.csv");
+    modals[1].nzFooter.find(button => button.label === "Upload")?.onClick();
+
+    expect((await emitted).map(item => item.name)).toEqual(["same.csv"]);
+  });
+
   it("skips all matching files after one Skip For All choice", async () => {
     datasetService.listMultipartUploads.mockReturnValue(of([]));
     datasetService.findExistingUploadFiles.mockReturnValue(of(["one.csv", "two.csv"]));
