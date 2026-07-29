@@ -1698,6 +1698,14 @@ describe("OperatorPropertyEditFrameComponent", () => {
       expect(getField("datasetVersionPath")?.type).toBe("datasetversionselector");
     });
 
+    it("maps uiParameters to the ui-udf-parameters field type", () => {
+      component.setFormlyFormBinding({
+        type: "object",
+        properties: { uiParameters: { type: "array" } },
+      });
+      expect(getField("uiParameters")?.type).toBe("ui-udf-parameters");
+    });
+
     it("maps a field described as 'Input your code here' to the codearea field type", () => {
       component.setFormlyFormBinding({
         type: "object",
