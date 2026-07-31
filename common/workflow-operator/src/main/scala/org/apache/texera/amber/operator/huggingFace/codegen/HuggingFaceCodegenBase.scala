@@ -42,7 +42,7 @@ import org.apache.texera.amber.pybuilder.PythonTemplateBuilder.PythonTemplateBui
   * loading, audio MIME inference, media-URL fetching, etc.) will be added
   * in subsequent PRs as the corresponding task families land.
   */
-object PythonCodegenBase {
+object HuggingFaceCodegenBase {
 
   def render(ctx: CodegenContext, codegen: TaskCodegen): String = {
     val payload = codegen.payloadPython(ctx)
@@ -205,9 +205,18 @@ object PythonCodegenBase {
        |            prov_task = prov.get("task", "")
        |            try:
        |                if self.TASK in ("text-generation", "image-text-to-text"):
-       |                    route = self.CHAT_ROUTES.get(provider_name, "v1/chat/completions")
-       |                    url = f"https://router.huggingface.co/{provider_name}/{route}"
-       |                    resp = requests.post(url, headers=json_headers, json=pipeline_payload, timeout=120)
+       |                    if provider_name == "hf-inference":
+       |                        # hf-inference expects the model in the URL path, like the
+       |                        # pipeline route below.
+       |                        url = f"https://router.huggingface.co/hf-inference/models/{self.MODEL_ID}/v1/chat/completions"
+       |                    else:
+       |                        route = self.CHAT_ROUTES.get(provider_name, "v1/chat/completions")
+       |                        url = f"https://router.huggingface.co/{provider_name}/{route}"
+       |                    # Provider-scoped routes need the provider's own model name
+       |                    # (providerId), not the HF Hub ID. Copy instead of mutating:
+       |                    # pipeline_payload is reused for the next provider attempt.
+       |                    chat_payload = {**pipeline_payload, "model": provider_id}
+       |                    resp = requests.post(url, headers=json_headers, json=chat_payload, timeout=120)
        |                elif is_model_author and prov_task in ("image-to-text", "image-text-to-text") and provider_name not in ("zai-org",):
        |                    url = f"https://router.huggingface.co/{provider_name}/v1/chat/completions"
        |                    img_b64 = ""
