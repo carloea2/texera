@@ -61,6 +61,7 @@ import { ɵNzTransitionPatchDirective } from "ng-zorro-antd/core/transition-patc
 import { NzIconDirective } from "ng-zorro-antd/icon";
 import { NgFor, NgComponentOutlet, NgIf } from "@angular/common";
 import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
+import { NotificationService } from "../../../common/service/notification/notification.service";
 
 type MonacoEditor = monaco.editor.IStandaloneCodeEditor;
 
@@ -147,7 +148,8 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     public coeditorPresenceService: CoeditorPresenceService,
     private aiAssistantService: AIAssistantService,
     private config: GuiConfigService,
-    private uiUdfParametersSyncService: UiUdfParametersSyncService
+    private uiUdfParametersSyncService: UiUdfParametersSyncService,
+    private notificationService: NotificationService
   ) {
     this.currentOperatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     const operatorType = this.workflowActionService.getTexeraGraph().getOperator(this.currentOperatorId).operatorType;
@@ -173,6 +175,14 @@ export class CodeEditorComponent implements AfterViewInit, SafeStyle, OnDestroy 
     // hacky solution to reset view after view is rendered.
     const style = localStorage.getItem(this.currentOperatorId);
     if (style) this.containerElement.nativeElement.style.cssText = style;
+
+    this.uiUdfParametersSyncService.uiParametersParseError$
+      .pipe(untilDestroyed(this))
+      .subscribe(({ operatorId, message }) => {
+        if (operatorId === this.currentOperatorId && message) {
+          this.notificationService.error(`Could not update UDF parameters: ${message}`);
+        }
+      });
 
     // start editor
     this.workflowVersionService

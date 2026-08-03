@@ -532,8 +532,10 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
         };
 
         this.listeningToChange = false;
+        this.formData = cloneDeep(newModel);
         this.workflowActionService.setOperatorProperty(operatorId, newModel);
         this.listeningToChange = true;
+        this.changeDetectorRef.detectChanges();
       });
   }
 

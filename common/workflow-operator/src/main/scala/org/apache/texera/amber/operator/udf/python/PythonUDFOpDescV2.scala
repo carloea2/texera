@@ -31,27 +31,15 @@ import org.apache.texera.amber.operator.{LogicalOp, PortDescription, StateTransf
 
 import scala.util.{Success, Try}
 
-class PythonUDFOpDescV2 extends LogicalOp {
+class PythonUDFOpDescV2 extends LogicalOp with PythonUdfUiParameterSupport {
   @JsonProperty(
     required = true,
     defaultValue =
       "# Choose from the following templates:\n" +
         "# \n" +
-        "# UiParameter notes:\n" +
-        "# - A UiParameter is a user-editable value exposed in the property panel and read from your Python code.\n" +
-        "# - Define UiParameter values in open() and then use them later in your UDF methods.\n" +
-        "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
-        "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
-        "# \n" +
-        "# Example usage in open():\n" +
-        "# @overrides\n" +
-        "# def open(self):\n" +
-        "#     self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
-        "#     self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
-        "#     self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
-        "#     self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
-        "#     self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
-        "#     self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+        "# Define UiParameter inside open() of ProcessTupleOperator, ProcessBatchOperator, or ProcessTableOperator.\n" +
+        "# Example: self.count = self.UiParameter(\"count\", AttributeType.INT).value\n" +
+        "# See the Python UDF operator documentation for supported types and behavior.\n" +
         "# \n" +
         "# from pytexera import *\n" +
         "# \n" +
@@ -107,13 +95,6 @@ class PythonUDFOpDescV2 extends LogicalOp {
   )
   var outputColumns: List[Attribute] = List()
 
-  @JsonProperty
-  @JsonSchemaTitle("Parameters")
-  @JsonPropertyDescription(
-    "Parameters inferred from active self.UiParameter(...) calls in the Python script"
-  )
-  var uiParameters: List[UiUDFParameter] = List()
-
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
@@ -125,6 +106,7 @@ class PythonUDFOpDescV2 extends LogicalOp {
     } else {
       opInfo.inputPorts.map(_ => None)
     }
+    val codeWithParameters = injectUiParameters(code)
 
     val propagateSchema = (inputSchemas: Map[PortIdentity, Schema]) => {
       val inputSchema = inputSchemas(operatorInfo.inputPorts.head.id)
@@ -153,7 +135,7 @@ class PythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
+          OpExecWithCode(codeWithParameters, "python")
         )
         .withParallelizable(true)
         .withSuggestedWorkerNum(workers)
@@ -163,7 +145,7 @@ class PythonUDFOpDescV2 extends LogicalOp {
           workflowId,
           executionId,
           operatorIdentifier,
-          OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
+          OpExecWithCode(codeWithParameters, "python")
         )
         .withParallelizable(false)
     }

@@ -27,27 +27,15 @@ import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, Workflow
 import org.apache.texera.amber.core.workflow.{OutputPort, PhysicalOp, SchemaPropagationFunc}
 import org.apache.texera.amber.operator.metadata.{OperatorGroupConstants, OperatorInfo}
 import org.apache.texera.amber.operator.source.SourceOperatorDescriptor
-import org.apache.texera.amber.operator.udf.python.{PythonUdfUiParameterInjector, UiUDFParameter}
+import org.apache.texera.amber.operator.udf.python.PythonUdfUiParameterSupport
 
-class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
+class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor with PythonUdfUiParameterSupport {
 
   @JsonProperty(
     required = true,
-    defaultValue = "# UiParameter notes:\n" +
-      "# - A UiParameter is a user-editable value exposed in the property panel and read from your Python code.\n" +
-      "# - Define UiParameter values in open() and then use them later in your UDF methods.\n" +
-      "# - Active UiParameter calls appear in the property panel; commented-out calls are ignored.\n" +
-      "# - Supported UiParameter types are STRING, INT/LONG, DOUBLE, BOOL, and TIMESTAMP.\n" +
-      "# \n" +
-      "# Example usage in open():\n" +
-      "# @overrides\n" +
-      "# def open(self):\n" +
-      "#     self.value1 = self.UiParameter(\"string_param\", AttributeType.STRING).value\n" +
-      "#     self.value2 = self.UiParameter(\"int_param\", AttributeType.INT).value\n" +
-      "#     self.value3 = self.UiParameter(\"long_param\", AttributeType.LONG).value\n" +
-      "#     self.value4 = self.UiParameter(\"double_param\", AttributeType.DOUBLE).value\n" +
-      "#     self.value5 = self.UiParameter(\"bool_param\", AttributeType.BOOL).value\n" +
-      "#     self.value6 = self.UiParameter(\"timestamp_param\", AttributeType.TIMESTAMP).value\n" +
+    defaultValue = "# Define UiParameter inside GenerateOperator.open().\n" +
+      "# Example: self.count = self.UiParameter(\"count\", AttributeType.INT).value\n" +
+      "# See the Python UDF operator documentation for supported types and behavior.\n" +
       "# \n" +
       "# from pytexera import *\n" +
       "# class GenerateOperator(UDFSourceOperator):\n" +
@@ -83,13 +71,6 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
   @JsonPropertyDescription("The columns of the source")
   var columns: List[Attribute] = List.empty
 
-  @JsonProperty
-  @JsonSchemaTitle("Parameters")
-  @JsonPropertyDescription(
-    "Parameters inferred from active self.UiParameter(...) calls in the Python script"
-  )
-  var uiParameters: List[UiUDFParameter] = List()
-
   override def getPhysicalOp(
       workflowId: WorkflowIdentity,
       executionId: ExecutionIdentity
@@ -106,13 +87,14 @@ class PythonUDFSourceOpDescV2 extends SourceOperatorDescriptor {
           )
         trimmed
       }
+    val codeWithParameters = injectUiParameters(code)
 
     val physicalOp = PhysicalOp
       .sourcePhysicalOp(
         workflowId,
         executionId,
         operatorIdentifier,
-        OpExecWithCode(PythonUdfUiParameterInjector.inject(code, uiParameters), "python")
+        OpExecWithCode(codeWithParameters, "python")
       )
       .withInputPorts(operatorInfo.inputPorts)
       .withOutputPorts(operatorInfo.outputPorts)
