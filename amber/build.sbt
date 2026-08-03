@@ -253,7 +253,7 @@ Compile / compile := (Compile / compile).dependsOn(genPythonProto).value
 // https://mvnrepository.com/artifact/org.scalamock/scalamock
 libraryDependencies += "org.scalamock" %% "scalamock" % "5.2.0" % Test
 // https://mvnrepository.com/artifact/ch.vorburger.mariaDB4j/mariaDB4j
-libraryDependencies += "ch.vorburger.mariaDB4j" % "mariaDB4j" % "2.4.0" % Test
+libraryDependencies += "ch.vorburger.mariaDB4j" % "mariaDB4j" % "2.6.0" % Test
 // https://www.scalatest.org/getting_started_with_fun_suite
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.20" % Test
 // JUnit related dependencies
@@ -290,7 +290,7 @@ libraryDependencies += "com.univocity" % "univocity-parsers" % "2.9.1"
 libraryDependencies += "com.konghq" % "unirest-java" % "3.14.5"
 
 // https://mvnrepository.com/artifact/com.github.marianobarrios/lbmq
-libraryDependencies += "com.github.marianobarrios" % "lbmq" % "0.6.0"
+libraryDependencies += "com.github.marianobarrios" % "lbmq" % "0.7.0"
 
 // https://mvnrepository.com/artifact/org.jooq/jooq
 libraryDependencies += "org.jooq" % "jooq" % "3.19.36"
