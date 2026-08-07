@@ -28,11 +28,7 @@ import org.apache.texera.amber.core.virtualidentity.{
   WorkflowIdentity
 }
 import org.apache.texera.amber.core.workflow._
-import org.apache.texera.amber.operator.trycatch.{
-  CatchGateConfig,
-  FinallyOpDesc,
-  TryCatchOpDesc
-}
+import org.apache.texera.amber.operator.trycatch.{CatchGateConfig, FinallyOpDesc, TryCatchOpDesc}
 import org.apache.texera.amber.util.JSONUtils.objectMapper
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -393,9 +389,8 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
 
     val result = TryCatchFramePass.run(plan, None)
     val outerGate = result.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))
-    val fromCatchLeaf = result.links.filter(l =>
-      l.fromOpId == opId("catchOp2") && l.toOpId == outerGate.id
-    )
+    val fromCatchLeaf =
+      result.links.filter(l => l.fromOpId == opId("catchOp2") && l.toOpId == outerGate.id)
     fromCatchLeaf should have size 1
     // inner try tail signals the inner gate, not the outer one
     val innerGate = result.getOperator(gate2Id)

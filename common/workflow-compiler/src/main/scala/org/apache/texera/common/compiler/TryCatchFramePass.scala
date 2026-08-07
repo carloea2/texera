@@ -190,27 +190,25 @@ object TryCatchFramePass {
     // tail ports of a frame's try cone: no outgoing links, or feeding the
     // paired merger's From Try — owned by the innermost frame only
     val signalSources: Map[OperatorIdentity, List[(PhysicalOpIdentity, PortIdentity)]] =
-      frames
-        .map { frame =>
-          val tails = frame.tryCone.toList
-            .filter(opId => innermostFrameOf(opId).exists(_.logicalOpId == frame.logicalOpId))
-            .flatMap { opId =>
-              val op = plan.getOperator(opId)
-              op.outputPorts.keys
-                .filterNot(_.internal)
-                .filter { portId =>
-                  val outLinks = plan.links.filter(l => l.fromOpId == opId && l.fromPortId == portId)
-                  outLinks.isEmpty ||
-                  frame.merger.exists(m =>
-                    outLinks.exists(l => l.toOpId == m.id && l.toPortId == FROM_TRY)
-                  )
-                }
-                .map(portId => (opId, portId))
-            }
-            .sortBy { case (opId, portId) => (opId.logicalOpId.id, opId.layerName, portId.id) }
-          frame.logicalOpId -> tails
-        }
-        .toMap
+      frames.map { frame =>
+        val tails = frame.tryCone.toList
+          .filter(opId => innermostFrameOf(opId).exists(_.logicalOpId == frame.logicalOpId))
+          .flatMap { opId =>
+            val op = plan.getOperator(opId)
+            op.outputPorts.keys
+              .filterNot(_.internal)
+              .filter { portId =>
+                val outLinks = plan.links.filter(l => l.fromOpId == opId && l.fromPortId == portId)
+                outLinks.isEmpty ||
+                frame.merger.exists(m =>
+                  outLinks.exists(l => l.toOpId == m.id && l.toPortId == FROM_TRY)
+                )
+              }
+              .map(portId => (opId, portId))
+          }
+          .sortBy { case (opId, portId) => (opId.logicalOpId.id, opId.layerName, portId.id) }
+        frame.logicalOpId -> tails
+      }.toMap
 
     // escalation: catch-cone TERMINAL leaves signal the innermost enclosing
     // frame's gate, so catch-side failures escalate even when their branch
@@ -349,7 +347,8 @@ object TryCatchFramePass {
     * acyclic by construction: frames only add leaf->gate and escalation edges,
     * and try/catch cones are validated disjoint). Any operator left in a cycle
     * is appended last so a malformed graph fails in the compiler's own checks
-    * rather than here. */
+    * rather than here.
+    */
   private def topologicalIndex(
       opIds: Set[PhysicalOpIdentity],
       links: Set[PhysicalLink]

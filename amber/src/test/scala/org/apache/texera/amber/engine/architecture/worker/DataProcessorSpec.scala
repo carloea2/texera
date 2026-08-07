@@ -556,7 +556,8 @@ class DataProcessorSpec extends AnyFlatSpec with MockFactory with Matchers with 
         m.foreach(emitted += _); ()
       }
       .anyNumberOfTimes()
-    val errorState = State.errorState("upstreamOp/main", "some-worker", new RuntimeException("boom"))
+    val errorState =
+      State.errorState("upstreamOp/main", "some-worker", new RuntimeException("boom"))
     // the executor SEES the error State (frame operators react to it); the
     // default pass-through contract forwards it downstream
     (
