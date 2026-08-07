@@ -2190,6 +2190,36 @@ class TestMainLoop:
         assert not main_loop._is_port_poisoned(PortIdentity(id=0))
 
     @pytest.mark.timeout(2)
+    def test_error_state_reaches_materialized_state_storage(
+        self, main_loop, monkeypatch
+    ):
+        # A try-cone tail's outgoing edges (a Finally's dependee From Try, a
+        # gate's dependee signal ports) are MATERIALIZED: the worker has no
+        # live partitioners for them, so emit_state alone sends the failure
+        # signal to nobody. It must also be written to the port state storage
+        # that the materialization readers replay — mirroring the Scala
+        # worker's emitState, which always does both.
+        main_loop.context.guarded = True
+        monkeypatch.setattr(main_loop, "_send_console_message", lambda msg: None)
+        monkeypatch.setattr(main_loop, "_emit_batches", lambda batches: None)
+        saved = []
+        monkeypatch.setattr(
+            main_loop.context.output_manager,
+            "save_state_to_storage_if_needed",
+            lambda state, *args, **kwargs: saved.append(state),
+        )
+
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError:
+            exc_info = sys.exc_info()
+        main_loop.context.exception_manager.set_exception_info(exc_info)
+        main_loop._check_exception()
+
+        assert len(saved) == 1
+        assert saved[0].is_error()
+
+    @pytest.mark.timeout(2)
     def test_failed_worker_drains_instead_of_invoking_the_executor(
         self, main_loop, monkeypatch
     ):

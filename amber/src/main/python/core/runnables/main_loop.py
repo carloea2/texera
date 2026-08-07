@@ -699,10 +699,17 @@ class MainLoop(StoppableQueueBlockingRunnable):
             self.context.worker_id,
             err,
         )
-        # Emit directly: _emit_and_save_state funnels back into _check_exception
-        # on failure, and the storage write is irrelevant for a failure signal.
+        # Emit directly rather than via _emit_and_save_state: that helper
+        # funnels its own failures back into _check_exception, which is the
+        # caller of this method. Both halves of the Scala worker's emitState
+        # are needed: the network buffers for live links, AND the port state
+        # storage for MATERIALIZED links — a try-cone tail's outgoing edges
+        # (a Finally's dependee `From Try`, a gate's dependee signal ports)
+        # are materialized and have no live partitioners at all, so storage
+        # is the only road the failure signal can travel to the gate.
         try:
             self._emit_batches(self.context.output_manager.emit_state(error_state))
+            self.context.output_manager.save_state_to_storage_if_needed(error_state)
         except Exception as emit_err:  # pragma: no cover - defensive
             logger.exception(emit_err)
 
