@@ -34,10 +34,11 @@ import org.apache.texera.amber.util.JSONUtils.objectMapper
   * decision is deterministic, never a race.
   *
   * The winner leaves through the port named after it: `Try Result` on success,
-  * `Catch Result` on failure (both carry the branches' common schema). The
-  * outcome is therefore observable downstream — connect only one port to react
-  * to that outcome, or connect both to the same downstream input (a Union) to
-  * get "the winner, whichever it was".
+  * `Catch Result` on failure. Rows never cross ports, so each result port
+  * carries its own branch's schema — the branches need not agree. The outcome
+  * is therefore observable downstream — connect only one port to react to
+  * that outcome, or (when the branches do share a schema) connect both to the
+  * same downstream input (a Union) to get "the winner, whichever it was".
   */
 class FinallyOpDesc extends LogicalOp {
 
@@ -59,15 +60,14 @@ class FinallyOpDesc extends LogicalOp {
       .withOutputPorts(operatorInfo.outputPorts)
       .withPropagateSchema(
         SchemaPropagationFunc(inputSchemas => {
-          val trySchema = inputSchemas(operatorInfo.inputPorts.head.id)
-          val catchSchema = inputSchemas(operatorInfo.inputPorts.last.id)
-          require(
-            trySchema == catchSchema,
-            s"Finally requires the try and catch branches to produce the same schema (got $trySchema vs $catchSchema)"
-          )
+          // Each result port adopts its own branch's schema: try rows only
+          // ever leave through Try Result and catch rows through Catch
+          // Result, so the branches need not agree. Wiring both ports into
+          // one downstream input is a Union, which enforces schema
+          // compatibility itself, like any other Union.
           Map(
-            FinallyOpDesc.TRY_RESULT -> trySchema,
-            FinallyOpDesc.CATCH_RESULT -> trySchema
+            FinallyOpDesc.TRY_RESULT -> inputSchemas(operatorInfo.inputPorts.head.id),
+            FinallyOpDesc.CATCH_RESULT -> inputSchemas(operatorInfo.inputPorts.last.id)
           )
         })
       )

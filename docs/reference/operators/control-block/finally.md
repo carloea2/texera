@@ -50,8 +50,10 @@ the code after it does not care which.
   downstream input** — a Union — to get "the winner, whichever it was".
 - **Deterministic outcome.** `From Catch` is consumed only after `From Try`
   fully resolves, so the release decision never depends on timing.
-- **Both branches must produce the same schema** (same rule as Union) — both
-  result ports carry that common schema.
+- **Each result port carries its own branch's schema.** Rows never cross
+  ports, so the branches need not agree — a try branch fetching web content
+  can fall back to a catch branch producing plain lines. Unioning the two
+  ports downstream requires compatible schemas, as with any Union.
 - **On double failure** (the catch branch fails too) Finally emits nothing and
   the failure escalates to any enclosing frame.
 - **Optional.** A Try Catch works without a Finally: use it when the branches

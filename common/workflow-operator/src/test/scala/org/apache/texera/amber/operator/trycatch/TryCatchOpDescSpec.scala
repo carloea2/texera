@@ -70,28 +70,26 @@ class TryCatchOpDescSpec extends AnyFlatSpec with Matchers {
       List(FinallyOpDesc.TRY_RESULT, FinallyOpDesc.CATCH_RESULT)
   }
 
-  it should "require matching schemas and emit the common schema on both result ports" in {
+  it should "give each result port its own branch's schema" in {
+    // Rows never cross ports (try rows leave through Try Result, catch rows
+    // through Catch Result), so the branches need not agree on a schema —
+    // e.g. a try branch fetching web content can fall back to a catch branch
+    // producing plain lines. A downstream union of the two ports enforces
+    // compatibility itself, like any other Union.
     val desc = new FinallyOpDesc()
-    val out = desc.getExternalOutputSchemas(
-      Map(PortIdentity() -> schema, PortIdentity(1) -> schema)
-    )
-    out shouldBe Map(
+    val catchSchema = Schema().add("other", AttributeType.STRING)
+    desc.getExternalOutputSchemas(
+      Map(PortIdentity() -> schema, PortIdentity(1) -> catchSchema)
+    ) shouldBe Map(
       FinallyOpDesc.TRY_RESULT -> schema,
-      FinallyOpDesc.CATCH_RESULT -> schema
+      FinallyOpDesc.CATCH_RESULT -> catchSchema
     )
-
-    val otherSchema = Schema().add("other", AttributeType.STRING)
-    assertThrows[Exception] {
-      desc.getExternalOutputSchemas(
-        Map(PortIdentity() -> schema, PortIdentity(1) -> otherSchema)
-      )
-    }
   }
 
   it should "adopt whatever schema the connected branches carry" in {
-    // Finally does not impose a schema: it takes the one the user's two
-    // branches actually produce (both must agree) and emits exactly that, so
-    // the frame is transparent to whatever columns flow through it.
+    // Finally does not impose a schema: each port takes exactly what its
+    // branch produces, so the frame is transparent to whatever columns flow
+    // through it.
     val desc = new FinallyOpDesc()
     val wideSchema = Schema()
       .add("id", AttributeType.LONG)
@@ -103,26 +101,6 @@ class TryCatchOpDescSpec extends AnyFlatSpec with Matchers {
       FinallyOpDesc.TRY_RESULT -> wideSchema,
       FinallyOpDesc.CATCH_RESULT -> wideSchema
     )
-  }
-
-  it should "reject branches whose columns differ only in type or order" in {
-    val desc = new FinallyOpDesc()
-    val a = Schema().add("x", AttributeType.INTEGER).add("y", AttributeType.STRING)
-    // same names, different type on x
-    val differentType =
-      Schema().add("x", AttributeType.LONG).add("y", AttributeType.STRING)
-    // same attributes, different order
-    val differentOrder =
-      Schema().add("y", AttributeType.STRING).add("x", AttributeType.INTEGER)
-
-    val typeError = intercept[Exception] {
-      desc.getExternalOutputSchemas(Map(PortIdentity() -> a, PortIdentity(1) -> differentType))
-    }
-    typeError.getMessage should include("same schema")
-
-    assertThrows[Exception] {
-      desc.getExternalOutputSchemas(Map(PortIdentity() -> a, PortIdentity(1) -> differentOrder))
-    }
   }
 
   "FinallyOpDesc" should "declare From Catch dependent on From Try" in {
