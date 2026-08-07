@@ -32,11 +32,16 @@ class IfOpExec(descString: String) extends OperatorExecutor {
   //This function can handle one or more states.
   //The state can have mutiple key-value pairs. Keys are not identified by conditionName will be ignored.
   //It can accept any value that can be converted to a boolean. For example, Int 1 will be converted to true.
-  //States that do not carry conditionName at all (e.g. error States, loop envelopes)
-  //are passed through without touching the routing decision.
   override def processState(state: State, port: Int): Option[State] = {
-    state.values.get(desc.conditionName).foreach { value =>
-      outputPort = if (value.asInstanceOf[Boolean]) PortIdentity(1) else PortIdentity()
+    // An error State is a failure traveling as a dataflow event, not a
+    // routing decision: forward it untouched so a failure upstream of an If
+    // does not become a second failure inside the If. Any OTHER state is
+    // expected to carry conditionName, and a missing key still surfaces as
+    // NoSuchElementException rather than a quiet misroute.
+    if (!State.isError(state)) {
+      outputPort =
+        if (state.values(desc.conditionName).asInstanceOf[Boolean]) PortIdentity(1)
+        else PortIdentity()
     }
     Some(state)
   }
