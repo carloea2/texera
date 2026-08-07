@@ -323,6 +323,64 @@ class TryCatchIntegrationSpec
     assert(portRowCount(outerFin, port1) == 1)
   }
 
+  it should "recover independently in sibling Finally-less inner frames (self-contained branches)" in {
+    // Two inner TryCatch frames WITHOUT Finallys, side by side inside an
+    // outer frame. A Finally-less frame is terminal: its branches end in
+    // their own result tables. Each inner frame owns its own failure (the
+    // innermost-frame rule), recovers independently, and a successful
+    // recovery is invisible to the outer frame — whose own try path and
+    // Finally proceed as a clean run.
+    val src = textInput("1\n2\n3")
+    val outer = new TryCatchOpDesc()
+    val outerTail = limit(3) // outer's own try path, feeds the outer Finally
+    val inner1 = new TryCatchOpDesc()
+    val inner1Try = failingFilter() // fails => inner1's catch replays
+    val inner1Catch = limit(2) // terminal: its result table is the recovery
+    val inner2 = new TryCatchOpDesc()
+    val inner2Try = limit(1) // clean => inner2's catch stays empty
+    val inner2Catch = limit(3)
+    val outerCatch = limit(1)
+    val fin = new FinallyOpDesc()
+
+    val operators = List(
+      src,
+      outer,
+      outerTail,
+      inner1,
+      inner1Try,
+      inner1Catch,
+      inner2,
+      inner2Try,
+      inner2Catch,
+      outerCatch,
+      fin
+    )
+    val links = List(
+      link(src, port0, outer, port0),
+      link(outer, port0, outerTail, port0), // outer try path
+      link(outer, port0, inner1, port0), // fan-out into inner frame 1
+      link(outer, port0, inner2, port0), // fan-out into inner frame 2
+      link(inner1, port0, inner1Try, port0),
+      link(inner1, port1, inner1Catch, port0),
+      link(inner2, port0, inner2Try, port0),
+      link(inner2, port1, inner2Catch, port0),
+      link(outerTail, port0, fin, port0), // outer From Try
+      link(outer, port1, outerCatch, port0), // outer Catch
+      link(outerCatch, port0, fin, port1) // outer From Catch
+    )
+    val materialized = runAndGetMaterializedRowCounts(operators, links)
+    // inner1 failed and recovered: its catch replayed all 3 rows, limit(2)
+    assert(materialized(inner1Catch.operatorIdentifier) == 2)
+    // the failing branch's own table is empty
+    assert(materialized(inner1Try.operatorIdentifier) == 0)
+    // inner2 was clean: try table filled, catch ran empty
+    assert(materialized(inner2Try.operatorIdentifier) == 1)
+    assert(materialized(inner2Catch.operatorIdentifier) == 0)
+    // both inner outcomes are invisible to the outer frame: clean try side
+    assert(materialized(fin.operatorIdentifier) == 3)
+    assert(portRowCount(fin, port1) == 0)
+  }
+
   it should "route the catch branch by error type: catch(SpecificError) via Error Info + If" in {
     // Simulates `catch (SpecificError e)`: a classifier UDF consumes the
     // frame's Error Info rows and emits a boolean State; an If routes the

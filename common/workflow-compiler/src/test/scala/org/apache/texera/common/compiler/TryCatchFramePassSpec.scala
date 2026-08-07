@@ -367,6 +367,91 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
     config.ownConeOpIds should not contain "side/main"
   }
 
+  it should "signal a nested Finally-less frame's terminal catch leaf exactly once" in {
+    // A terminal catch leaf of a nested (Finally-less) frame qualifies as an
+    // enclosing-frame-owned tail AND as an escalation tap. It must get ONE
+    // signal edge, not two: signal ports are dependees, dependee edges
+    // materialize their source port, and a duplicate would race to create
+    // the same storage table (iceberg commit conflict).
+    val tc2Desc = new TryCatchOpDesc()
+    tc2Desc.setOperatorId("tc2")
+    val tc2Plan = tc2Desc.getPhysicalPlan(wid, eid)
+    val splitter2Id = opId("tc2", TryCatchOpDesc.SPLITTER_LAYER)
+    val gate2Id = opId("tc2", TryCatchOpDesc.GATE_LAYER)
+
+    var plan = buildFramePlan()
+    (Set(simpleOp("tryOp2"), simpleOp("catchOp2")) ++ tc2Plan.operators).foreach { op =>
+      plan = plan.addOperator(op.propagateSchema())
+    }
+    List(
+      // the outer Try also feeds a nested frame whose branches are terminal
+      link(opId("tc", TryCatchOpDesc.SPLITTER_LAYER), out0, splitter2Id, in0),
+      tc2Plan.links.head, // splitter2 -> gate2 snapshot
+      link(splitter2Id, out0, opId("tryOp2"), in0),
+      link(gate2Id, catchPort, opId("catchOp2"), in0)
+    ).foreach(l => plan = plan.addLink(l))
+
+    val result = TryCatchFramePass.run(plan, None)
+    val outerGate = result.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))
+    val fromCatchLeaf = result.links.filter(l =>
+      l.fromOpId == opId("catchOp2") && l.toOpId == outerGate.id
+    )
+    fromCatchLeaf should have size 1
+    // inner try tail signals the inner gate, not the outer one
+    val innerGate = result.getOperator(gate2Id)
+    result.links.count(l => l.fromOpId == opId("tryOp2") && l.toOpId == innerGate.id) shouldBe 1
+    result.links.count(l => l.fromOpId == opId("tryOp2") && l.toOpId == outerGate.id) shouldBe 0
+  }
+
+  it should "reject a Finally-less frame flowing into an enclosing frame's Finally (close inside-out)" in {
+    // Try1 -> Try2 -> Finally(of 1): the inner frame never closes — its
+    // unbounded cone would swallow the outer Merger, starving its own gate
+    // of signal edges (failures in its try branch would be invisible) and
+    // mis-owning everything past the Finally. Must be rejected, telling the
+    // user to close the inner frame first.
+    val tc1Desc = new TryCatchOpDesc()
+    tc1Desc.setOperatorId("tc1")
+    val tc2Desc = new TryCatchOpDesc()
+    tc2Desc.setOperatorId("tc2")
+    val finDesc = new FinallyOpDesc()
+    finDesc.setOperatorId("fin1")
+    val tc1Plan = tc1Desc.getPhysicalPlan(wid, eid)
+    val tc2Plan = tc2Desc.getPhysicalPlan(wid, eid)
+    val merger = finDesc.getPhysicalOp(wid, eid)
+    val splitter1Id = opId("tc1", TryCatchOpDesc.SPLITTER_LAYER)
+    val gate1Id = opId("tc1", TryCatchOpDesc.GATE_LAYER)
+    val splitter2Id = opId("tc2", TryCatchOpDesc.SPLITTER_LAYER)
+    val gate2Id = opId("tc2", TryCatchOpDesc.GATE_LAYER)
+
+    var plan = PhysicalPlan(operators = Set.empty, links = Set.empty)
+    (Set(
+      sourceOp("src"),
+      simpleOp("tryOp"),
+      simpleOp("catchOp2"),
+      simpleOp("catchOp"),
+      merger
+    ) ++ tc1Plan.operators ++ tc2Plan.operators).foreach { op =>
+      plan = plan.addOperator(op.propagateSchema())
+    }
+    List(
+      link(opId("src"), out0, splitter1Id, in0),
+      tc1Plan.links.head,
+      tc2Plan.links.head,
+      link(splitter1Id, out0, splitter2Id, in0), // Try1 -> Try2
+      link(splitter2Id, out0, opId("tryOp"), in0), // Try2's try branch...
+      link(opId("tryOp"), out0, merger.id, PortIdentity()), // ...into Finally(of 1)!
+      link(gate2Id, catchPort, opId("catchOp2"), in0), // Try2's catch (terminal)
+      link(gate1Id, catchPort, opId("catchOp"), in0), // Try1's catch
+      link(opId("catchOp"), out0, merger.id, PortIdentity(1))
+    ).foreach(l => plan = plan.addLink(l))
+
+    val rejected = intercept[IllegalArgumentException] {
+      TryCatchFramePass.run(plan, None)
+    }
+    rejected.getMessage should include("inside-out")
+    rejected.getMessage should include("tc2")
+  }
+
   it should "reject a Finally whose From Try comes from outside the frame" in {
     val tcDesc = new TryCatchOpDesc()
     tcDesc.setOperatorId("tc")

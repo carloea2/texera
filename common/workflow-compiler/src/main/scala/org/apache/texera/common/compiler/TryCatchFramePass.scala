@@ -161,6 +161,28 @@ object TryCatchFramePass {
     // ---- 3. validations
     frames.foreach(validateFrame(plan, _))
 
+    // Finallys close inside-out: a frame WITHOUT a Finally is terminal — its
+    // branches must end in their own sinks. If its cone flows into another
+    // frame's Finally (one that is not nested inside it), the inner frame
+    // never closes: its unbounded cone would swallow the outer Merger and
+    // everything past it, mis-owning failures and starving its own gate of
+    // signal edges. Reject with the rule's own words.
+    frames.filter(_.merger.isEmpty).foreach { open =>
+      frames
+        .filter(other =>
+          other.merger.exists(m => open.cone.contains(m.id)) &&
+            !open.cone.contains(other.splitter.id)
+        )
+        .foreach { other =>
+          throw new IllegalArgumentException(
+            s"TryCatch '${open.logicalOpId.id}' has no Finally, but its subgraph flows into " +
+              s"the Finally of '${other.logicalOpId.id}'. A frame without a Finally must end " +
+              s"in its own sinks — add a Finally to '${open.logicalOpId.id}' to continue past " +
+              "it (Finallys close inside-out)."
+          )
+        }
+    }
+
     // ---- 4. per-op innermost-frame assignment (smallest containing cone)
     def innermostFrameOf(opId: PhysicalOpIdentity): Option[Frame] =
       frames.filter(_.tryCone.contains(opId)).sortBy(_.tryCone.size).headOption
@@ -230,8 +252,12 @@ object TryCatchFramePass {
     // ---- 5. rebuild the plan with reconfigured gates/mergers + signal links
     val gateSignals: Map[PhysicalOpIdentity, List[(PhysicalOpIdentity, PortIdentity)]] =
       frames.map { frame =>
-        val signals = signalSources(frame.logicalOpId) ++
-          escalationSources.getOrElse(frame.logicalOpId, List.empty)
+        // distinct: a nested frame's TERMINAL catch leaf is both an
+        // enclosing-frame-owned tail (signal source) and an escalation tap.
+        // Wiring it twice would materialize the same source port twice
+        // (signal ports are dependees), racing to create one storage table.
+        val signals = (signalSources(frame.logicalOpId) ++
+          escalationSources.getOrElse(frame.logicalOpId, List.empty)).distinct
         frame.gate.id -> signals
       }.toMap
 
