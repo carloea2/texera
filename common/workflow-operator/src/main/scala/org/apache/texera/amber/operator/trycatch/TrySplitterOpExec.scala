@@ -17,35 +17,27 @@
  * under the License.
  */
 
-package org.apache.texera.amber.operator.ifStatement
+package org.apache.texera.amber.operator.trycatch
 
 import org.apache.texera.amber.core.executor.OperatorExecutor
-import org.apache.texera.amber.core.state.State
 import org.apache.texera.amber.core.tuple.{Tuple, TupleLike}
 import org.apache.texera.amber.core.workflow.PortIdentity
-import org.apache.texera.amber.util.JSONUtils.objectMapper
 
-class IfOpExec(descString: String) extends OperatorExecutor {
-  private val desc: IfOpDesc = objectMapper.readValue(descString, classOf[IfOpDesc])
-  private var outputPort: PortIdentity = PortIdentity(1) // by default, it should be the true port.
+/**
+  * Physical entry of a TryCatch frame: tees every input tuple to the live Try
+  * port and to the snapshot port (whose edge toward the gate is materialized by
+  * the scheduler, providing the replay data for the catch subgraph).
+  */
+class TrySplitterOpExec(descString: String) extends OperatorExecutor {
 
-  //This function can handle one or more states.
-  //The state can have mutiple key-value pairs. Keys are not identified by conditionName will be ignored.
-  //It can accept any value that can be converted to a boolean. For example, Int 1 will be converted to true.
-  //States that do not carry conditionName at all (e.g. error States, loop envelopes)
-  //are passed through without touching the routing decision.
-  override def processState(state: State, port: Int): Option[State] = {
-    state.values.get(desc.conditionName).foreach { value =>
-      outputPort = if (value.asInstanceOf[Boolean]) PortIdentity(1) else PortIdentity()
-    }
-    Some(state)
-  }
+  private val tryPort = PortIdentity()
+  private val snapshotPort = TryCatchOpDesc.SNAPSHOT_OUT
 
   override def processTupleMultiPort(
       tuple: Tuple,
       port: Int
   ): Iterator[(TupleLike, Option[PortIdentity])] =
-    Iterator((tuple, Some(outputPort)))
+    Iterator((tuple, Some(tryPort)), (tuple, Some(snapshotPort)))
 
   override def processTuple(tuple: Tuple, port: Int): Iterator[TupleLike] = ???
 }
