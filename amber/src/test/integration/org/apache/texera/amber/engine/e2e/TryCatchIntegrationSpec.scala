@@ -323,6 +323,44 @@ class TryCatchIntegrationSpec
     assert(portRowCount(outerFin, port1) == 1)
   }
 
+  it should "support an inner frame inside the CATCH branch: try1 {} catch1 { try2 {} catch2 {} } finally1" in {
+    // The PL shape `try1 { attempt } catch1 { try2 { A } catch2 { B } } finally1`:
+    // the outer recovery is itself guarded. The inner construct's closing
+    // brace is its own Finally, whose result ports union into the outer
+    // From Catch. Here BOTH attempts fail, so the rows that reach the outer
+    // Finally are the inner frame's recovery — a catch inside a catch.
+    val src = textInput("1\n2\n3")
+    val outer = new TryCatchOpDesc()
+    val outerTry = failingFilter() // outer attempt fails => catch1 runs
+    val inner = new TryCatchOpDesc() // catch1's body IS an inner frame
+    val innerTry = failingFilter() // inner attempt fails too => catch2 runs
+    val innerCatch = limit(2)
+    val innerFin = new FinallyOpDesc()
+    val outerFin = new FinallyOpDesc()
+
+    val operators =
+      List(src, outer, outerTry, inner, innerTry, innerCatch, innerFin, outerFin)
+    val links = List(
+      link(src, port0, outer, port0),
+      link(outer, port0, outerTry, port0), // try1
+      link(outerTry, port0, outerFin, port0), // From Try (poisoned, discarded)
+      link(outer, port1, inner, port0), // catch1 = inner frame's input
+      link(inner, port0, innerTry, port0), // try2
+      link(inner, port1, innerCatch, port0), // catch2
+      link(innerTry, port0, innerFin, port0),
+      link(innerCatch, port0, innerFin, port1),
+      // inner closing brace: winner (whichever side) -> outer From Catch
+      link(innerFin, port0, outerFin, port1),
+      link(innerFin, port1, outerFin, port1)
+    )
+    val materialized = runAndGetMaterializedRowCounts(operators, links)
+    // outer attempt failed; the recovery's own attempt failed; the inner
+    // catch replayed all 3 rows through limit(2) => the outer construct's
+    // value is those 2 rows, out its Catch Result port
+    assert(materialized(outerFin.operatorIdentifier) == 0)
+    assert(portRowCount(outerFin, port1) == 2)
+  }
+
   it should "recover independently in sibling Finally-less inner frames (self-contained branches)" in {
     // Two inner TryCatch frames WITHOUT Finallys, side by side inside an
     // outer frame. A Finally-less frame is terminal: its branches end in
