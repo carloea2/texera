@@ -46,40 +46,22 @@
   <div
     class="ui-udf-parameter-add"
     *ngIf="workflowModificationEnabled">
-    <ng-container *ngIf="addParameterFormVisible; else addParameterButton">
-      <input
-        #parameterNameInput
-        class="add-parameter-name"
-        type="text"
-        placeholder="Parameter name"
-        (keyup.enter)="addParameter(parameterNameInput.value, parameterTypeSelect.value)" />
-      <select
-        #parameterTypeSelect
-        class="add-parameter-type">
-        <option
-          *ngFor="let parameterType of addParameterTypeOptions"
-          [value]="parameterType">
-          {{ parameterType }}
-        </option>
-      </select>
-      <button
-        type="button"
-        (click)="addParameter(parameterNameInput.value, parameterTypeSelect.value)">
-        Add
-      </button>
-      <button
-        type="button"
-        (click)="addParameterFormVisible = false">
-        Cancel
-      </button>
-    </ng-container>
-    <ng-template #addParameterButton>
-      <button
-        type="button"
-        class="add-parameter-button"
-        (click)="addParameterFormVisible = true">
-        Add parameter
-      </button>
-    </ng-template>
+    <input
+      #parameterNameInput
+      type="text"
+      placeholder="New parameter name"
+      (keyup.enter)="addParameter(parameterNameInput, parameterTypeSelect.value)" />
+    <select #parameterTypeSelect>
+      <option
+        *ngFor="let parameterType of addParameterTypeOptions"
+        [value]="parameterType">
+        {{ parameterType }}
+      </option>
+    </select>
+    <button
+      type="button"
+      (click)="addParameter(parameterNameInput, parameterTypeSelect.value)">
+      Add
+    </button>
   </div>
 </div>

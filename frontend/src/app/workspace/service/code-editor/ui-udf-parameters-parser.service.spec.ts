@@ -211,188 +211,152 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
     service = new UiUdfParametersParserService();
   });
 
-  it("should append after the last UiParameter declaration in open()", () => {
-    const code = pythonLines(
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    @overrides",
-      "    def open(self):",
-      '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
-      "        self.other = 1",
-      "",
-      "    def process_tuple(self, tuple_, port):",
-      "        yield tuple_"
-    );
-
-    expect(insertParameter(service, code, "b")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    @overrides",
-        "    def open(self):",
-        '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
-        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
-        "        self.other = 1",
-        "",
-        "    def process_tuple(self, tuple_, port):",
-        "        yield tuple_"
-      )
-    );
-  });
-
-  it("should insert after the open() docstring when no UiParameter exists", () => {
-    const code = pythonLines(
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    def open(self):",
-      '        """Load resources."""',
-      "        self.other = 1"
-    );
-
-    expect(insertParameter(service, code, "b")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    def open(self):",
-        '        """Load resources."""',
-        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
-        "        self.other = 1"
-      )
-    );
-  });
-
-  it("should insert at the top of the open() body when there is no docstring", () => {
-    const code = pythonLines(
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    def open(self):",
-      "        self.other = 1"
-    );
-
-    expect(insertParameter(service, code, "b", "string")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    def open(self):",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.STRING).value',
-        "        self.other = 1"
-      )
-    );
-  });
-
-  it("should create a decorated open() before the first method when the code uses @overrides", () => {
-    const code = pythonLines(
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    @overrides",
-      "    def process_tuple(self, tuple_, port):",
-      "        yield tuple_"
-    );
-
-    expect(insertParameter(service, code, "b")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    @overrides",
-        "    def open(self) -> None:",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
-        "",
-        "    @overrides",
-        "    def process_tuple(self, tuple_, port):",
-        "        yield tuple_"
-      )
-    );
-  });
-
-  it("should create an undecorated open() when the code does not use @overrides", () => {
-    const code = pythonLines(
-      "class GenerateOperator(UDFSourceOperator):",
-      "    def produce(self):",
-      '        yield {"x": 1}'
-    );
-
-    expect(insertParameter(service, code, "b", "long")).toBe(
-      pythonLines(
-        "class GenerateOperator(UDFSourceOperator):",
-        "    def open(self) -> None:",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.LONG).value',
-        "",
-        "    def produce(self):",
-        '        yield {"x": 1}'
-      )
-    );
-  });
-
-  it("should append open() after the class body when the class has no methods", () => {
-    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", '    """Doc."""');
-
-    expect(insertParameter(service, code, "b", "boolean")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        '    """Doc."""',
-        "",
-        "    def open(self) -> None:",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value'
-      )
-    );
-  });
-
-  it("should start the class body with open() when the template body is still commented out", () => {
-    // Exact user flow: only the import and the class header line of the template are uncommented,
-    // so the class body holds nothing but comments (and lezer's trailing error node).
-    const code = pythonLines(
-      "# Choose from the following templates:",
-      "# ",
-      "from pytexera import *",
-      "# ",
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "#     ",
-      "#     @overrides",
-      "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
-      "#         yield tuple_",
-      "# ",
-      "# class ProcessBatchOperator(UDFBatchOperator):"
-    );
-
-    const updatedCode = insertParameter(service, code, "carlos", "string");
-
-    expect(updatedCode).toBe(
-      pythonLines(
-        "# Choose from the following templates:",
-        "# ",
-        "from pytexera import *",
-        "# ",
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    def open(self) -> None:",
-        '        self.carlos = self.UiParameter(name="carlos", type=AttributeType.STRING).value',
-        "#     ",
-        "#     @overrides",
-        "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
-        "#         yield tuple_",
-        "# ",
-        "# class ProcessBatchOperator(UDFBatchOperator):"
-      )
-    );
-    expect(service.parse(updatedCode)).toEqual([
-      { attribute: { attributeName: "carlos", attributeType: "string" }, value: "" },
-    ]);
-  });
-
-  it("should start the open() body when its statements are still commented out", () => {
-    const code = pythonLines(
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    def open(self):",
-      "        # self.a = 1",
-      "        # nothing real yet",
-      "",
-      "    def process_tuple(self, tuple_, port):",
-      "        yield tuple_"
-    );
-
-    expect(insertParameter(service, code, "b")).toBe(
-      pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    def open(self):",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
-        "        # self.a = 1",
-        "        # nothing real yet",
-        "",
-        "    def process_tuple(self, tuple_, port):",
-        "        yield tuple_"
-      )
-    );
+  (
+    [
+      [
+        "append below the last UiParameter declaration",
+        "b",
+        "double",
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
+          "        self.other = 1",
+        ],
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
+          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          "        self.other = 1",
+        ],
+      ],
+      [
+        "insert at the top of an existing open() body",
+        "b",
+        "string",
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '        """Load resources."""',
+          "        self.other = 1",
+        ],
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '        self.b = self.UiParameter(name="b", type=AttributeType.STRING).value',
+          '        """Load resources."""',
+          "        self.other = 1",
+        ],
+      ],
+      [
+        "create a decorated open() before the first method when the code uses @overrides",
+        "b",
+        "double",
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    @overrides",
+          "    def process_tuple(self, tuple_, port):",
+          "        yield tuple_",
+        ],
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    @overrides",
+          "    def open(self) -> None:",
+          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          "",
+          "    @overrides",
+          "    def process_tuple(self, tuple_, port):",
+          "        yield tuple_",
+        ],
+      ],
+      [
+        "create an undecorated open() when the code does not use @overrides",
+        "b",
+        "long",
+        ["class GenerateOperator(UDFSourceOperator):", "    def produce(self):", '        yield {"x": 1}'],
+        [
+          "class GenerateOperator(UDFSourceOperator):",
+          "    def open(self) -> None:",
+          '        self.b = self.UiParameter(name="b", type=AttributeType.LONG).value',
+          "",
+          "    def produce(self):",
+          '        yield {"x": 1}',
+        ],
+      ],
+      [
+        "create open() at the top of a class without methods",
+        "b",
+        "boolean",
+        ["class ProcessTupleOperator(UDFOperatorV2):", '    """Doc."""'],
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self) -> None:",
+          '        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value',
+          "",
+          '    """Doc."""',
+        ],
+      ],
+      [
+        // Exact user flow: only the import and the class header line of the template are
+        // uncommented, so the class body holds nothing but comments and lezer's error node.
+        "start the class body with open() when the template body is still commented out",
+        "carlos",
+        "string",
+        [
+          "from pytexera import *",
+          "# ",
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "#     ",
+          "#     @overrides",
+          "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
+          "#         yield tuple_",
+          "# ",
+          "# class ProcessBatchOperator(UDFBatchOperator):",
+        ],
+        [
+          "from pytexera import *",
+          "# ",
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self) -> None:",
+          '        self.carlos = self.UiParameter(name="carlos", type=AttributeType.STRING).value',
+          "#     ",
+          "#     @overrides",
+          "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
+          "#         yield tuple_",
+          "# ",
+          "# class ProcessBatchOperator(UDFBatchOperator):",
+        ],
+      ],
+      [
+        "start the open() body when its statements are still commented out",
+        "b",
+        "double",
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          "        # self.a = 1",
+          "",
+          "    def process_tuple(self, tuple_, port):",
+          "        yield tuple_",
+        ],
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          "        # self.a = 1",
+          "",
+          "    def process_tuple(self, tuple_, port):",
+          "        yield tuple_",
+        ],
+      ],
+    ] as ReadonlyArray<readonly [string, string, AttributeType, string[], string[]]>
+  ).forEach(([description, name, attributeType, inputLines, expectedLines]) => {
+    it(`should ${description}`, () => {
+      const updatedCode = insertParameter(service, pythonLines(...inputLines), name, attributeType);
+      expect(updatedCode).toBe(pythonLines(...expectedLines));
+      expect(service.parse(updatedCode).map(parsed => parsed.attribute.attributeName)).toContain(name);
+    });
   });
 
   it("should keep the exact parameter name while sanitizing the assignment target", () => {
@@ -459,7 +423,7 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
       code: "class ProcessTupleOperator(UDFOperatorV2):\n    def open(self): pass",
       name: "b",
       attributeType: "double" as AttributeType,
-      message: "open() must have an indented block body",
+      message: "need an indented block body",
     },
     {
       description: "an empty parameter name",

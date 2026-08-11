@@ -39,29 +39,27 @@
 .ui-udf-parameter-add {
   display: flex;
   gap: 8px;
-  align-items: center;
   margin-top: 8px;
-}
 
-.add-parameter-name,
-.add-parameter-type,
-.ui-udf-parameter-add button {
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 2px;
-  background: transparent;
-}
+  input,
+  select,
+  button {
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid #d9d9d9;
+    border-radius: 2px;
+    background: transparent;
+  }
 
-.add-parameter-name {
-  width: 180px;
-}
+  input {
+    width: 160px;
+  }
 
-.ui-udf-parameter-add button {
-  padding: 0 12px;
-  cursor: pointer;
+  button {
+    cursor: pointer;
 
-  &:hover {
-    border-color: #8c8c8c;
+    &:hover {
+      border-color: #8c8c8c;
+    }
   }
 }

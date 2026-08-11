@@ -47,7 +47,6 @@ export class UiUdfParametersComponent extends FieldArrayType<FormlyFieldConfig> 
   ];
 
   readonly addParameterTypeOptions: AttributeType[] = ["string", "integer", "long", "double", "boolean", "timestamp"];
-  addParameterFormVisible = false;
 
   constructor(
     private workflowActionService: WorkflowActionService,
@@ -62,17 +61,11 @@ export class UiUdfParametersComponent extends FieldArrayType<FormlyFieldConfig> 
   }
 
   /** Inserts the declaration into the operator's Python code; the row then appears through the normal code sync. */
-  addParameter(name: string, attributeType: string): void {
-    const attributeName = name.trim();
-    if (!attributeName) {
-      this.notificationService.error("Could not add UDF parameter: parameter name is required.");
-      return;
-    }
-
+  addParameter(nameInput: HTMLInputElement, attributeType: string): void {
     const operatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
     try {
-      this.uiUdfParametersSyncService.addParameter(operatorId, attributeName, attributeType as AttributeType);
-      this.addParameterFormVisible = false;
+      this.uiUdfParametersSyncService.addParameter(operatorId, nameInput.value, attributeType as AttributeType);
+      nameInput.value = "";
     } catch (error) {
       if (!(error instanceof UiUdfParametersEditError) && !(error instanceof UiUdfParametersParseError)) throw error;
       this.notificationService.error(`Could not add UDF parameter: ${error.message}`);

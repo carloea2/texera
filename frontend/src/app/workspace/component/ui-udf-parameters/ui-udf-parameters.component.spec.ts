@@ -124,37 +124,28 @@ describe("UiUdfParametersComponent", () => {
     });
   });
 
-  it("should add a trimmed parameter for the highlighted operator and hide the add form", () => {
-    component.addParameterFormVisible = true;
+  it("should add a parameter for the highlighted operator and clear the name input", () => {
+    const nameInput = { value: "threshold" } as HTMLInputElement;
 
-    component.addParameter("  threshold  ", "double");
+    component.addParameter(nameInput, "double");
 
     expect(syncServiceMock.addParameter).toHaveBeenCalledWith(operatorId, "threshold", "double");
-    expect(component.addParameterFormVisible).toBe(false);
+    expect(nameInput.value).toBe("");
     expect(notificationServiceMock.error).not.toHaveBeenCalled();
   });
 
-  it("should reject an empty parameter name without editing code", () => {
-    component.addParameter("   ", "double");
-
-    expect(syncServiceMock.addParameter).not.toHaveBeenCalled();
-    expect(notificationServiceMock.error).toHaveBeenCalledWith(
-      "Could not add UDF parameter: parameter name is required."
-    );
-  });
-
-  it("should surface edit errors and keep the add form open", () => {
-    component.addParameterFormVisible = true;
+  it("should surface edit errors and keep the name input", () => {
     syncServiceMock.addParameter.mockImplementation(() => {
       throw new UiUdfParametersEditError("UiParameter name 'threshold' is declared already.");
     });
+    const nameInput = { value: "threshold" } as HTMLInputElement;
 
-    component.addParameter("threshold", "double");
+    component.addParameter(nameInput, "double");
 
     expect(notificationServiceMock.error).toHaveBeenCalledWith(
       "Could not add UDF parameter: UiParameter name 'threshold' is declared already."
     );
-    expect(component.addParameterFormVisible).toBe(true);
+    expect(nameInput.value).toBe("threshold");
   });
 
   it("should reflect the workflow modification state", () => {
