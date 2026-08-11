@@ -19,7 +19,7 @@
 <div class="ui-udf-parameters-field">
   <div
     class="ui-udf-parameter-list"
-    *ngIf="model?.length">
+    *ngIf="model?.length || draftVisible">
     <div class="ui-udf-parameter-row header">
       <div
         class="field-cell"
@@ -41,27 +41,66 @@
         </div>
       </ng-container>
     </div>
+
+    <div
+      class="ui-udf-parameter-row draft"
+      *ngIf="draftVisible">
+      <div class="field-cell"></div>
+      <div class="field-cell">
+        <input
+          #parameterNameInput
+          type="text"
+          placeholder="Parameter name"
+          autofocus
+          (keyup.enter)="addParameter(parameterNameInput, parameterTypeSelect.value)"
+          (keyup.escape)="draftVisible = false" />
+      </div>
+      <div class="field-cell draft-actions">
+        <select #parameterTypeSelect>
+          <option
+            *ngFor="let parameterType of addParameterTypeOptions"
+            [value]="parameterType">
+            {{ parameterType }}
+          </option>
+        </select>
+        <button
+          nz-button
+          nzType="primary"
+          nzShape="circle"
+          nzSize="small"
+          type="button"
+          title="Add parameter"
+          (click)="addParameter(parameterNameInput, parameterTypeSelect.value)">
+          <span
+            nz-icon
+            nzType="check"></span>
+        </button>
+        <button
+          nz-button
+          nzShape="circle"
+          nzSize="small"
+          type="button"
+          title="Cancel"
+          (click)="draftVisible = false">
+          <span
+            nz-icon
+            nzType="close"></span>
+        </button>
+      </div>
+    </div>
   </div>
 
-  <div
-    class="ui-udf-parameter-add"
-    *ngIf="workflowModificationEnabled">
-    <input
-      #parameterNameInput
-      type="text"
-      placeholder="New parameter name"
-      (keyup.enter)="addParameter(parameterNameInput, parameterTypeSelect.value)" />
-    <select #parameterTypeSelect>
-      <option
-        *ngFor="let parameterType of addParameterTypeOptions"
-        [value]="parameterType">
-        {{ parameterType }}
-      </option>
-    </select>
-    <button
-      type="button"
-      (click)="addParameter(parameterNameInput, parameterTypeSelect.value)">
-      Add
-    </button>
-  </div>
+  <button
+    class="add-parameter-button"
+    *ngIf="workflowModificationEnabled && !draftVisible"
+    nz-button
+    nzType="dashed"
+    nzBlock
+    type="button"
+    (click)="draftVisible = true">
+    <span
+      nz-icon
+      nzType="plus"></span>
+    Add parameter
+  </button>
 </div>

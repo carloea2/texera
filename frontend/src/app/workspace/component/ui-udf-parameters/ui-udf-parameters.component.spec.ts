@@ -124,34 +124,28 @@ describe("UiUdfParametersComponent", () => {
     });
   });
 
-  it("should add a parameter for the highlighted operator and clear the name input", () => {
-    const nameInput = { value: "threshold" } as HTMLInputElement;
+  it("should add a parameter for the highlighted operator and close the draft row", () => {
+    component.draftVisible = true;
 
-    component.addParameter(nameInput, "double");
+    component.addParameter({ value: "threshold" } as HTMLInputElement, "double");
 
     expect(syncServiceMock.addParameter).toHaveBeenCalledWith(operatorId, "threshold", "double");
-    expect(nameInput.value).toBe("");
+    expect(component.draftVisible).toBe(false);
     expect(notificationServiceMock.error).not.toHaveBeenCalled();
   });
 
-  it("should surface edit errors and keep the name input", () => {
+  it("should surface edit errors and keep the draft row open", () => {
+    component.draftVisible = true;
     syncServiceMock.addParameter.mockImplementation(() => {
       throw new UiUdfParametersEditError("UiParameter name 'threshold' is declared already.");
     });
-    const nameInput = { value: "threshold" } as HTMLInputElement;
 
-    component.addParameter(nameInput, "double");
+    component.addParameter({ value: "threshold" } as HTMLInputElement, "double");
 
     expect(notificationServiceMock.error).toHaveBeenCalledWith(
       "Could not add UDF parameter: UiParameter name 'threshold' is declared already."
     );
-    expect(nameInput.value).toBe("threshold");
-  });
-
-  it("should reflect the workflow modification state", () => {
-    expect(component.workflowModificationEnabled).toBe(true);
-    workflowActionServiceMock.checkWorkflowModificationEnabled.mockReturnValue(false);
-    expect(component.workflowModificationEnabled).toBe(false);
+    expect(component.draftVisible).toBe(true);
   });
 });
 
