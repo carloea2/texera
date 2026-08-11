@@ -120,15 +120,40 @@ object TryCatchFramePass {
     // makes the pairing unique under nesting.
     val gates = splitters.map(s => s.id.logicalOpId -> gateOf(plan, s)).toMap
 
-    val mergerToFrame: Map[PhysicalOpIdentity, OperatorIdentity] = mergers.flatMap { merger =>
+    def pairingCandidates(
+        merger: PhysicalOp,
+        crossInternal: Boolean,
+        stopAt: Set[PhysicalOpIdentity]
+    ): List[PhysicalOp] = {
       val fromTrySources = sourcesInto(plan, merger.id, FROM_TRY)
       val fromCatchSources = sourcesInto(plan, merger.id, FROM_CATCH)
-      val candidates = splitters.filter { s =>
-        val tryReach = reach(plan, s.id, TRY_PORT, crossInternal = false, stopAt = Set.empty)
+      splitters.filter { s =>
+        val tryReach = reach(plan, s.id, TRY_PORT, crossInternal, stopAt)
         val catchReach =
-          reach(plan, gates(s.id.logicalOpId).id, CATCH_PORT, crossInternal = false, Set.empty)
+          reach(plan, gates(s.id.logicalOpId).id, CATCH_PORT, crossInternal, stopAt)
         fromTrySources.exists(src => tryReach.contains(src) || src == s.id) &&
         fromCatchSources.exists(src => catchReach.contains(src))
+      }
+    }
+
+    val mergerToFrame: Map[PhysicalOpIdentity, OperatorIdentity] = mergers.flatMap { merger =>
+      // Pass 1 — strict: do not cross frame-internal (snapshot) links. This
+      // pairs every Finally fed directly from its frame's own subgraphs.
+      // Pass 2 — for a Finally that pass 1 could not see (its inputs come
+      // through a NESTED frame's gate, e.g. catch1 { try2 {..} catch2 { B }
+      // } with only B continuing): cross internal links, but stop at every
+      // OTHER Merger — a Merger is a closing brace, and never crossing one
+      // is what keeps pairing unique in chains (tc1 -> fin1 -> tc2 -> fin2);
+      // for genuine nesting the try/catch disjointness already guarantees
+      // only one frame can supply BOTH ports.
+      val candidates = pairingCandidates(merger, crossInternal = false, Set.empty) match {
+        case Nil =>
+          pairingCandidates(
+            merger,
+            crossInternal = true,
+            stopAt = mergers.map(_.id).toSet - merger.id
+          )
+        case found => found
       }
       candidates match {
         case single :: Nil => Some(merger.id -> single.id.logicalOpId)
@@ -316,6 +341,86 @@ object TryCatchFramePass {
         frame.gate.id -> signals
       }.toMap
 
+    // The Merger must see the same decision evidence the gate does, for every
+    // cone ending that does not already flow into one of its data ports.
+    // Otherwise the two disagree: a failure on an unwired try ending leaves
+    // the Merger flushing the try side while the gate releases the replay,
+    // and a failing terminal fork of the catch branch lets the Merger release
+    // a half-dead recovery as if it were whole.
+    //   try side:   exactly the gate's signal list (it IS the try-side
+    //               aggregate), minus endings wired into From Try;
+    //   catch side: the frame's own catch-cone boundary endings (same tail
+    //               rule; interiors of frames nested INSIDE this one are
+    //               excluded — their apparatus escape ports, e.g. a
+    //               rethrowing gate's dangling Catch, fall out of the
+    //               boundary rule naturally), plus nested frames' terminal
+    //               catch leaves (their failure is this frame's failed
+    //               recovery), minus endings wired into From Catch.
+    val mergerSignals: Map[
+      PhysicalOpIdentity,
+      (List[(PhysicalOpIdentity, PortIdentity)], List[(PhysicalOpIdentity, PortIdentity)])
+    ] =
+      frames.flatMap { frame =>
+        frame.merger.map { m =>
+          def wiredTo(portId: PortIdentity): Set[(PhysicalOpIdentity, PortIdentity)] =
+            plan.links
+              .filter(l => l.toOpId == m.id && l.toPortId == portId)
+              .map(l => (l.fromOpId, l.fromPortId))
+              .toSet
+
+          val trySide = gateSignals(frame.gate.id).filterNot(wiredTo(FROM_TRY))
+
+          val nestedFrames = frames.filter(g =>
+            g.logicalOpId != frame.logicalOpId && frame.cone.contains(g.splitter.id)
+          )
+          val interiorToNested: PhysicalOpIdentity => Boolean =
+            opId => nestedFrames.exists(_.cone.contains(opId))
+
+          val ownEndings = frame.catchCone.toList
+            .filterNot(interiorToNested)
+            .flatMap { opId =>
+              val op = plan.getOperator(opId)
+              op.outputPorts.keys
+                .filterNot(_.internal)
+                .filter { portId =>
+                  val outLinks =
+                    plan.links.filter(l => l.fromOpId == opId && l.fromPortId == portId)
+                  !outLinks.exists(l => frame.catchCone.contains(l.toOpId))
+                }
+                .map(portId => (opId, portId))
+            }
+
+          val nestedCatchLeaves = nestedFrames
+            .filter(g => frame.catchCone.contains(g.splitter.id))
+            .filter { g => // this frame is the innermost catch-block encloser
+              frames
+                .filter(h =>
+                  h.logicalOpId != g.logicalOpId && h.catchCone.contains(g.splitter.id)
+                )
+                .sortBy(_.catchCone.size)
+                .headOption
+                .exists(_.logicalOpId == frame.logicalOpId)
+            }
+            .flatMap { g =>
+              g.catchCone.toList.flatMap { opId =>
+                val op = plan.getOperator(opId)
+                op.outputPorts.keys
+                  .filterNot(_.internal)
+                  .filter(portId =>
+                    plan.links.forall(l => !(l.fromOpId == opId && l.fromPortId == portId))
+                  )
+                  .map(portId => (opId, portId))
+              }
+            }
+
+          val catchSide = (ownEndings ++ nestedCatchLeaves).distinct
+            .filterNot(wiredTo(FROM_CATCH))
+            .sortBy { case (opId, portId) => (opId.logicalOpId.id, opId.layerName, portId.id) }
+
+          m.id -> (trySide, catchSide)
+        }
+      }.toMap
+
     // guarded = drain semantics on own failure (error State in-band). Marks
     // every cone operator plus the frame apparatus itself; everything outside
     // any frame keeps the default report-and-pause behavior.
@@ -336,6 +441,8 @@ object TryCatchFramePass {
           )
           val config = new CatchGateConfig()
           config.ownConeOpIds = frame.coneIdStrings
+          config.catchConnected =
+            plan.links.exists(l => l.fromOpId == frame.gate.id && l.fromPortId == CATCH_PORT)
           op.withInputPorts(snapshotPort :: signalPorts)
             .withPartitionRequirement(
               List(None) ++ signalPorts.map(_ => Some(SignalPartition()))
@@ -346,11 +453,29 @@ object TryCatchFramePass {
         case None =>
           frames.find(_.merger.exists(_.id == op.id)) match {
             case Some(frame) =>
+              val (trySide, catchSide) = mergerSignals(op.id)
+              // internal ids start at 2: executors receive only the int id,
+              // and 0/1 are the external From Try / From Catch
+              val signalPorts = (trySide ++ catchSide).zipWithIndex.map {
+                case (_, idx) =>
+                  InputPort(PortIdentity(idx + 2, internal = true), s"signal-${idx + 2}")
+              }
               val config = new FinallyMergerConfig()
               config.ownConeOpIds = frame.coneIdStrings
-              op.copy(opExecInitInfo =
-                OpExecWithClassName(MergerClassName, objectMapper.writeValueAsString(config))
-              )
+              config.trySignalPortIds = trySide.indices.map(_ + 2).toList
+              config.catchSignalPortIds = catchSide.indices.map(_ + 2 + trySide.size).toList
+              val fromTry = op.inputPorts(FROM_TRY)._1
+              val fromCatch = op
+                .inputPorts(FROM_CATCH)
+                ._1
+                .copy(dependencies = FROM_TRY :: signalPorts.map(_.id).toList)
+              op.withInputPorts(fromTry :: fromCatch :: signalPorts)
+                .withPartitionRequirement(
+                  List(None, None) ++ signalPorts.map(_ => Some(SignalPartition()))
+                )
+                .copy(opExecInitInfo =
+                  OpExecWithClassName(MergerClassName, objectMapper.writeValueAsString(config))
+                )
             case None => op
           }
       }
@@ -365,7 +490,15 @@ object TryCatchFramePass {
         }
     }.toSet
 
-    rebuildPlan(rebuiltOps, plan.links ++ signalLinks)
+    val mergerSignalLinks: Set[PhysicalLink] = mergerSignals.flatMap {
+      case (mergerId, (trySide, catchSide)) =>
+        (trySide ++ catchSide).zipWithIndex.map {
+          case ((srcOpId, srcPortId), idx) =>
+            PhysicalLink(srcOpId, srcPortId, mergerId, PortIdentity(idx + 2, internal = true))
+        }
+    }.toSet
+
+    rebuildPlan(rebuiltOps, plan.links ++ signalLinks ++ mergerSignalLinks)
   }
 
   /**
@@ -499,6 +632,21 @@ object TryCatchFramePass {
           overlap.map(_.logicalOpId.id).mkString(", ")
       )
     }
+    // Error Info lists CAUGHT failures. With no catch subgraph the frame
+    // handles nothing — failures rethrow to the enclosing frame — so a
+    // connected Error Info would stay forever empty (and forwarding the
+    // rethrown State would poison its consumers). Reject the near-miss.
+    val catchConnected =
+      plan.links.exists(l => l.fromOpId == frame.gate.id && l.fromPortId == CATCH_PORT)
+    val errorInfoConnected =
+      plan.links.exists(l => l.fromOpId == frame.gate.id && l.fromPortId == ERROR_INFO_PORT)
+    if (errorInfoConnected && !catchConnected) {
+      throw new IllegalArgumentException(
+        s"TryCatch '$name': Error Info lists caught failures, but the Catch port is " +
+          "unconnected so nothing is caught (failures rethrow to the enclosing frame) — " +
+          "connect Catch, or remove the Error Info consumers"
+      )
+    }
     // Error Info feeding back into the try subgraph is a structural cycle
     // (reporter -> cone op -> tails -> signal edges -> gate) and a temporal
     // paradox (the report exists only once the attempt resolved). Catch-cone
@@ -529,8 +677,6 @@ object TryCatchFramePass {
             s"offending: ${badCatch.map(_.logicalOpId.id).mkString(", ")}"
         )
       }
-      val catchConnected =
-        plan.links.exists(l => l.fromOpId == frame.gate.id && l.fromPortId == CATCH_PORT)
       if (!catchConnected) {
         throw new IllegalArgumentException(
           s"TryCatch '$name': a paired Finally requires the Catch port to be connected"

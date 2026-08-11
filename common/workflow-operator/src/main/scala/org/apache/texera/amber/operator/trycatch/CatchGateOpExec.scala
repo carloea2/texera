@@ -60,20 +60,42 @@ class CatchGateOpExec(descString: String) extends OperatorExecutor {
   // one error State per execution, so (operatorId, workerId) identifies the
   // event however many signal ports (fan-out) it arrived on
   private val reportedErrors = mutable.LinkedHashMap[(String, String), TupleLike]()
+  // the error to RETHROW (catch unconnected): held until the snapshot lane,
+  // because signal ports are dependees and during the dependee phase this
+  // operator has no output ports yet — emitting there would go nowhere
+  private var rethrow: Option[State] = None
 
   override def processState(state: State, port: Int): Option[State] = {
     if (port == snapshotPortId) {
       // snapshot lane: pass through (loop envelopes, foreign errors)
       Some(state)
-    } else {
-      // signal lane: record own-cone failures, absorb everything
-      if (State.isError(state) && State.errorOperatorId(state).exists(ownCone.contains)) {
+    } else if (State.isError(state) && State.errorOperatorId(state).exists(ownCone.contains)) {
+      if (config.catchConnected) {
+        // signal lane, own-cone failure: trigger the catch and absorb — a
+        // caught error must not leak past the frame
         failed = true
         recordError(state)
+      } else if (rethrow.isEmpty) {
+        // no catch subgraph: nothing is handled here, so RETHROW — hold the
+        // error for the snapshot lane (phase 2, output ports assigned); it
+        // then travels this gate's dangling ports' signal edges to the
+        // enclosing gate and Merger (own-cone there, by inclusive
+        // ownership). No Error Info row either: the report belongs to
+        // whoever catches it. One error suffices — like PL, a single
+        // exception escapes the block.
+        rethrow = Some(state)
       }
+      None
+    } else {
+      // ordinary or foreign States on a signal lane are absorbed; a foreign
+      // error always also traveled the splitter, so the snapshot lane
+      // forwards it
       None
     }
   }
+
+  override def produceStateOnFinish(port: Int): Option[State] =
+    if (port == snapshotPortId) rethrow else None
 
   private def recordError(state: State): Unit = {
     val envelope = state.values.get(State.ErrorKey) match {

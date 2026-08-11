@@ -32,9 +32,13 @@ class CatchGateOpExecSpec extends AnyFlatSpec with Matchers {
   private val snapshotPort = TryCatchOpDesc.SNAPSHOT_IN.id // 0
   private val signalPort = 1
 
-  private def mkGate(ownCone: List[String]): CatchGateOpExec = {
+  private def mkGate(
+      ownCone: List[String],
+      catchConnected: Boolean = true
+  ): CatchGateOpExec = {
     val config = new CatchGateConfig()
     config.ownConeOpIds = ownCone
+    config.catchConnected = catchConnected
     new CatchGateOpExec(objectMapper.writeValueAsString(config))
   }
 
@@ -90,5 +94,45 @@ class CatchGateOpExecSpec extends AnyFlatSpec with Matchers {
     val gate = mkGate(List("myop/main"))
     gate.processState(ownError, signalPort)
     gate.processTupleMultiPort(tuple, signalPort) shouldBe empty
+  }
+
+  it should "RETHROW an own-cone error when the Catch port is unconnected" in {
+    // No catch subgraph => the frame handles nothing. The error is held
+    // through the signal phase (dependee ports run before this operator has
+    // output ports, so emitting there would go nowhere) and rethrown at the
+    // snapshot lane's finish, where it travels the gate's dangling ports'
+    // signal edges to the enclosing gate and Merger. No Error Info row is
+    // recorded — the report belongs to whoever actually catches it.
+    val gate = mkGate(List("myop/main"), catchConnected = false)
+    gate.processState(ownError, signalPort) shouldBe None // held, not emitted yet
+    gate.produceStateOnFinish(snapshotPort) shouldBe Some(ownError)
+    gate.onFinishMultiPort(snapshotPort) shouldBe empty // no report
+  }
+
+  it should "rethrow a single error even when several own-cone failures arrive" in {
+    // Like PL, one exception escapes the block: the first held error wins.
+    val gate = mkGate(List("myop/main", "otherop/main"), catchConnected = false)
+    val secondError =
+      State.errorState("otherop/main", "worker-1", new RuntimeException("later"))
+    gate.processState(ownError, signalPort) shouldBe None
+    gate.processState(secondError, signalPort + 1) shouldBe None
+    gate.produceStateOnFinish(snapshotPort) shouldBe Some(ownError)
+  }
+
+  it should "produce no finish State when the catch is connected or nothing failed" in {
+    val catching = mkGate(List("myop/main"))
+    catching.processState(ownError, signalPort)
+    catching.produceStateOnFinish(snapshotPort) shouldBe None // absorbed, not rethrown
+    val clean = mkGate(List("myop/main"), catchConnected = false)
+    clean.produceStateOnFinish(snapshotPort) shouldBe None
+  }
+
+  it should "still absorb foreign errors and ordinary States when the Catch port is unconnected" in {
+    // Rethrow applies to OWN failures only: a foreign error always also
+    // traveled through the splitter, so the snapshot lane forwards it —
+    // forwarding it here too would duplicate it.
+    val gate = mkGate(List("myop/main"), catchConnected = false)
+    gate.processState(foreignError, signalPort) shouldBe None
+    gate.processState(State(Map("some" -> "state")), signalPort) shouldBe None
   }
 }

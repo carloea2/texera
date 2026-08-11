@@ -54,6 +54,8 @@ class FinallyMergerOpExec(descString: String) extends OperatorExecutor {
   private val config: FinallyMergerConfig =
     objectMapper.readValue(descString, classOf[FinallyMergerConfig])
   private val ownCone: Set[String] = config.ownConeOpIds.toSet
+  private val trySignals: Set[Int] = config.trySignalPortIds.toSet
+  private val catchSignals: Set[Int] = config.catchSignalPortIds.toSet
 
   private val FROM_TRY = 0
   private val FROM_CATCH = 1
@@ -61,17 +63,44 @@ class FinallyMergerOpExec(descString: String) extends OperatorExecutor {
   private val stagedTry = new ArrayBuffer[Tuple]()
   private val stagedCatch = new ArrayBuffer[Tuple]()
   private var trySideClean = false
+  // Failures on cone endings NOT wired into this Merger, reported through the
+  // signal ports. Wired failures need no flag: the error State poisons the
+  // data port and the worker suppresses its finish hooks.
+  private var tryFailed = false
+  private var catchFailed = false
 
   override def processTuple(tuple: Tuple, port: Int): Iterator[TupleLike] = {
-    if (port == FROM_TRY) stagedTry.append(tuple) else stagedCatch.append(tuple)
+    if (port == FROM_TRY) stagedTry.append(tuple)
+    else if (port == FROM_CATCH) stagedCatch.append(tuple)
+    // signal-lane tuples cannot occur (SignalPartitioning drops them at the
+    // sender); ignore defensively
     Iterator.empty
   }
 
   override def processState(state: State, port: Int): Option[State] = {
-    if (
-      port == FROM_TRY && State.isError(state) &&
-      State.errorOperatorId(state).exists(ownCone.contains)
-    ) {
+    val ownError =
+      State.isError(state) && State.errorOperatorId(state).exists(ownCone.contains)
+    if (trySignals.contains(port) || catchSignals.contains(port)) {
+      // signal lane: same decision evidence the gate sees, for the endings
+      // that do not flow into this Merger
+      if (ownError && trySignals.contains(port)) {
+        // caught by this frame (the gate is releasing the replay): discard
+        // the failed attempt and absorb — it must not leak past the frame
+        tryFailed = true
+        stagedTry.clear()
+        None
+      } else if (ownError) {
+        // a catch-side ending died: the recovery as a whole failed. Suppress
+        // the release and forward the error — escalation to the enclosing
+        // frame, exactly like a wired catch-side failure
+        catchFailed = true
+        Some(state)
+      } else {
+        // ordinary/foreign States on a signal lane are absorbed (foreign
+        // errors travel the data lanes)
+        None
+      }
+    } else if (port == FROM_TRY && ownError) {
       // caught: discard the failed attempt's staged output and absorb the
       // error — it must not leak past the frame
       stagedTry.clear()
@@ -89,10 +118,16 @@ class FinallyMergerOpExec(descString: String) extends OperatorExecutor {
       // (this callback is suppressed by the worker if the port was poisoned)
       trySideClean = true
       Iterator.empty
-    } else if (trySideClean) {
+    } else if (port != FROM_CATCH) {
+      Iterator.empty // a signal port finishing carries no output
+    } else if (trySideClean && !tryFailed) {
       stagedTry.iterator.map(t => (t, Some(FinallyOpDesc.TRY_RESULT)))
-    } else {
+    } else if (!catchFailed) {
       stagedCatch.iterator.map(t => (t, Some(FinallyOpDesc.CATCH_RESULT)))
+    } else {
+      // double failure: the attempt failed and so did part of the recovery —
+      // nothing is released; the forwarded catch-side error escalates
+      Iterator.empty
     }
   }
 }

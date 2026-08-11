@@ -37,9 +37,15 @@ class FinallyMergerOpExecSpec extends AnyFlatSpec with Matchers {
   private val TRY_RESULT = FinallyOpDesc.TRY_RESULT
   private val CATCH_RESULT = FinallyOpDesc.CATCH_RESULT
 
-  private def mkMerger(ownCone: List[String] = List("myop/main")): FinallyMergerOpExec = {
+  private def mkMerger(
+      ownCone: List[String] = List("myop/main"),
+      trySignalPortIds: List[Int] = List(),
+      catchSignalPortIds: List[Int] = List()
+  ): FinallyMergerOpExec = {
     val config = new FinallyMergerConfig()
     config.ownConeOpIds = ownCone
+    config.trySignalPortIds = trySignalPortIds
+    config.catchSignalPortIds = catchSignalPortIds
     new FinallyMergerOpExec(objectMapper.writeValueAsString(config))
   }
 
@@ -90,6 +96,45 @@ class FinallyMergerOpExecSpec extends AnyFlatSpec with Matchers {
     val merger = mkMerger()
     val envelope = State(Map("k" -> 1L))
     merger.processState(envelope, FROM_TRY) shouldBe Some(envelope)
+  }
+
+  it should "flush the catch side when an UNWIRED try ending failed (signal lane)" in {
+    // A failing terminal fork of the try cone never touches From Try: its
+    // error arrives on a signal port. The wired fork completed cleanly
+    // (onFinishMultiPort(From Try) runs), but the attempt as a whole failed —
+    // the Merger must agree with the gate and release the recovery, not the
+    // partial attempt.
+    val merger = mkMerger(trySignalPortIds = List(2))
+    tuples(0 until 3).foreach(merger.processTuple(_, FROM_TRY)) // wired fork, clean
+    merger.processState(ownError, 2) shouldBe None // absorbed: caught by this frame
+    merger.onFinishMultiPort(FROM_TRY) shouldBe empty
+    val fallback = tuples(100 until 102)
+    fallback.foreach(merger.processTuple(_, FROM_CATCH))
+    merger.onFinishMultiPort(FROM_CATCH).toList shouldBe
+      fallback.map(t => (t, Some(CATCH_RESULT)))
+  }
+
+  it should "release nothing when an UNWIRED catch ending failed (signal lane)" in {
+    // The recovery forked and a terminal fork died: the recovery as a whole
+    // failed. The error is FORWARDED (escalation, like a wired catch-side
+    // failure) and the release is suppressed — never a half-dead recovery.
+    val merger = mkMerger(trySignalPortIds = List(2), catchSignalPortIds = List(3))
+    merger.processState(ownError, 2) shouldBe None // attempt failed
+    merger.onFinishMultiPort(FROM_TRY) shouldBe empty
+    tuples(100 until 102).foreach(merger.processTuple(_, FROM_CATCH)) // surviving fork
+    merger.processState(ownError, 3) shouldBe Some(ownError) // forwarded: escalation
+    merger.onFinishMultiPort(FROM_CATCH) shouldBe empty
+  }
+
+  it should "absorb foreign and ordinary States on signal lanes" in {
+    val merger = mkMerger(trySignalPortIds = List(2), catchSignalPortIds = List(3))
+    merger.processState(foreignError, 2) shouldBe None
+    merger.processState(State(Map("k" -> 1L)), 3) shouldBe None
+    // and neither set a failure flag: a clean run still flushes the try side
+    val rows = tuples(0 until 2)
+    rows.foreach(merger.processTuple(_, FROM_TRY))
+    merger.onFinishMultiPort(FROM_TRY) shouldBe empty
+    merger.onFinishMultiPort(FROM_CATCH).toList shouldBe rows.map(t => (t, Some(TRY_RESULT)))
   }
 
   it should "emit the winning branch's actual field values, unchanged" in {

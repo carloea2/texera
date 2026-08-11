@@ -31,4 +31,16 @@ import com.fasterxml.jackson.annotation.JsonProperty
 class FinallyMergerConfig {
   @JsonProperty
   var ownConeOpIds: List[String] = List()
+
+  // Signal-port ids (internal, starting at 2 so they cannot collide with the
+  // external From Try = 0 / From Catch = 1, since executors see only the int).
+  // One per cone ending NOT wired into this Merger: the gate aggregates every
+  // ending of the try cone for ITS decision, and the Merger must see the same
+  // evidence, or a failure on an unwired ending leaves the two disagreeing —
+  // the gate releasing the catch replay while the Merger still flushes the
+  // try side (or flushing a "recovery" whose unwired fork died).
+  @JsonProperty
+  var trySignalPortIds: List[Int] = List()
+  @JsonProperty
+  var catchSignalPortIds: List[Int] = List()
 }

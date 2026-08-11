@@ -28,7 +28,11 @@ import org.apache.texera.amber.core.storage.DocumentFactory
 import org.apache.texera.amber.core.storage.model.VirtualDocument
 import org.apache.texera.amber.core.tuple.Tuple
 import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, OperatorIdentity}
-import org.apache.texera.amber.core.workflow.PortIdentity
+import org.apache.texera.amber.core.workflow.{
+  ExecutionMode,
+  PortIdentity,
+  WorkflowSettings
+}
 import org.apache.texera.amber.engine.common.AmberRuntime
 import org.apache.texera.amber.engine.e2e.TestUtils.{
   buildWorkflow,
@@ -45,6 +49,7 @@ import org.apache.texera.amber.operator.filter.{
   SpecializedFilterOpDesc
 }
 import org.apache.texera.amber.operator.limit.LimitOpDesc
+import org.apache.texera.amber.operator.loop.{LoopEndOpDesc, LoopStartOpDesc}
 import org.apache.texera.amber.operator.source.scan.text.TextInputSourceOpDesc
 import org.apache.texera.amber.operator.trycatch.{FinallyOpDesc, TryCatchOpDesc}
 import org.apache.texera.amber.operator.udf.python.PythonUDFOpDescV2
@@ -323,6 +328,92 @@ class TryCatchIntegrationSpec
     assert(portRowCount(outerFin, port1) == 1)
   }
 
+  it should "rethrow from a nested frame with an unconnected Catch to the enclosing catch" in {
+    // PL: try1 { x = A(); try2 { B() } /* no catch2 */ } catch1 { C() } — an
+    // uncaught inner failure aborts the OUTER attempt. The inner gate, having
+    // no catch subgraph, forwards the error instead of absorbing it; the
+    // forward travels its dangling ports' signal edges to the outer gate
+    // (replay) and the outer Merger (release agreement).
+    val src = textInput("1\n2\n3")
+    val outer = new TryCatchOpDesc()
+    val outerTail = limit(3) // outer's own try path: completes CLEAN
+    val inner = new TryCatchOpDesc() // Catch left unconnected: pure guard
+    val innerTry = failingFilter() // terminal; fails => rethrow
+    val outerCatch = limit(2)
+    val fin = new FinallyOpDesc()
+
+    val materialized = runAndGetMaterializedRowCounts(
+      List(src, outer, outerTail, inner, innerTry, outerCatch, fin),
+      List(
+        link(src, port0, outer, port0),
+        link(outer, port0, outerTail, port0),
+        link(outer, port0, inner, port0),
+        link(inner, port0, innerTry, port0), // inner Try; Catch unconnected
+        link(outerTail, port0, fin, port0), // From Try (clean data!)
+        link(outer, port1, outerCatch, port0), // outer Catch
+        link(outerCatch, port0, fin, port1) // From Catch
+      )
+    )
+    // the outer catch replayed all 3 rows through limit(2); and although the
+    // wired try path completed cleanly, the Merger must NOT flush it — the
+    // attempt as a whole failed
+    assert(materialized(fin.operatorIdentifier) == 0)
+    assert(portRowCount(fin, port1) == 2)
+  }
+
+  it should "release the recovery when a terminal try fork fails but the wired fork is clean" in {
+    // The gate hears every ending of the try cone; the Merger must reach the
+    // same verdict. A failing terminal fork used to be invisible to the
+    // Merger (no error on From Try), which then flushed the clean fork's
+    // rows while the gate was simultaneously releasing the catch replay.
+    val src = textInput("1\n2\n3")
+    val tryCatch = new TryCatchOpDesc()
+    val okFork = limit(3) // wired into the Finally, completes clean
+    val badFork = failingFilter() // terminal, dies
+    val catchBranch = limit(1)
+    val fin = new FinallyOpDesc()
+
+    val materialized = runAndGetMaterializedRowCounts(
+      List(src, tryCatch, okFork, badFork, catchBranch, fin),
+      List(
+        link(src, port0, tryCatch, port0),
+        link(tryCatch, port0, okFork, port0),
+        link(tryCatch, port0, badFork, port0),
+        link(okFork, port0, fin, port0), // From Try
+        link(tryCatch, port1, catchBranch, port0),
+        link(catchBranch, port0, fin, port1) // From Catch
+      )
+    )
+    assert(materialized(fin.operatorIdentifier) == 0) // NOT okFork's 3 rows
+    assert(portRowCount(fin, port1) == 1) // the replay through limit(1)
+  }
+
+  it should "release nothing when a terminal fork of the CATCH branch fails" in {
+    // The recovery itself forked and one fork died: the recovery is not
+    // whole, so the Merger must not release the surviving fork's rows as if
+    // it were. Both result ports stay empty and the run still terminates.
+    val src = textInput("1\n2\n3")
+    val tryCatch = new TryCatchOpDesc()
+    val tryBranch = failingFilter() // the attempt fails => catch replays
+    val catchOk = limit(2) // surviving fork, wired into the Finally
+    val catchBad = failingFilter() // terminal fork of the recovery, dies
+    val fin = new FinallyOpDesc()
+
+    val materialized = runAndGetMaterializedRowCounts(
+      List(src, tryCatch, tryBranch, catchOk, catchBad, fin),
+      List(
+        link(src, port0, tryCatch, port0),
+        link(tryCatch, port0, tryBranch, port0),
+        link(tryBranch, port0, fin, port0), // From Try (poisoned)
+        link(tryCatch, port1, catchOk, port0),
+        link(tryCatch, port1, catchBad, port0),
+        link(catchOk, port0, fin, port1) // From Catch
+      )
+    )
+    assert(materialized(fin.operatorIdentifier) == 0)
+    assert(portRowCount(fin, port1) == 0) // suppressed: half a recovery is no recovery
+  }
+
   it should "support an inner frame inside the CATCH branch: try1 {} catch1 { try2 {} catch2 {} } finally1" in {
     // The PL shape `try1 { attempt } catch1 { try2 { A } catch2 { B } } finally1`:
     // the outer recovery is itself guarded. The inner construct's closing
@@ -471,6 +562,127 @@ class ProcessTupleOperator(UDFOperatorV2):
     // the recovery leaves Finally through Catch Result (port 1)
     assert(materialized(fin.operatorIdentifier) == 0)
     assert(portRowCount(fin, port1) == 2)
+  }
+
+  it should "emit recovery rows only when the recovery's own inner attempt fails: catch1 { try2 { sideEffect } catch2 { B } } finally1" in {
+    // A nested frame inside the catch block whose CATCH branch alone feeds
+    // the enclosing Finally (its try branch is a terminal side effect):
+    // real-life "in the recovery, attempt a side-effecting operation; if IT
+    // fails, route fallback rows onward instead". The Finally is fed only
+    // through the nested frame's gate, which the strict pairing pass cannot
+    // see — the two-pass pairing resolves it. Here BOTH attempts fail, so B
+    // replays the recovery and its rows are the outer construct's value.
+    val src = textInput("1\n2\n3")
+    val outer = new TryCatchOpDesc()
+    val outerTry = failingFilter() // outer attempt fails => catch1 runs
+    val inner = new TryCatchOpDesc() // catch1's body: a guarded side effect
+    val innerSide = failingFilter() // terminal side effect; fails => B runs
+    val fallback = limit(2)
+    val fin = new FinallyOpDesc()
+
+    val materialized = runAndGetMaterializedRowCounts(
+      List(src, outer, outerTry, inner, innerSide, fallback, fin),
+      List(
+        link(src, port0, outer, port0),
+        link(outer, port0, outerTry, port0), // try1
+        link(outerTry, port0, fin, port0), // From Try (poisoned, discarded)
+        link(outer, port1, inner, port0), // catch1 = the nested frame
+        link(inner, port0, innerSide, port0), // try2, terminal
+        link(inner, port1, fallback, port0), // catch2
+        link(fallback, port0, fin, port1) // ONLY catch2 continues onward
+      )
+    )
+    assert(materialized(fin.operatorIdentifier) == 0)
+    assert(portRowCount(fin, port1) == 2) // the fallback's replay
+    assert(materialized(innerSide.operatorIdentifier) == 0)
+  }
+
+  it should "keep the Finally intact when the Error Info branch itself fails" in {
+    // try fails -> catch recovers -> the REPORTER lane (Error Info consumers)
+    // fails too. The reporter sits outside both cones, so its failure cannot
+    // reach the Finally (forward-only poison + provenance): the recovery is
+    // delivered untouched and the run terminates. The reporter lane is
+    // wrapped in its own guard here — an UNGUARDED reporter failure pauses
+    // the workflow instead, by the pause-preservation rule.
+    val src = textInput("1\n2\n3")
+    val tryCatch = new TryCatchOpDesc()
+    val failing = failingFilter()
+    val catchBranch = limit(2)
+    val fin = new FinallyOpDesc()
+    val reporterGuard = new TryCatchOpDesc() // Catch unconnected: pure guard
+    val reporterBoom = failingFilter() // dies on the first Error Info row
+
+    val materialized = runAndGetMaterializedRowCounts(
+      List(src, tryCatch, failing, catchBranch, fin, reporterGuard, reporterBoom),
+      List(
+        link(src, port0, tryCatch, port0),
+        link(tryCatch, port0, failing, port0), // Try
+        link(failing, port0, fin, port0), // From Try (poisoned, discarded)
+        link(tryCatch, port1, catchBranch, port0), // Catch
+        link(catchBranch, port0, fin, port1), // From Catch
+        link(tryCatch, PortIdentity(2), reporterGuard, port0), // Error Info
+        link(reporterGuard, port0, reporterBoom, port0)
+      )
+    )
+    // the recovery is exactly the catch rows, despite the reporter dying
+    assert(materialized(fin.operatorIdentifier) == 0)
+    assert(portRowCount(fin, port1) == 2)
+    assert(materialized(reporterBoom.operatorIdentifier) == 0)
+  }
+
+  it should "catch and recover on EVERY iteration of a loop around the frame" in {
+    // A frame inside a loop body: each iteration replays one row through the
+    // frame, the attempt fails, the catch recovers it, and the loop takes the
+    // back-edge. Workers are recreated per iteration, so this exercises the
+    // whole frame apparatus (signal edges, snapshot release, staging) being
+    // rebuilt every time; the LoopEnd's materialized table accumulates across
+    // iterations (reuseStorage), so 3 rows == the frame recovered 3 times.
+    val src = textInput("1\n2\n3")
+    val start = new LoopStartOpDesc()
+    start.initialization = "i = 0"
+    start.output = "table.iloc[i]"
+    val tryCatch = new TryCatchOpDesc()
+    val tryBranch = failingFilter()
+    val catchBranch = limit(1)
+    val fin = new FinallyOpDesc()
+    val end = new LoopEndOpDesc()
+    end.update = "i += 1"
+    end.condition = "i < len(table)"
+
+    val operators = List(src, start, tryCatch, tryBranch, catchBranch, fin, end)
+    val links = List(
+      link(src, port0, start, port0),
+      link(start, port0, tryCatch, port0),
+      link(tryCatch, port0, tryBranch, port0),
+      link(tryBranch, port0, fin, port0),
+      link(tryCatch, port1, catchBranch, port0),
+      link(catchBranch, port0, fin, port1),
+      // the construct's value continues into the loop tail, whichever side won
+      link(fin, port0, end, port0),
+      link(fin, port1, end, port0)
+    )
+    // loops require MATERIALIZED execution (the back-edge is a cross-region
+    // state channel), so this test runs under its own context settings
+    val materialized = runWorkflowAndReadResults(
+      system,
+      buildWorkflow(
+        operators,
+        links,
+        workflowContext(
+          specId,
+          WorkflowSettings(dataTransferBatchSize = 400, executionMode = ExecutionMode.MATERIALIZED)
+        )
+      ),
+      operators.map(_.operatorIdentifier),
+      _.getCount,
+      Duration.fromSeconds(90)
+    )
+    val endRows = materialized.getOrElse(end.operatorIdentifier, -1L)
+    assert(
+      endRows == 3,
+      s"the frame must recover once per iteration and the loop must run all 3: got $endRows " +
+        s"(all: $materialized)"
+    )
   }
 
   it should "guard a Python UDF failure and fall back to the catch branch" in {

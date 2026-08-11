@@ -31,4 +31,12 @@ import com.fasterxml.jackson.annotation.JsonProperty
 class CatchGateConfig {
   @JsonProperty
   var ownConeOpIds: List[String] = List()
+
+  // Whether the Catch port has consumers. Without a catch subgraph the frame
+  // handles nothing: an own-cone failure is FORWARDED (rethrow) instead of
+  // absorbed, so an enclosing frame — whose gate the pass already wires to
+  // this gate's dangling ports — can catch it. At top level forwarding goes
+  // nowhere and the run terminates with the console error, as before.
+  @JsonProperty
+  var catchConnected: Boolean = true
 }

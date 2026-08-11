@@ -28,7 +28,12 @@ import org.apache.texera.amber.core.virtualidentity.{
   WorkflowIdentity
 }
 import org.apache.texera.amber.core.workflow._
-import org.apache.texera.amber.operator.trycatch.{CatchGateConfig, FinallyOpDesc, TryCatchOpDesc}
+import org.apache.texera.amber.operator.trycatch.{
+  CatchGateConfig,
+  FinallyMergerConfig,
+  FinallyOpDesc,
+  TryCatchOpDesc
+}
 import org.apache.texera.amber.util.JSONUtils.objectMapper
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -92,6 +97,30 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
       case OpExecWithClassName(_, desc) => desc
     }
     objectMapper.readValue(descString, classOf[CatchGateConfig])
+  }
+
+  private def mergerConfig(merger: PhysicalOp): FinallyMergerConfig = {
+    val descString = merger.opExecInitInfo match {
+      case OpExecWithClassName(_, desc) => desc
+    }
+    objectMapper.readValue(descString, classOf[FinallyMergerConfig])
+  }
+
+  /** src -> TryCatch; Try -> tryOp (terminal); Catch and Error Info unconnected */
+  private def rethrowFramePlan(): PhysicalPlan = {
+    val tcDesc = new TryCatchOpDesc()
+    tcDesc.setOperatorId("tc")
+    val tcPlan = tcDesc.getPhysicalPlan(wid, eid)
+    var plan = PhysicalPlan(operators = Set.empty, links = Set.empty)
+    (Set(sourceOp("src"), simpleOp("tryOp")) ++ tcPlan.operators).foreach { op =>
+      plan = plan.addOperator(op.propagateSchema())
+    }
+    List(
+      link(opId("src"), out0, opId("tc", TryCatchOpDesc.SPLITTER_LAYER), in0),
+      tcPlan.links.head,
+      link(opId("tc", TryCatchOpDesc.SPLITTER_LAYER), out0, opId("tryOp"), in0)
+    ).foreach(l => plan = plan.addLink(l))
+    plan
   }
 
   private def link(
@@ -238,6 +267,95 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
     signalPorts.foreach(p =>
       gate.partitionRequirement.lift(p.id).flatten shouldBe Some(SignalPartition())
     )
+  }
+
+  it should "give the Merger no signal ports when every cone ending is wired into it" in {
+    // The simple shape: tryOp -> From Try, catchOp -> From Catch. Failures on
+    // wired endings arrive on the data ports themselves, so signal ports
+    // would be pure redundancy — the Merger keeps its two-port shape.
+    val result = TryCatchFramePass.run(buildFramePlan(), None)
+    val merger = result.getOperator(opId("fin"))
+    merger.inputPorts.keys.count(_.internal) shouldBe 0
+    val config = mergerConfig(merger)
+    config.trySignalPortIds shouldBe empty
+    config.catchSignalPortIds shouldBe empty
+  }
+
+  it should "wire an unwired try ending into the Merger as a try-signal port" in {
+    // A terminal fork of the try cone: its failure reaches the gate (which
+    // releases the replay), so the Merger must hear it too, or the two
+    // disagree and the Merger flushes the partial attempt as a success.
+    var plan = buildFramePlan()
+    val sideTail = simpleOp("sideTail")
+    plan = plan.addOperator(sideTail.propagateSchema())
+    plan = plan.addLink(
+      link(opId("tc", TryCatchOpDesc.SPLITTER_LAYER), out0, opId("sideTail"), in0)
+    )
+
+    val result = TryCatchFramePass.run(plan, None)
+    val merger = result.getOperator(opId("fin"))
+    val config = mergerConfig(merger)
+    config.trySignalPortIds shouldBe List(2)
+    config.catchSignalPortIds shouldBe empty
+    // the signal link originates at the fork's port and lands on internal 2
+    result.links.count(l =>
+      l.fromOpId == opId("sideTail") && l.toOpId == merger.id &&
+        l.toPortId == PortIdentity(2, internal = true)
+    ) shouldBe 1
+    // From Catch waits for the signal (dependee ordering), and the link
+    // carries only States/completion
+    val fromCatch = merger.inputPorts(PortIdentity(1))._1
+    fromCatch.dependencies should contain(PortIdentity(2, internal = true))
+    merger.partitionRequirement.lift(2).flatten shouldBe Some(SignalPartition())
+  }
+
+  it should "wire an unwired catch ending into the Merger as a catch-signal port" in {
+    // A terminal fork of the catch cone: if it dies, the recovery as a whole
+    // failed — the Merger must suppress the release instead of emitting the
+    // surviving fork's rows as if the recovery were whole.
+    var plan = buildFramePlan()
+    val catchFork = simpleOp("catchFork")
+    plan = plan.addOperator(catchFork.propagateSchema())
+    plan = plan.addLink(
+      link(opId("tc", TryCatchOpDesc.GATE_LAYER), catchPort, opId("catchFork"), in0)
+    )
+
+    val result = TryCatchFramePass.run(plan, None)
+    val merger = result.getOperator(opId("fin"))
+    val config = mergerConfig(merger)
+    config.trySignalPortIds shouldBe empty
+    config.catchSignalPortIds shouldBe List(2)
+    result.links.count(l =>
+      l.fromOpId == opId("catchFork") && l.toOpId == merger.id &&
+        l.toPortId == PortIdentity(2, internal = true)
+    ) shouldBe 1
+  }
+
+  it should "mark the gate of a frame with an unconnected Catch port for rethrow" in {
+    val result = TryCatchFramePass.run(rethrowFramePlan(), None)
+    gateConfig(result.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))).catchConnected shouldBe
+      false
+    // and the standard frame keeps catching
+    val connected = TryCatchFramePass.run(buildFramePlan(), None)
+    gateConfig(connected.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))).catchConnected shouldBe
+      true
+  }
+
+  it should "reject Error Info consumers on a frame whose Catch port is unconnected" in {
+    // Error Info lists CAUGHT failures; with no catch subgraph nothing is
+    // caught (failures rethrow) — the table would stay forever empty, and
+    // the rethrown State would poison the consumers.
+    var plan = rethrowFramePlan()
+    val audit = fixedSchemaOp("audit")
+    plan = plan.addOperator(audit.propagateSchema())
+    plan = plan.addLink(
+      link(opId("tc", TryCatchOpDesc.GATE_LAYER), TryCatchOpDesc.ERROR_INFO_PORT, opId("audit"), in0)
+    )
+    val rejected = intercept[IllegalArgumentException] {
+      TryCatchFramePass.run(plan, None)
+    }
+    rejected.getMessage should include("Error Info")
+    rejected.getMessage should include("Catch port is unconnected")
   }
 
   it should "not signal-partition the user's data link into Finally" in {
@@ -544,25 +662,30 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
     rejected.getMessage should include("its own Finally")
   }
 
-  it should "require the enclosing Finally's From Catch to come from its own block, not through a nested frame's gate" in {
-    // Documented limitation, pinned as real behavior. Wiring ONLY a nested
-    // frame's catch branch into the enclosing Finally (its try branch ending
-    // in its own sink) dodges the partial-row leak, but the enclosing Finally
-    // can no longer be paired: frame pairing refuses to traverse
-    // frame-internal (snapshot) links -- which is what makes pairing unique
-    // under nesting -- so a nested frame's catch branch, reachable only
-    // through that frame's own gate, is invisible to it. The shape is also
-    // semantically thin: the enclosing catch block would contribute nothing
-    // whenever the inner attempt succeeds. The fix for a user is the same as
-    // above -- close the inner frame with its own Finally and wire THAT into
-    // the enclosing one -- so the pairing error points the right way.
+  it should "pair a Finally fed only through a nested frame's catch branch (two-pass pairing)" in {
+    // Real-life PL: catch1 { try2 { sideEffect() } catch2 { B } } finally1 —
+    // the recovery emits rows ONLY when its own inner attempt failed. The
+    // strict pairing pass cannot see B (reachable from gate1.Catch only
+    // through tc2's internal snapshot link), so a second pass crosses
+    // internal links while stopping at every other Merger, which keeps
+    // chain shapes unique. The nested frame comes out fully armed.
     var plan = nestedInCatchPlan(withInnerFinally = false)
     plan = plan.removeLink(link(opId("try2op"), out0, opId("fin"), PortIdentity(1)))
 
-    val rejected = intercept[IllegalArgumentException] {
-      TryCatchFramePass.run(plan, None)
-    }
-    rejected.getMessage should include("not wired to any TryCatch")
+    val result = TryCatchFramePass.run(plan, None)
+    val innerGate = result.getOperator(opId("tc2", TryCatchOpDesc.GATE_LAYER))
+    val outerGate = result.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))
+    // the inner try tail (terminal sink) signals ITS gate, so try2's failure
+    // releases catch2 — and nothing signals across frames by accident
+    result.links.count(l => l.fromOpId == opId("try2op") && l.toOpId == innerGate.id) shouldBe 1
+    result.links.count(l => l.fromOpId == opId("try2op") && l.toOpId == outerGate.id) shouldBe 0
+    // the outer frame owns the nested block inclusively; the inner does not
+    // swallow the outer Merger
+    gateConfig(outerGate).ownConeOpIds should contain("catch2op/main")
+    gateConfig(innerGate).ownConeOpIds should not contain "fin/main"
+    // and the Finally still pairs with the OUTER frame: its From Catch input
+    // (catch2op) is validated against tc's catch cone
+    mergerConfig(result.getOperator(opId("fin"))).ownConeOpIds should contain("try2op/main")
   }
 
   it should "reject a Finally whose From Try comes from outside the frame" in {
