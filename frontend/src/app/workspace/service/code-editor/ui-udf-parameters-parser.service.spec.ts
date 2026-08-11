@@ -18,10 +18,12 @@
  */
 
 import {
+  UiUdfParametersEditError,
   UiUdfParametersParseError,
   UiUdfParametersParserService,
   type UiUdfParameter,
 } from "./ui-udf-parameters-parser.service";
+import type { AttributeType } from "../../types/workflow-compiling.interface";
 
 const MULTIPLE_SUPPORTED_CLASSES_ERROR = "Only one Python UDF class can declare UiParameter values.";
 const DUPLICATE_NAME_ERROR = "UiParameter name 'threshold' is declared more than once.";
@@ -201,6 +203,233 @@ describe("UiUdfParametersParserService", () => {
     });
   });
 });
+
+describe("UiUdfParametersParserService.computeParameterInsertion", () => {
+  let service: UiUdfParametersParserService;
+
+  beforeEach(() => {
+    service = new UiUdfParametersParserService();
+  });
+
+  it("should append after the last UiParameter declaration in open()", () => {
+    const code = pythonLines(
+      "class ProcessTupleOperator(UDFOperatorV2):",
+      "    @overrides",
+      "    def open(self):",
+      '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
+      "        self.other = 1",
+      "",
+      "    def process_tuple(self, tuple_, port):",
+      "        yield tuple_"
+    );
+
+    expect(insertParameter(service, code, "b")).toBe(
+      pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        "    @overrides",
+        "    def open(self):",
+        '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
+        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+        "        self.other = 1",
+        "",
+        "    def process_tuple(self, tuple_, port):",
+        "        yield tuple_"
+      )
+    );
+  });
+
+  it("should insert after the open() docstring when no UiParameter exists", () => {
+    const code = pythonLines(
+      "class ProcessTupleOperator(UDFOperatorV2):",
+      "    def open(self):",
+      '        """Load resources."""',
+      "        self.other = 1"
+    );
+
+    expect(insertParameter(service, code, "b")).toBe(
+      pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        "    def open(self):",
+        '        """Load resources."""',
+        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+        "        self.other = 1"
+      )
+    );
+  });
+
+  it("should insert at the top of the open() body when there is no docstring", () => {
+    const code = pythonLines(
+      "class ProcessTupleOperator(UDFOperatorV2):",
+      "    def open(self):",
+      "        self.other = 1"
+    );
+
+    expect(insertParameter(service, code, "b", "string")).toBe(
+      pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        "    def open(self):",
+        '        self.b = self.UiParameter(name="b", type=AttributeType.STRING).value',
+        "        self.other = 1"
+      )
+    );
+  });
+
+  it("should create a decorated open() before the first method when the code uses @overrides", () => {
+    const code = pythonLines(
+      "class ProcessTupleOperator(UDFOperatorV2):",
+      "    @overrides",
+      "    def process_tuple(self, tuple_, port):",
+      "        yield tuple_"
+    );
+
+    expect(insertParameter(service, code, "b")).toBe(
+      pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        "    @overrides",
+        "    def open(self) -> None:",
+        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+        "",
+        "    @overrides",
+        "    def process_tuple(self, tuple_, port):",
+        "        yield tuple_"
+      )
+    );
+  });
+
+  it("should create an undecorated open() when the code does not use @overrides", () => {
+    const code = pythonLines(
+      "class GenerateOperator(UDFSourceOperator):",
+      "    def produce(self):",
+      '        yield {"x": 1}'
+    );
+
+    expect(insertParameter(service, code, "b", "long")).toBe(
+      pythonLines(
+        "class GenerateOperator(UDFSourceOperator):",
+        "    def open(self) -> None:",
+        '        self.b = self.UiParameter(name="b", type=AttributeType.LONG).value',
+        "",
+        "    def produce(self):",
+        '        yield {"x": 1}'
+      )
+    );
+  });
+
+  it("should append open() after the class body when the class has no methods", () => {
+    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", '    """Doc."""');
+
+    expect(insertParameter(service, code, "b", "boolean")).toBe(
+      pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        '    """Doc."""',
+        "",
+        "    def open(self) -> None:",
+        '        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value'
+      )
+    );
+  });
+
+  it("should keep the exact parameter name while sanitizing the assignment target", () => {
+    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass");
+
+    const updatedCode = insertParameter(service, code, "my param-1", "timestamp");
+
+    expect(updatedCode).toContain(
+      'self.my_param_1 = self.UiParameter(name="my param-1", type=AttributeType.TIMESTAMP).value'
+    );
+    expect(service.parse(updatedCode)).toEqual([
+      { attribute: { attributeName: "my param-1", attributeType: "timestamp" }, value: "" },
+    ]);
+  });
+
+  it("should guard assignment targets that sanitize to Python keywords", () => {
+    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass");
+
+    expect(insertParameter(service, code, "class")).toContain(
+      'self.class_ = self.UiParameter(name="class", type=AttributeType.DOUBLE).value'
+    );
+  });
+
+  it("should produce code the parser reads back, preserving prior declarations", () => {
+    let code = pythonLines(
+      "from pytexera import *",
+      "",
+      "class ProcessTupleOperator(UDFOperatorV2):",
+      "    @overrides",
+      "    def process_tuple(self, tuple_, port):",
+      "        yield tuple_"
+    );
+
+    code = insertParameter(service, code, "threshold", "double");
+    code = insertParameter(service, code, "label", "string");
+
+    expect(service.parse(code)).toEqual([
+      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
+    ]);
+  });
+
+  [
+    {
+      description: "no supported UDF class",
+      code: "class RandomClass(ABC):\n    def open(self):\n        pass",
+      name: "b",
+      attributeType: "double" as AttributeType,
+      message: "No supported Python UDF class",
+    },
+    {
+      description: "a duplicate parameter name",
+      code: pythonLines(
+        "class ProcessTupleOperator(UDFOperatorV2):",
+        "    def open(self):",
+        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value'
+      ),
+      name: "b",
+      attributeType: "double" as AttributeType,
+      message: "UiParameter name 'b' is declared already.",
+    },
+    {
+      description: "a single-line open() body",
+      code: "class ProcessTupleOperator(UDFOperatorV2):\n    def open(self): pass",
+      name: "b",
+      attributeType: "double" as AttributeType,
+      message: "open() must have an indented block body",
+    },
+    {
+      description: "an empty parameter name",
+      code: pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass"),
+      name: "   ",
+      attributeType: "double" as AttributeType,
+      message: "UiParameter name is required.",
+    },
+    {
+      description: "an unsupported parameter type",
+      code: pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass"),
+      name: "b",
+      attributeType: "binary" as AttributeType,
+      message: "UiParameter type 'binary' is not supported.",
+    },
+  ].forEach(({ description, code, name, attributeType, message }) => {
+    it(`should raise an error for ${description}`, () => {
+      expect(() => service.computeParameterInsertion(code, name, attributeType)).toThrow(UiUdfParametersEditError);
+      expect(() => service.computeParameterInsertion(code, name, attributeType)).toThrow(message);
+    });
+  });
+});
+
+function insertParameter(
+  service: UiUdfParametersParserService,
+  code: string,
+  name: string,
+  attributeType: AttributeType = "double"
+): string {
+  const edit = service.computeParameterInsertion(code, name, attributeType);
+  return code.slice(0, edit.offset) + edit.text + code.slice(edit.offset);
+}
+
+function pythonLines(...lines: string[]): string {
+  return `${lines.join("\n")}\n`;
+}
 
 function expectParsed(
   service: UiUdfParametersParserService,

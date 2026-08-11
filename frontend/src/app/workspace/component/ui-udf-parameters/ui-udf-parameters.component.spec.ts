@@ -19,13 +19,39 @@
 
 import { FormControl } from "@angular/forms";
 import { FormlyFieldConfig } from "@ngx-formly/core";
+import type { Mock } from "vitest";
+import { vi as vitest } from "vitest";
+import { NotificationService } from "../../../common/service/notification/notification.service";
+import { UiUdfParametersEditError } from "../../service/code-editor/ui-udf-parameters-parser.service";
+import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
+import { WorkflowActionService } from "../../service/workflow-graph/model/workflow-action.service";
 import { UiUdfParametersComponent } from "./ui-udf-parameters.component";
 
 describe("UiUdfParametersComponent", () => {
+  const operatorId = "operator-1";
+
   let component: UiUdfParametersComponent;
+  let workflowActionServiceMock: {
+    checkWorkflowModificationEnabled: Mock;
+    getJointGraphWrapper: Mock;
+  };
+  let syncServiceMock: { addParameter: Mock };
+  let notificationServiceMock: { error: Mock };
 
   beforeEach(() => {
-    component = new UiUdfParametersComponent();
+    workflowActionServiceMock = {
+      checkWorkflowModificationEnabled: vitest.fn().mockReturnValue(true),
+      getJointGraphWrapper: vitest.fn().mockReturnValue({
+        getCurrentHighlightedOperatorIDs: () => [operatorId],
+      }),
+    };
+    syncServiceMock = { addParameter: vitest.fn() };
+    notificationServiceMock = { error: vitest.fn() };
+    component = new UiUdfParametersComponent(
+      workflowActionServiceMock as unknown as WorkflowActionService,
+      syncServiceMock as unknown as UiUdfParametersSyncService,
+      notificationServiceMock as unknown as NotificationService
+    );
   });
 
   it("should disable name and type fields while leaving value editable", () => {
@@ -96,6 +122,45 @@ describe("UiUdfParametersComponent", () => {
       expect((columnField as any).templateOptions?.disabled).toBe(column.disabled);
       expect(control.disabled).toBe(column.disabled);
     });
+  });
+
+  it("should add a trimmed parameter for the highlighted operator and hide the add form", () => {
+    component.addParameterFormVisible = true;
+
+    component.addParameter("  threshold  ", "double");
+
+    expect(syncServiceMock.addParameter).toHaveBeenCalledWith(operatorId, "threshold", "double");
+    expect(component.addParameterFormVisible).toBe(false);
+    expect(notificationServiceMock.error).not.toHaveBeenCalled();
+  });
+
+  it("should reject an empty parameter name without editing code", () => {
+    component.addParameter("   ", "double");
+
+    expect(syncServiceMock.addParameter).not.toHaveBeenCalled();
+    expect(notificationServiceMock.error).toHaveBeenCalledWith(
+      "Could not add UDF parameter: parameter name is required."
+    );
+  });
+
+  it("should surface edit errors and keep the add form open", () => {
+    component.addParameterFormVisible = true;
+    syncServiceMock.addParameter.mockImplementation(() => {
+      throw new UiUdfParametersEditError("UiParameter name 'threshold' is declared already.");
+    });
+
+    component.addParameter("threshold", "double");
+
+    expect(notificationServiceMock.error).toHaveBeenCalledWith(
+      "Could not add UDF parameter: UiParameter name 'threshold' is declared already."
+    );
+    expect(component.addParameterFormVisible).toBe(true);
+  });
+
+  it("should reflect the workflow modification state", () => {
+    expect(component.workflowModificationEnabled).toBe(true);
+    workflowActionServiceMock.checkWorkflowModificationEnabled.mockReturnValue(false);
+    expect(component.workflowModificationEnabled).toBe(false);
   });
 });
 

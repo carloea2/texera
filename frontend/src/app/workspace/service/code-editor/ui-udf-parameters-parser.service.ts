@@ -32,14 +32,18 @@ const SUPPORTED_CLASS_NAMES = new Set([
 const PYTHON_NODE = {
   ARG_LIST: "ArgList",
   ASSIGN_OP: "AssignOp",
+  BODY: "Body",
   CALL_EXPRESSION: "CallExpression",
   CLASS_DEFINITION: "ClassDefinition",
+  EXPRESSION_STATEMENT: "ExpressionStatement",
+  FUNCTION_DEFINITION: "FunctionDefinition",
   MEMBER_EXPRESSION: "MemberExpression",
   PROPERTY_NAME: "PropertyName",
   STRING: "String",
   VARIABLE_NAME: "VariableName",
 } as const;
 const ARGUMENT_DELIMITER_NODES = new Set(["(", ")", ","]);
+const NON_STATEMENT_BODY_NODES = new Set([":", "Comment"]);
 
 const UI_PARAMETER_CALLEE = ["self", "UiParameter"];
 const ATTRIBUTE_TYPE_RECEIVER = "AttributeType";
@@ -60,6 +64,12 @@ export type UiUdfParameter = Readonly<{ attribute: SchemaAttribute; value: strin
 /** Raised when supported Python UDF code declares UI parameters that cannot be represented safely in the UI. */
 export class UiUdfParametersParseError extends Error {}
 
+/** Raised when a new UiParameter declaration cannot be inserted into the Python UDF code. */
+export class UiUdfParametersEditError extends Error {}
+
+/** A single text insertion that adds a UiParameter declaration to Python UDF code. */
+export type UiUdfParameterCodeEdit = Readonly<{ offset: number; text: string }>;
+
 // Accept Java enum names (INTEGER, BOOLEAN) and Python enum aliases (INT, BOOL).
 const ATTRIBUTE_TYPES_BY_TOKEN: Readonly<Record<string, AttributeType>> = {
   STRING: "string",
@@ -71,6 +81,24 @@ const ATTRIBUTE_TYPES_BY_TOKEN: Readonly<Record<string, AttributeType>> = {
   BOOL: "boolean",
   TIMESTAMP: "timestamp",
 };
+
+// Python AttributeType member emitted when generating declarations; matches the pytexera enum and template style.
+const PYTHON_TOKENS_BY_ATTRIBUTE_TYPE: Readonly<Partial<Record<AttributeType, string>>> = {
+  string: "STRING",
+  integer: "INT",
+  long: "LONG",
+  double: "DOUBLE",
+  boolean: "BOOL",
+  timestamp: "TIMESTAMP",
+};
+
+// Hard keywords only; soft keywords (match, case, type) are valid attribute names.
+const PYTHON_KEYWORDS = new Set(
+  (
+    "False None True and as assert async await break class continue def del elif else except finally " +
+    "for from global if import in is lambda nonlocal not or pass raise return try while with yield"
+  ).split(" ")
+);
 
 /** Parses Python UDF source code and infers supported self.UiParameter(...) declarations for the property panel. */
 @Injectable({ providedIn: "root" })
@@ -125,6 +153,155 @@ export class UiUdfParametersParserService {
 
     return result;
   }
+
+  /**
+   * Computes the text insertion that declares a new self.UiParameter(...) inside open() of the
+   * supported Python UDF class, synthesizing an open() method when the class does not define one.
+   * Throws UiUdfParametersEditError when there is no safe place to insert the declaration.
+   */
+  computeParameterInsertion(code: string, name: string, attributeType: AttributeType): UiUdfParameterCodeEdit {
+    const attributeName = name.trim();
+    const pythonToken = PYTHON_TOKENS_BY_ATTRIBUTE_TYPE[attributeType];
+    if (!attributeName) throw new UiUdfParametersEditError("UiParameter name is required.");
+    if (!pythonToken) throw new UiUdfParametersEditError(`UiParameter type '${attributeType}' is not supported.`);
+    if (this.parse(code).some(parameter => parameter.attribute.attributeName === attributeName))
+      throw new UiUdfParametersEditError(`UiParameter name '${attributeName}' is declared already.`);
+
+    const declaration =
+      `self.${toPythonIdentifier(attributeName)} = ` +
+      `self.UiParameter(name=${JSON.stringify(attributeName)}, type=AttributeType.${pythonToken}).value`;
+    const classBody = findSupportedClassBody(code);
+    const openMethod = findMethodDefinition(classBody, code, "open");
+    return openMethod
+      ? insertIntoOpenBody(openMethod, code, declaration)
+      : insertNewOpenMethod(classBody, code, declaration);
+  }
+}
+
+function findSupportedClassBody(code: string): ParserSyntaxNode {
+  let classBody: ParserSyntaxNode | undefined;
+  parser.parse(code).iterate({
+    enter: ({ name, node }) => {
+      const className = node.getChild(PYTHON_NODE.VARIABLE_NAME);
+      if (
+        name !== PYTHON_NODE.CLASS_DEFINITION ||
+        !className ||
+        !SUPPORTED_CLASS_NAMES.has(code.slice(className.from, className.to))
+      )
+        return;
+      classBody = node.getChild(PYTHON_NODE.BODY) ?? undefined;
+      return false;
+    },
+  });
+  // parse() already rejected multiple supported classes, so the last match is the only one.
+  if (!classBody)
+    throw new UiUdfParametersEditError(
+      "No supported Python UDF class (such as ProcessTupleOperator) was found in the code."
+    );
+  return classBody;
+}
+
+function getBlockStatements(body: ParserSyntaxNode): ParserSyntaxNode[] {
+  return getChildren(body).filter(child => !NON_STATEMENT_BODY_NODES.has(child.name));
+}
+
+function findMethodDefinition(
+  classBody: ParserSyntaxNode,
+  code: string,
+  methodName: string
+): ParserSyntaxNode | undefined {
+  for (const statement of getBlockStatements(classBody)) {
+    const definition = toFunctionDefinition(statement);
+    const definitionName = definition?.getChild(PYTHON_NODE.VARIABLE_NAME);
+    if (definition && definitionName && code.slice(definitionName.from, definitionName.to) === methodName)
+      return definition;
+  }
+  return undefined;
+}
+
+/** Returns the FunctionDefinition backing a class-body statement, unwrapping decorated methods. */
+function toFunctionDefinition(statement: ParserSyntaxNode): ParserSyntaxNode | undefined {
+  if (statement.name === PYTHON_NODE.FUNCTION_DEFINITION) return statement;
+  return statement.getChild(PYTHON_NODE.FUNCTION_DEFINITION) ?? undefined;
+}
+
+function insertIntoOpenBody(openMethod: ParserSyntaxNode, code: string, declaration: string): UiUdfParameterCodeEdit {
+  const statements = getIndentedBlockStatements(
+    openMethod.getChild(PYTHON_NODE.BODY),
+    code,
+    "open() must have an indented block body to declare UiParameter values."
+  );
+
+  const indent = lineIndentation(code, statements[0].from);
+  const anchor =
+    findLastUiParameterStatement(statements, code) ?? (isDocstring(statements[0]) ? statements[0] : undefined);
+  if (!anchor) return { offset: lineStart(code, statements[0].from), text: `${indent}${declaration}\n` };
+  return { offset: lineEnd(code, anchor.to), text: `\n${indent}${declaration}` };
+}
+
+function insertNewOpenMethod(classBody: ParserSyntaxNode, code: string, declaration: string): UiUdfParameterCodeEdit {
+  const statements = getIndentedBlockStatements(
+    classBody,
+    code,
+    "The Python UDF class must have an indented block body to declare UiParameter values."
+  );
+
+  const firstMethod = statements.find(statement => toFunctionDefinition(statement));
+  const methodIndent = lineIndentation(code, (firstMethod ?? statements[0]).from);
+  const openMethodText = [
+    ...(/^\s*@overrides\b/m.test(code) ? [`${methodIndent}@overrides`] : []),
+    `${methodIndent}def open(self) -> None:`,
+    `${methodIndent}    ${declaration}`,
+  ].join("\n");
+
+  if (firstMethod) return { offset: lineStart(code, firstMethod.from), text: `${openMethodText}\n\n` };
+  return { offset: lineEnd(code, statements[statements.length - 1].to), text: `\n\n${openMethodText}` };
+}
+
+/** Returns the statements of an indented block body, rejecting single-line bodies like "def open(self): pass". */
+function getIndentedBlockStatements(
+  body: ParserSyntaxNode | null,
+  code: string,
+  inlineBodyMessage: string
+): ParserSyntaxNode[] {
+  const statements = body ? getBlockStatements(body) : [];
+  if (!body || !statements.length || !code.slice(body.from, statements[0].from).includes("\n"))
+    throw new UiUdfParametersEditError(inlineBodyMessage);
+  return statements;
+}
+
+function findLastUiParameterStatement(statements: ParserSyntaxNode[], code: string): ParserSyntaxNode | undefined {
+  let lastStatement: ParserSyntaxNode | undefined;
+  for (const statement of statements) {
+    statement.cursor().iterate(cursorReference => {
+      if (cursorReference.name !== PYTHON_NODE.CALL_EXPRESSION) return;
+      if (readCall(cursorReference.node, code)) lastStatement = statement;
+      return false;
+    });
+  }
+  return lastStatement;
+}
+
+function isDocstring(statement: ParserSyntaxNode): boolean {
+  return statement.name === PYTHON_NODE.EXPRESSION_STATEMENT && statement.firstChild?.name === PYTHON_NODE.STRING;
+}
+
+function toPythonIdentifier(name: string): string {
+  const identifier = name.replace(/\W/g, "_").replace(/^(?=\d)/, "_") || "parameter";
+  return PYTHON_KEYWORDS.has(identifier) ? `${identifier}_` : identifier;
+}
+
+function lineStart(code: string, position: number): number {
+  return code.lastIndexOf("\n", position - 1) + 1;
+}
+
+function lineEnd(code: string, position: number): number {
+  const newline = code.indexOf("\n", position);
+  return newline === -1 ? code.length : newline;
+}
+
+function lineIndentation(code: string, position: number): string {
+  return code.slice(lineStart(code, position), position).match(/^[ \t]*/)?.[0] ?? "";
 }
 
 function readCall(call: ParserSyntaxNode, code: string): UiUdfParameter | undefined {

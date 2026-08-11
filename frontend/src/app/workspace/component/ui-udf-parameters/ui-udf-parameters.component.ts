@@ -19,6 +19,14 @@
 import { Component } from "@angular/core";
 import { NgFor, NgIf } from "@angular/common";
 import { FieldArrayType, FormlyFieldConfig, FormlyModule } from "@ngx-formly/core";
+import { NotificationService } from "../../../common/service/notification/notification.service";
+import { WorkflowActionService } from "../../service/workflow-graph/model/workflow-action.service";
+import {
+  UiUdfParametersEditError,
+  UiUdfParametersParseError,
+} from "../../service/code-editor/ui-udf-parameters-parser.service";
+import { UiUdfParametersSyncService } from "../../service/code-editor/ui-udf-parameters-sync.service";
+import type { AttributeType } from "../../types/workflow-compiling.interface";
 
 type UiUdfParameterColumn = Readonly<{ label: string; key: string; parentKey?: string; disabled: boolean }>;
 
@@ -37,6 +45,39 @@ export class UiUdfParametersComponent extends FieldArrayType<FormlyFieldConfig> 
     { label: "Name", key: "attributeName", parentKey: "attribute", disabled: true },
     { label: "Type", key: "attributeType", parentKey: "attribute", disabled: true },
   ];
+
+  readonly addParameterTypeOptions: AttributeType[] = ["string", "integer", "long", "double", "boolean", "timestamp"];
+  addParameterFormVisible = false;
+
+  constructor(
+    private workflowActionService: WorkflowActionService,
+    private uiUdfParametersSyncService: UiUdfParametersSyncService,
+    private notificationService: NotificationService
+  ) {
+    super();
+  }
+
+  get workflowModificationEnabled(): boolean {
+    return this.workflowActionService.checkWorkflowModificationEnabled();
+  }
+
+  /** Inserts the declaration into the operator's Python code; the row then appears through the normal code sync. */
+  addParameter(name: string, attributeType: string): void {
+    const attributeName = name.trim();
+    if (!attributeName) {
+      this.notificationService.error("Could not add UDF parameter: parameter name is required.");
+      return;
+    }
+
+    const operatorId = this.workflowActionService.getJointGraphWrapper().getCurrentHighlightedOperatorIDs()[0];
+    try {
+      this.uiUdfParametersSyncService.addParameter(operatorId, attributeName, attributeType as AttributeType);
+      this.addParameterFormVisible = false;
+    } catch (error) {
+      if (!(error instanceof UiUdfParametersEditError) && !(error instanceof UiUdfParametersParseError)) throw error;
+      this.notificationService.error(`Could not add UDF parameter: ${error.message}`);
+    }
+  }
 
   override onPopulate(field: FormlyFieldConfig): void {
     this.configureRowTemplate(this.getFieldArrayTemplate(field));
