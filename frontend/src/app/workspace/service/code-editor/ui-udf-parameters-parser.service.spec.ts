@@ -27,6 +27,7 @@ import type { AttributeType } from "../../types/workflow-compiling.interface";
 
 const MULTIPLE_SUPPORTED_CLASSES_ERROR = "Only one Python UDF class can declare UiParameter values.";
 const DUPLICATE_NAME_ERROR = "UiParameter name 'threshold' is declared more than once.";
+const PASS_ONLY_OPEN = "class ProcessTupleOperator(UDFOperatorV2):\n    def open(self):\n        pass\n";
 
 describe("UiUdfParametersParserService", () => {
   let service: UiUdfParametersParserService;
@@ -211,6 +212,8 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
     service = new UiUdfParametersParserService();
   });
 
+  // Each case is the expected file, with the inserted lines marked ">": the input is the same
+  // file without them. Every case also re-parses the result to prove the round trip.
   (
     [
       [
@@ -221,30 +224,18 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
           "class ProcessTupleOperator(UDFOperatorV2):",
           "    def open(self):",
           '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
-          "        self.other = 1",
-        ],
-        [
-          "class ProcessTupleOperator(UDFOperatorV2):",
-          "    def open(self):",
-          '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
-          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
           "        self.other = 1",
         ],
       ],
       [
         "insert at the top of an existing open() body",
         "b",
-        "string",
+        "integer",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
           "    def open(self):",
-          '        """Load resources."""',
-          "        self.other = 1",
-        ],
-        [
-          "class ProcessTupleOperator(UDFOperatorV2):",
-          "    def open(self):",
-          '        self.b = self.UiParameter(name="b", type=AttributeType.STRING).value',
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.INT).value',
           '        """Load resources."""',
           "        self.other = 1",
         ],
@@ -255,45 +246,24 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
         "double",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
-          "    @overrides",
-          "    def process_tuple(self, tuple_, port):",
-          "        yield tuple_",
-        ],
-        [
-          "class ProcessTupleOperator(UDFOperatorV2):",
-          "    @overrides",
-          "    def open(self) -> None:",
-          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
-          "",
+          ">    @overrides",
+          ">    def open(self) -> None:",
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          ">",
           "    @overrides",
           "    def process_tuple(self, tuple_, port):",
           "        yield tuple_",
         ],
       ],
       [
-        "create an undecorated open() when the code does not use @overrides",
-        "b",
-        "long",
-        ["class GenerateOperator(UDFSourceOperator):", "    def produce(self):", '        yield {"x": 1}'],
-        [
-          "class GenerateOperator(UDFSourceOperator):",
-          "    def open(self) -> None:",
-          '        self.b = self.UiParameter(name="b", type=AttributeType.LONG).value',
-          "",
-          "    def produce(self):",
-          '        yield {"x": 1}',
-        ],
-      ],
-      [
-        "create open() at the top of a class without methods",
+        "create an undecorated open() at the top of a class without methods",
         "b",
         "boolean",
-        ["class ProcessTupleOperator(UDFOperatorV2):", '    """Doc."""'],
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
-          "    def open(self) -> None:",
-          '        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value',
-          "",
+          ">    def open(self) -> None:",
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value',
+          ">",
           '    """Doc."""',
         ],
       ],
@@ -307,19 +277,8 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
           "from pytexera import *",
           "# ",
           "class ProcessTupleOperator(UDFOperatorV2):",
-          "#     ",
-          "#     @overrides",
-          "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
-          "#         yield tuple_",
-          "# ",
-          "# class ProcessBatchOperator(UDFBatchOperator):",
-        ],
-        [
-          "from pytexera import *",
-          "# ",
-          "class ProcessTupleOperator(UDFOperatorV2):",
-          "    def open(self) -> None:",
-          '        self.carlos = self.UiParameter(name="carlos", type=AttributeType.STRING).value',
+          ">    def open(self) -> None:",
+          '>        self.carlos = self.UiParameter(name="carlos", type=AttributeType.STRING).value',
           "#     ",
           "#     @overrides",
           "#     def process_tuple(self, tuple_: Tuple, port: int) -> Iterator[Optional[TupleLike]]:",
@@ -331,115 +290,70 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
       [
         "start the open() body when its statements are still commented out",
         "b",
-        "double",
+        "long",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
           "    def open(self):",
-          "        # self.a = 1",
-          "",
-          "    def process_tuple(self, tuple_, port):",
-          "        yield tuple_",
-        ],
-        [
-          "class ProcessTupleOperator(UDFOperatorV2):",
-          "    def open(self):",
-          '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.LONG).value',
           "        # self.a = 1",
           "",
           "    def process_tuple(self, tuple_, port):",
           "        yield tuple_",
         ],
       ],
-    ] as ReadonlyArray<readonly [string, string, AttributeType, string[], string[]]>
-  ).forEach(([description, name, attributeType, inputLines, expectedLines]) => {
+    ] as ReadonlyArray<readonly [string, string, AttributeType, string[]]>
+  ).forEach(([description, name, attributeType, annotatedLines]) => {
     it(`should ${description}`, () => {
-      const updatedCode = insertParameter(service, pythonLines(...inputLines), name, attributeType);
-      expect(updatedCode).toBe(pythonLines(...expectedLines));
+      const input = pythonLines(...annotatedLines.filter(line => !line.startsWith(">")));
+      const expected = pythonLines(...annotatedLines.map(line => (line.startsWith(">") ? line.slice(1) : line)));
+
+      const updatedCode = insertParameter(service, input, name, attributeType);
+
+      expect(updatedCode).toBe(expected);
       expect(service.parse(updatedCode).map(parsed => parsed.attribute.attributeName)).toContain(name);
     });
   });
 
-  it("should keep the exact parameter name while sanitizing the assignment target", () => {
-    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass");
+  it("should sanitize assignment targets while keeping exact names, and accumulate declarations", () => {
+    let code = PASS_ONLY_OPEN;
+    code = insertParameter(service, code, "my param-1", "timestamp");
+    code = insertParameter(service, code, "class");
 
-    const updatedCode = insertParameter(service, code, "my param-1", "timestamp");
-
-    expect(updatedCode).toContain(
-      'self.my_param_1 = self.UiParameter(name="my param-1", type=AttributeType.TIMESTAMP).value'
-    );
-    expect(service.parse(updatedCode)).toEqual([
-      { attribute: { attributeName: "my param-1", attributeType: "timestamp" }, value: "" },
-    ]);
-  });
-
-  it("should guard assignment targets that sanitize to Python keywords", () => {
-    const code = pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass");
-
-    expect(insertParameter(service, code, "class")).toContain(
-      'self.class_ = self.UiParameter(name="class", type=AttributeType.DOUBLE).value'
-    );
-  });
-
-  it("should produce code the parser reads back, preserving prior declarations", () => {
-    let code = pythonLines(
-      "from pytexera import *",
-      "",
-      "class ProcessTupleOperator(UDFOperatorV2):",
-      "    @overrides",
-      "    def process_tuple(self, tuple_, port):",
-      "        yield tuple_"
-    );
-
-    code = insertParameter(service, code, "threshold", "double");
-    code = insertParameter(service, code, "label", "string");
-
+    expect(code).toContain('self.my_param_1 = self.UiParameter(name="my param-1", type=AttributeType.TIMESTAMP).value');
+    expect(code).toContain('self.class_ = self.UiParameter(name="class", type=AttributeType.DOUBLE).value');
     expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "threshold", attributeType: "double" }, value: "" },
-      { attribute: { attributeName: "label", attributeType: "string" }, value: "" },
+      { attribute: { attributeName: "my param-1", attributeType: "timestamp" }, value: "" },
+      { attribute: { attributeName: "class", attributeType: "double" }, value: "" },
     ]);
   });
 
-  [
-    {
-      description: "no supported UDF class",
-      code: "class RandomClass(ABC):\n    def open(self):\n        pass",
-      name: "b",
-      attributeType: "double" as AttributeType,
-      message: "No supported Python UDF class",
-    },
-    {
-      description: "a duplicate parameter name",
-      code: pythonLines(
-        "class ProcessTupleOperator(UDFOperatorV2):",
-        "    def open(self):",
-        '        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value'
-      ),
-      name: "b",
-      attributeType: "double" as AttributeType,
-      message: "UiParameter name 'b' is declared already.",
-    },
-    {
-      description: "a single-line open() body",
-      code: "class ProcessTupleOperator(UDFOperatorV2):\n    def open(self): pass",
-      name: "b",
-      attributeType: "double" as AttributeType,
-      message: "need an indented block body",
-    },
-    {
-      description: "an empty parameter name",
-      code: pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass"),
-      name: "   ",
-      attributeType: "double" as AttributeType,
-      message: "UiParameter name is required.",
-    },
-    {
-      description: "an unsupported parameter type",
-      code: pythonLines("class ProcessTupleOperator(UDFOperatorV2):", "    def open(self):", "        pass"),
-      name: "b",
-      attributeType: "binary" as AttributeType,
-      message: "UiParameter type 'binary' is not supported.",
-    },
-  ].forEach(({ description, code, name, attributeType, message }) => {
+  (
+    [
+      [
+        "no supported UDF class",
+        "class RandomClass(ABC):\n    def open(self):\n        pass",
+        "b",
+        "double",
+        "No supported Python UDF class",
+      ],
+      [
+        "a duplicate parameter name",
+        PASS_ONLY_OPEN.replace("pass", 'self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value'),
+        "b",
+        "double",
+        "UiParameter name 'b' is declared already.",
+      ],
+      [
+        "a single-line open() body",
+        "class ProcessTupleOperator(UDFOperatorV2):\n    def open(self): pass",
+        "b",
+        "double",
+        "need an indented block body",
+      ],
+      ["an empty parameter name", PASS_ONLY_OPEN, "   ", "double", "UiParameter name is required."],
+      ["an unsupported parameter type", PASS_ONLY_OPEN, "b", "binary", "UiParameter type 'binary' is not supported."],
+    ] as ReadonlyArray<readonly [string, string, string, AttributeType, string]>
+  ).forEach(([description, code, name, attributeType, message]) => {
     it(`should raise an error for ${description}`, () => {
       expect(() => service.computeParameterInsertion(code, name, attributeType)).toThrow(UiUdfParametersEditError);
       expect(() => service.computeParameterInsertion(code, name, attributeType)).toThrow(message);
