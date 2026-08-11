@@ -28,11 +28,7 @@ import org.apache.texera.amber.core.storage.DocumentFactory
 import org.apache.texera.amber.core.storage.model.VirtualDocument
 import org.apache.texera.amber.core.tuple.Tuple
 import org.apache.texera.amber.core.virtualidentity.{ExecutionIdentity, OperatorIdentity}
-import org.apache.texera.amber.core.workflow.{
-  ExecutionMode,
-  PortIdentity,
-  WorkflowSettings
-}
+import org.apache.texera.amber.core.workflow.{ExecutionMode, PortIdentity, WorkflowSettings}
 import org.apache.texera.amber.engine.common.AmberRuntime
 import org.apache.texera.amber.engine.e2e.TestUtils.{
   buildWorkflow,

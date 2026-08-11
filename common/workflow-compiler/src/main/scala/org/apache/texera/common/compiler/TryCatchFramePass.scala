@@ -246,22 +246,22 @@ object TryCatchFramePass {
         // catch2 { .. } finally2 { } .. }` with try1 itself terminal).
         .filter(other => other.cone.contains(open.splitter.id))
         .foreach { other =>
-        other.merger.foreach { m =>
-          val leaking = plan.links
-            .filter(l => l.toOpId == m.id && open.tryCone.contains(l.fromOpId))
-            .map(_.fromOpId)
-          if (leaking.nonEmpty) {
-            throw new IllegalArgumentException(
-              s"TryCatch '${open.logicalOpId.id}' has no Finally of its own, but its Try " +
-                s"subgraph feeds the Finally of '${other.logicalOpId.id}' (via " +
-                s"${leaking.map(_.logicalOpId.id).mkString(", ")}). A failed attempt would leak " +
-                s"its partial rows into that reconvergence point: give '${open.logicalOpId.id}' " +
-                "its own Finally and wire that into " +
-                s"'${other.logicalOpId.id}' instead (Finallys close inside-out)."
-            )
+          other.merger.foreach { m =>
+            val leaking = plan.links
+              .filter(l => l.toOpId == m.id && open.tryCone.contains(l.fromOpId))
+              .map(_.fromOpId)
+            if (leaking.nonEmpty) {
+              throw new IllegalArgumentException(
+                s"TryCatch '${open.logicalOpId.id}' has no Finally of its own, but its Try " +
+                  s"subgraph feeds the Finally of '${other.logicalOpId.id}' (via " +
+                  s"${leaking.map(_.logicalOpId.id).mkString(", ")}). A failed attempt would leak " +
+                  s"its partial rows into that reconvergence point: give '${open.logicalOpId.id}' " +
+                  "its own Finally and wire that into " +
+                  s"'${other.logicalOpId.id}' instead (Finallys close inside-out)."
+              )
+            }
           }
         }
-      }
     }
 
     // ---- 4. per-op innermost-frame assignment (smallest containing cone)
@@ -394,9 +394,7 @@ object TryCatchFramePass {
             .filter(g => frame.catchCone.contains(g.splitter.id))
             .filter { g => // this frame is the innermost catch-block encloser
               frames
-                .filter(h =>
-                  h.logicalOpId != g.logicalOpId && h.catchCone.contains(g.splitter.id)
-                )
+                .filter(h => h.logicalOpId != g.logicalOpId && h.catchCone.contains(g.splitter.id))
                 .sortBy(_.catchCone.size)
                 .headOption
                 .exists(_.logicalOpId == frame.logicalOpId)

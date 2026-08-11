@@ -349,7 +349,12 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
     val audit = fixedSchemaOp("audit")
     plan = plan.addOperator(audit.propagateSchema())
     plan = plan.addLink(
-      link(opId("tc", TryCatchOpDesc.GATE_LAYER), TryCatchOpDesc.ERROR_INFO_PORT, opId("audit"), in0)
+      link(
+        opId("tc", TryCatchOpDesc.GATE_LAYER),
+        TryCatchOpDesc.ERROR_INFO_PORT,
+        opId("audit"),
+        in0
+      )
     )
     val rejected = intercept[IllegalArgumentException] {
       TryCatchFramePass.run(plan, None)
