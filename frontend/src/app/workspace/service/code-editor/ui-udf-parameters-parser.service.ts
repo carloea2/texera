@@ -43,7 +43,8 @@ const PYTHON_NODE = {
   VARIABLE_NAME: "VariableName",
 } as const;
 const ARGUMENT_DELIMITER_NODES = new Set(["(", ")", ","]);
-const NON_STATEMENT_BODY_NODES = new Set([":", "Comment"]);
+// "⚠" is lezer's error node: a body whose real statements are still commented out ends in one.
+const NON_STATEMENT_BODY_NODES = new Set([":", "Comment", "⚠"]);
 
 const UI_PARAMETER_CALLEE = ["self", "UiParameter"];
 const ATTRIBUTE_TYPE_RECEIVER = "AttributeType";
@@ -226,11 +227,17 @@ function toFunctionDefinition(statement: ParserSyntaxNode): ParserSyntaxNode | u
 }
 
 function insertIntoOpenBody(openMethod: ParserSyntaxNode, code: string, declaration: string): UiUdfParameterCodeEdit {
-  const statements = getIndentedBlockStatements(
-    openMethod.getChild(PYTHON_NODE.BODY),
-    code,
-    "open() must have an indented block body to declare UiParameter values."
-  );
+  const body = openMethod.getChild(PYTHON_NODE.BODY);
+  const statements = body ? getBlockStatements(body) : [];
+  if (!body) throw new UiUdfParametersEditError("open() must have a body to declare UiParameter values.");
+
+  if (!statements.length) {
+    // open() has no real statements yet (for example only commented-out lines): start its body.
+    const indent = `${lineIndentation(code, openMethod.from)}    `;
+    return { offset: lineEnd(code, bodyColonEnd(body)), text: `\n${indent}${declaration}` };
+  }
+
+  rejectInlineBody(body, statements, code, "open() must have an indented block body to declare UiParameter values.");
 
   const indent = lineIndentation(code, statements[0].from);
   const anchor =
@@ -240,34 +247,46 @@ function insertIntoOpenBody(openMethod: ParserSyntaxNode, code: string, declarat
 }
 
 function insertNewOpenMethod(classBody: ParserSyntaxNode, code: string, declaration: string): UiUdfParameterCodeEdit {
-  const statements = getIndentedBlockStatements(
+  const statements = getBlockStatements(classBody);
+  const classIndent = lineIndentation(code, (classBody.parent ?? classBody).from);
+
+  if (!statements.length) {
+    // The class body is still empty (for example a template whose statements are all commented
+    // out): start it with open() right after the class header line.
+    const openMethodText = openMethodLines(code, `${classIndent}    `, declaration).join("\n");
+    return { offset: lineEnd(code, bodyColonEnd(classBody)), text: `\n${openMethodText}` };
+  }
+
+  rejectInlineBody(
     classBody,
+    statements,
     code,
     "The Python UDF class must have an indented block body to declare UiParameter values."
   );
 
   const firstMethod = statements.find(statement => toFunctionDefinition(statement));
   const methodIndent = lineIndentation(code, (firstMethod ?? statements[0]).from);
-  const openMethodText = [
-    ...(/^\s*@overrides\b/m.test(code) ? [`${methodIndent}@overrides`] : []),
-    `${methodIndent}def open(self) -> None:`,
-    `${methodIndent}    ${declaration}`,
-  ].join("\n");
+  const openMethodText = openMethodLines(code, methodIndent, declaration).join("\n");
 
   if (firstMethod) return { offset: lineStart(code, firstMethod.from), text: `${openMethodText}\n\n` };
   return { offset: lineEnd(code, statements[statements.length - 1].to), text: `\n\n${openMethodText}` };
 }
 
-/** Returns the statements of an indented block body, rejecting single-line bodies like "def open(self): pass". */
-function getIndentedBlockStatements(
-  body: ParserSyntaxNode | null,
-  code: string,
-  inlineBodyMessage: string
-): ParserSyntaxNode[] {
-  const statements = body ? getBlockStatements(body) : [];
-  if (!body || !statements.length || !code.slice(body.from, statements[0].from).includes("\n"))
-    throw new UiUdfParametersEditError(inlineBodyMessage);
-  return statements;
+function openMethodLines(code: string, methodIndent: string, declaration: string): string[] {
+  return [
+    ...(/^\s*@overrides\b/m.test(code) ? [`${methodIndent}@overrides`] : []),
+    `${methodIndent}def open(self) -> None:`,
+    `${methodIndent}    ${declaration}`,
+  ];
+}
+
+/** Rejects single-line bodies like "def open(self): pass", where a new line cannot be inserted. */
+function rejectInlineBody(body: ParserSyntaxNode, statements: ParserSyntaxNode[], code: string, message: string): void {
+  if (!code.slice(body.from, statements[0].from).includes("\n")) throw new UiUdfParametersEditError(message);
+}
+
+function bodyColonEnd(body: ParserSyntaxNode): number {
+  return getChildren(body).find(child => child.name === ":")?.to ?? body.from;
 }
 
 function findLastUiParameterStatement(statements: ParserSyntaxNode[], code: string): ParserSyntaxNode | undefined {
