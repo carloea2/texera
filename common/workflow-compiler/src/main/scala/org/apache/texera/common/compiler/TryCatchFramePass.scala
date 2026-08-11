@@ -145,50 +145,110 @@ object TryCatchFramePass {
       }
     }.toMap
 
-    // ---- 2. cones (ownership; inclusive of nested frames, cut at own merger)
-    val frames: List[Frame] = splitters.map { s =>
-      val gate = gates(s.id.logicalOpId)
-      val merger =
-        mergerToFrame.collectFirst {
-          case (mergerId, frameId) if frameId == s.id.logicalOpId => plan.getOperator(mergerId)
-        }
-      val stop = merger.map(_.id).toSet
-      val tryCone = reach(plan, s.id, TRY_PORT, crossInternal = true, stopAt = stop)
-      val catchCone = reach(plan, gate.id, CATCH_PORT, crossInternal = true, stopAt = stop)
-      Frame(s, gate, merger, tryCone, catchCone)
+    // ---- 2. cones (ownership; inclusive of nested frames)
+    //
+    // A frame's cone ends at its own Finally. A frame WITHOUT one ends at the
+    // Finally of whichever frame encloses it — the dataflow reading of "an
+    // inner block's scope ends no later than the enclosing block's". Without
+    // that cut an unclosed inner frame swallows the enclosing Merger and
+    // everything past it: it mis-owns those operators' failures, its try and
+    // catch cones overlap out there, and its own tails stop looking like
+    // tails, so its gate never hears about a failure and its catch branch
+    // never fires.
+    //
+    // Enclosure is itself defined by the cones, so solve by fixpoint: start
+    // with every frame cut only at its own Merger, then repeatedly cut each
+    // frame at the Mergers of the frames it does NOT contain (a Merger of a
+    // frame nested inside this one is interior and must stay reachable).
+    // Cutting only shrinks cones, and a smaller cone only adds cuts, so the
+    // iteration decreases monotonically and settles.
+    val mergerIdOf: Map[OperatorIdentity, PhysicalOpIdentity] =
+      mergerToFrame.map { case (mergerId, frameId) => frameId -> mergerId }
+
+    def conesCutAt(stopFor: OperatorIdentity => Set[PhysicalOpIdentity]): List[Frame] =
+      splitters.map { s =>
+        val frameId = s.id.logicalOpId
+        val gate = gates(frameId)
+        val stop = stopFor(frameId)
+        Frame(
+          s,
+          gate,
+          mergerIdOf.get(frameId).map(plan.getOperator),
+          reach(plan, s.id, TRY_PORT, crossInternal = true, stopAt = stop),
+          reach(plan, gate.id, CATCH_PORT, crossInternal = true, stopAt = stop)
+        )
+      }
+
+    var frames: List[Frame] = conesCutAt(id => mergerIdOf.get(id).toSet)
+    var settled = false
+    var round = 0
+    while (!settled && round <= splitters.size) {
+      round += 1
+      val byId = frames.map(f => f.logicalOpId -> f).toMap
+      val next = conesCutAt { id =>
+        val self = byId(id)
+        mergerIdOf.get(id).toSet ++ mergerIdOf.collect {
+          case (otherId, mergerId)
+              if otherId != id && !self.cone.contains(byId(otherId).splitter.id) =>
+            mergerId
+        }.toSet
+      }
+      def shape(fs: List[Frame]) = fs.map(f => (f.logicalOpId, f.tryCone, f.catchCone))
+      settled = shape(next) == shape(frames)
+      frames = next
     }
 
     // ---- 3. validations
     frames.foreach(validateFrame(plan, _))
 
-    // Finallys close inside-out: a frame WITHOUT a Finally is terminal — its
-    // branches must end in their own sinks. If its cone flows into another
-    // frame's Finally (one that is not nested inside it), the inner frame
-    // never closes: its unbounded cone would swallow the outer Merger and
-    // everything past it, mis-owning failures and starving its own gate of
-    // signal edges. Reject with the rule's own words.
+    // A frame without its own Finally may sit inside another frame's block —
+    // that is ordinary nesting (`try { .. } catch { try { .. } catch { .. } }`)
+    // and its cone is cut at the enclosing Finally above. What it must NOT do
+    // is feed that enclosing Finally from its TRY cone: an attempt streams
+    // rows downstream as it goes and only then fails, so those partial rows
+    // would already be staged at the enclosing reconvergence point and get
+    // released mixed with (or in place of) the recovery — breaking the
+    // all-or-nothing contract the Finally exists to provide. Staging and
+    // discarding a failed attempt is precisely a Finally's job, so the inner
+    // construct needs one of its own. Its CATCH cone may feed the enclosing
+    // Finally freely: those rows ARE the recovery, and if the catch fails too
+    // the error travels on as escalation, which is the correct outcome.
     frames.filter(_.merger.isEmpty).foreach { open =>
       frames
-        .filter(other =>
-          other.merger.exists(m => open.cone.contains(m.id)) &&
-            !open.cone.contains(other.splitter.id)
-        )
+        // only an ENCLOSING frame's Finally is a problem. A Finally belonging
+        // to a frame nested INSIDE this one is interior to its block, and an
+        // unclosed outer frame feeding it is ordinary (`try1 { try2 { .. }
+        // catch2 { .. } finally2 { } .. }` with try1 itself terminal).
+        .filter(other => other.cone.contains(open.splitter.id))
         .foreach { other =>
-          throw new IllegalArgumentException(
-            s"TryCatch '${open.logicalOpId.id}' has no Finally, but its subgraph flows into " +
-              s"the Finally of '${other.logicalOpId.id}'. A frame without a Finally must end " +
-              s"in its own sinks — add a Finally to '${open.logicalOpId.id}' to continue past " +
-              "it (Finallys close inside-out)."
-          )
+        other.merger.foreach { m =>
+          val leaking = plan.links
+            .filter(l => l.toOpId == m.id && open.tryCone.contains(l.fromOpId))
+            .map(_.fromOpId)
+          if (leaking.nonEmpty) {
+            throw new IllegalArgumentException(
+              s"TryCatch '${open.logicalOpId.id}' has no Finally of its own, but its Try " +
+                s"subgraph feeds the Finally of '${other.logicalOpId.id}' (via " +
+                s"${leaking.map(_.logicalOpId.id).mkString(", ")}). A failed attempt would leak " +
+                s"its partial rows into that reconvergence point: give '${open.logicalOpId.id}' " +
+                "its own Finally and wire that into " +
+                s"'${other.logicalOpId.id}' instead (Finallys close inside-out)."
+            )
+          }
         }
+      }
     }
 
     // ---- 4. per-op innermost-frame assignment (smallest containing cone)
     def innermostFrameOf(opId: PhysicalOpIdentity): Option[Frame] =
       frames.filter(_.tryCone.contains(opId)).sortBy(_.tryCone.size).headOption
 
-    // tail ports of a frame's try cone: no outgoing links, or feeding the
-    // paired merger's From Try — owned by the innermost frame only
+    // tail ports of a frame's try cone — owned by the innermost frame only.
+    // A tail is a port whose output LEAVES the try cone: it ends the attempt
+    // (no consumer at all), or every consumer sits at the frame boundary —
+    // the frame's own Merger, or the enclosing frame's, both of which the
+    // cone is cut at. A port feeding another cone operator is interior, so
+    // the failure would still be travelling and the attempt is not over.
     val signalSources: Map[OperatorIdentity, List[(PhysicalOpIdentity, PortIdentity)]] =
       frames.map { frame =>
         val tails = frame.tryCone.toList
@@ -199,10 +259,7 @@ object TryCatchFramePass {
               .filterNot(_.internal)
               .filter { portId =>
                 val outLinks = plan.links.filter(l => l.fromOpId == opId && l.fromPortId == portId)
-                outLinks.isEmpty ||
-                frame.merger.exists(m =>
-                  outLinks.exists(l => l.toOpId == m.id && l.toPortId == FROM_TRY)
-                )
+                !outLinks.exists(l => frame.tryCone.contains(l.toOpId))
               }
               .map(portId => (opId, portId))
           }

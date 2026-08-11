@@ -447,6 +447,124 @@ class TryCatchFramePassSpec extends AnyFlatSpec with Matchers {
     rejected.getMessage should include("tc2")
   }
 
+  /**
+    * `try1 { tryOp } catch1 { try2 { try2op } catch2 { catch2op } <inner> }
+    * finally1 { }` — a whole frame nested inside the enclosing frame's CATCH
+    * block. `inner` is the nested frame's own Finally when `withInnerFinally`,
+    * otherwise its branches are wired straight into Finally1's From Catch.
+    */
+  private def nestedInCatchPlan(withInnerFinally: Boolean): PhysicalPlan = {
+    val tc2Desc = new TryCatchOpDesc()
+    tc2Desc.setOperatorId("tc2")
+    val tc2Plan = tc2Desc.getPhysicalPlan(wid, eid)
+    val splitter2Id = opId("tc2", TryCatchOpDesc.SPLITTER_LAYER)
+    val gate2Id = opId("tc2", TryCatchOpDesc.GATE_LAYER)
+    val gate1Id = opId("tc", TryCatchOpDesc.GATE_LAYER)
+
+    // start from the standard frame, then REPLACE its catch branch with the
+    // nested frame
+    var plan = buildFramePlan()
+    plan = plan.removeLink(link(opId("catchOp"), out0, opId("fin"), PortIdentity(1)))
+    plan = plan.removeLink(link(gate1Id, catchPort, opId("catchOp"), in0))
+    (Set(simpleOp("try2op"), simpleOp("catch2op")) ++ tc2Plan.operators).foreach { op =>
+      plan = plan.addOperator(op.propagateSchema())
+    }
+    List(
+      link(gate1Id, catchPort, splitter2Id, in0),
+      tc2Plan.links.head, // splitter2 -> gate2 snapshot
+      link(splitter2Id, out0, opId("try2op"), in0),
+      link(gate2Id, catchPort, opId("catch2op"), in0)
+    ).foreach(l => plan = plan.addLink(l))
+
+    if (withInnerFinally) {
+      val fin2Desc = new FinallyOpDesc()
+      fin2Desc.setOperatorId("fin2")
+      val merger2 = fin2Desc.getPhysicalOp(wid, eid)
+      plan = plan.addOperator(merger2.propagateSchema())
+      List(
+        link(opId("try2op"), out0, merger2.id, PortIdentity()),
+        link(opId("catch2op"), out0, merger2.id, PortIdentity(1)),
+        link(merger2.id, out0, opId("fin"), PortIdentity(1)) // inner result -> From Catch
+      ).foreach(l => plan = plan.addLink(l))
+    } else {
+      List(
+        link(opId("try2op"), out0, opId("fin"), PortIdentity(1)),
+        link(opId("catch2op"), out0, opId("fin"), PortIdentity(1))
+      ).foreach(l => plan = plan.addLink(l))
+    }
+    plan
+  }
+
+  it should "accept a whole frame nested inside the enclosing frame's CATCH block" in {
+    // Legal PL: try1 { .. } catch1 { try2 { .. } catch2 { .. } finally2 { } }
+    // finally1 { }. The inner frame opens and closes inside catch1, so nothing
+    // is unbalanced — and the inner frame must come out ARMED: its cone cut at
+    // its own Finally (never swallowing the enclosing one), and its try tail
+    // signalling its OWN gate so an inner failure fires catch2.
+    val result = TryCatchFramePass.run(nestedInCatchPlan(withInnerFinally = true), None)
+    val innerGate = result.getOperator(opId("tc2", TryCatchOpDesc.GATE_LAYER))
+    val outerGate = result.getOperator(opId("tc", TryCatchOpDesc.GATE_LAYER))
+
+    result.links.count(l => l.fromOpId == opId("try2op") && l.toOpId == innerGate.id) shouldBe 1
+    result.links.count(l => l.fromOpId == opId("try2op") && l.toOpId == outerGate.id) shouldBe 0
+
+    // the inner cone stops at its own Finally: neither the enclosing Merger
+    // nor the region past it is the inner frame's business
+    val innerCone = gateConfig(innerGate).ownConeOpIds
+    innerCone should contain("try2op/main")
+    innerCone should contain("catch2op/main")
+    innerCone should not contain "fin/main"
+    innerCone should not contain "down/main"
+    innerCone should not contain "fin2/main"
+
+    // the enclosing frame owns the whole nested block, inner Finally included
+    // (inclusive ownership), but its try side is still just its own branch
+    val outerCone = gateConfig(outerGate).ownConeOpIds
+    outerCone should contain("tryOp/main")
+    outerCone should contain("try2op/main")
+    outerCone should contain("fin2/main")
+    outerCone should not contain "down/main"
+    // exactly one signal port each: the outer try tail and the inner try tail
+    outerGate.inputPorts.keys.count(p => p.internal && p.id > 0) shouldBe 1
+    innerGate.inputPorts.keys.count(p => p.internal && p.id > 0) shouldBe 1
+  }
+
+  it should "reject a nested frame whose TRY branch feeds the enclosing Finally directly" in {
+    // Same nesting, but with NO inner Finally: try2op streams rows into
+    // Finally1's From Catch as it goes, and only then fails. Those partial
+    // rows are already staged at the enclosing reconvergence point, so the
+    // recovery would be released mixed with a failed attempt's output —
+    // exactly what all-or-nothing forbids. Staging and discarding a failed
+    // attempt IS a Finally's job: the inner construct needs its own.
+    val rejected = intercept[IllegalArgumentException] {
+      TryCatchFramePass.run(nestedInCatchPlan(withInnerFinally = false), None)
+    }
+    rejected.getMessage should include("tc2")
+    rejected.getMessage should include("leak")
+    rejected.getMessage should include("its own Finally")
+  }
+
+  it should "require the enclosing Finally's From Catch to come from its own block, not through a nested frame's gate" in {
+    // Documented limitation, pinned as real behavior. Wiring ONLY a nested
+    // frame's catch branch into the enclosing Finally (its try branch ending
+    // in its own sink) dodges the partial-row leak, but the enclosing Finally
+    // can no longer be paired: frame pairing refuses to traverse
+    // frame-internal (snapshot) links -- which is what makes pairing unique
+    // under nesting -- so a nested frame's catch branch, reachable only
+    // through that frame's own gate, is invisible to it. The shape is also
+    // semantically thin: the enclosing catch block would contribute nothing
+    // whenever the inner attempt succeeds. The fix for a user is the same as
+    // above -- close the inner frame with its own Finally and wire THAT into
+    // the enclosing one -- so the pairing error points the right way.
+    var plan = nestedInCatchPlan(withInnerFinally = false)
+    plan = plan.removeLink(link(opId("try2op"), out0, opId("fin"), PortIdentity(1)))
+
+    val rejected = intercept[IllegalArgumentException] {
+      TryCatchFramePass.run(plan, None)
+    }
+    rejected.getMessage should include("not wired to any TryCatch")
+  }
+
   it should "reject a Finally whose From Try comes from outside the frame" in {
     val tcDesc = new TryCatchOpDesc()
     tcDesc.setOperatorId("tc")
