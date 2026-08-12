@@ -17,6 +17,20 @@
  under the License.
 -->
 <div class="ui-udf-parameters-field">
+  <button
+    class="add-parameter-button"
+    *ngIf="workflowModificationEnabled && !draftVisible"
+    nz-button
+    nzType="dashed"
+    nzBlock
+    type="button"
+    (click)="draftVisible = true">
+    <span
+      nz-icon
+      nzType="plus"></span>
+    Add parameter
+  </button>
+
   <div
     class="ui-udf-parameter-list"
     *ngIf="model?.length || draftVisible">
@@ -26,20 +40,6 @@
         *ngFor="let column of fieldColumns">
         <span class="col-title">{{ column.label }}</span>
       </div>
-    </div>
-
-    <div
-      class="ui-udf-parameter-row"
-      *ngFor="let parameter of (model || []); let i = index; trackBy: trackByParameterName">
-      <ng-container *ngIf="field.fieldGroup?.[i] as rowField">
-        <div
-          class="field-cell"
-          *ngFor="let column of fieldColumns">
-          <formly-field
-            *ngIf="getColumnField(rowField, column) as columnField"
-            [field]="columnField"></formly-field>
-        </div>
-      </ng-container>
     </div>
 
     <div
@@ -88,19 +88,19 @@
         </button>
       </div>
     </div>
-  </div>
 
-  <button
-    class="add-parameter-button"
-    *ngIf="workflowModificationEnabled && !draftVisible"
-    nz-button
-    nzType="dashed"
-    nzBlock
-    type="button"
-    (click)="draftVisible = true">
-    <span
-      nz-icon
-      nzType="plus"></span>
-    Add parameter
-  </button>
+    <div
+      class="ui-udf-parameter-row"
+      *ngFor="let parameter of (model || []); let i = index; trackBy: trackByParameterName">
+      <ng-container *ngIf="field.fieldGroup?.[i] as rowField">
+        <div
+          class="field-cell"
+          *ngFor="let column of fieldColumns">
+          <formly-field
+            *ngIf="getColumnField(rowField, column) as columnField"
+            [field]="columnField"></formly-field>
+        </div>
+      </ng-container>
+    </div>
+  </div>
 </div>

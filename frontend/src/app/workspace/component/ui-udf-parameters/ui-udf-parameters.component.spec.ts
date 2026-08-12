@@ -18,6 +18,7 @@
  */
 
 import { FormControl } from "@angular/forms";
+import { ComponentFixture, TestBed } from "@angular/core/testing";
 import { FormlyFieldConfig } from "@ngx-formly/core";
 import type { Mock } from "vitest";
 import { vi as vitest } from "vitest";
@@ -30,6 +31,7 @@ import { UiUdfParametersComponent } from "./ui-udf-parameters.component";
 describe("UiUdfParametersComponent", () => {
   const operatorId = "operator-1";
 
+  let fixture: ComponentFixture<UiUdfParametersComponent>;
   let component: UiUdfParametersComponent;
   let workflowActionServiceMock: {
     checkWorkflowModificationEnabled: Mock;
@@ -38,7 +40,7 @@ describe("UiUdfParametersComponent", () => {
   let syncServiceMock: { addParameter: Mock };
   let notificationServiceMock: { error: Mock };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     workflowActionServiceMock = {
       checkWorkflowModificationEnabled: vitest.fn().mockReturnValue(true),
       getJointGraphWrapper: vitest.fn().mockReturnValue({
@@ -47,11 +49,40 @@ describe("UiUdfParametersComponent", () => {
     };
     syncServiceMock = { addParameter: vitest.fn() };
     notificationServiceMock = { error: vitest.fn() };
-    component = new UiUdfParametersComponent(
-      workflowActionServiceMock as unknown as WorkflowActionService,
-      syncServiceMock as unknown as UiUdfParametersSyncService,
-      notificationServiceMock as unknown as NotificationService
-    );
+
+    await TestBed.configureTestingModule({
+      imports: [UiUdfParametersComponent],
+      providers: [
+        { provide: WorkflowActionService, useValue: workflowActionServiceMock },
+        { provide: UiUdfParametersSyncService, useValue: syncServiceMock },
+        { provide: NotificationService, useValue: notificationServiceMock },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(UiUdfParametersComponent);
+    component = fixture.componentInstance;
+  });
+
+  it("should render the add control and draft row before existing parameters", () => {
+    (component as any).field = {
+      model: [{ value: "42", attribute: { attributeName: "threshold", attributeType: "double" } }],
+      fieldGroup: [{}],
+    } as FormlyFieldConfig;
+
+    fixture.detectChanges();
+
+    const addButton = fixture.nativeElement.querySelector(".add-parameter-button") as HTMLElement;
+    const parameterList = fixture.nativeElement.querySelector(".ui-udf-parameter-list") as HTMLElement;
+    expect(addButton.compareDocumentPosition(parameterList) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    component.draftVisible = true;
+    fixture.detectChanges();
+
+    const draftRow = fixture.nativeElement.querySelector(".ui-udf-parameter-row.draft") as HTMLElement;
+    const existingRow = fixture.nativeElement.querySelector(
+      ".ui-udf-parameter-row:not(.header):not(.draft)"
+    ) as HTMLElement;
+    expect(draftRow.compareDocumentPosition(existingRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("should disable name and type fields while leaving value editable", () => {

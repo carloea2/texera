@@ -35,6 +35,7 @@ const PYTHON_NODE = {
   BODY: "Body",
   CALL_EXPRESSION: "CallExpression",
   CLASS_DEFINITION: "ClassDefinition",
+  EXPRESSION_STATEMENT: "ExpressionStatement",
   FUNCTION_DEFINITION: "FunctionDefinition",
   MEMBER_EXPRESSION: "MemberExpression",
   PROPERTY_NAME: "PropertyName",
@@ -146,15 +147,6 @@ export class UiUdfParametersParserService {
         "No supported Python UDF class (such as ProcessTupleOperator) was found in the code."
       );
 
-    // Group with existing declarations: the new one goes right below the last one.
-    let lastDeclaration: ParserSyntaxNode | undefined;
-    forEachUiParameterCall(supportedClass, code, (_, call) => (lastDeclaration = statementOf(call)));
-    if (lastDeclaration)
-      return {
-        offset: lineEnd(code, lastDeclaration.to),
-        text: `\n${lineIndentation(code, lastDeclaration.from)}${declaration}`,
-      };
-
     const openMethod = findOpenMethod(supportedClass, code);
     if (openMethod) return insertIntoBody(code, openMethod, [declaration]);
     return insertIntoBody(code, supportedClass, [
@@ -194,13 +186,6 @@ function forEachUiParameterCall(
   });
 }
 
-/** Walks up to the class- or method-body statement containing a node. */
-function statementOf(node: ParserSyntaxNode): ParserSyntaxNode {
-  let statement = node;
-  while (statement.parent && statement.parent.name !== PYTHON_NODE.BODY) statement = statement.parent;
-  return statement;
-}
-
 function findOpenMethod(supportedClass: ParserSyntaxNode, code: string): ParserSyntaxNode | undefined {
   const body = supportedClass.getChild(PYTHON_NODE.BODY);
   for (const statement of body ? getChildren(body) : []) {
@@ -216,9 +201,9 @@ function findOpenMethod(supportedClass: ParserSyntaxNode, code: string): ParserS
 }
 
 /**
- * Inserts lines as the first statement(s) of a class or def body: before its first existing
- * statement, or right after the header line when the body has no real statement yet (for
- * example a template whose statements are all commented out).
+ * Inserts lines at the start of a class or def body while preserving a leading docstring.
+ * When the body has no real statement yet (for example a template whose statements are all
+ * commented out), the lines go right after the header.
  */
 function insertIntoBody(
   code: string,
@@ -226,9 +211,19 @@ function insertIntoBody(
   lines: string[]
 ): Readonly<{ offset: number; text: string }> {
   const body = definition.getChild(PYTHON_NODE.BODY);
-  const first = body ? getChildren(body).find(child => !NON_STATEMENT_BODY_NODES.has(child.name)) : undefined;
+  const statements = body ? getChildren(body).filter(child => !NON_STATEMENT_BODY_NODES.has(child.name)) : [];
+  const first = statements[0];
   if (body && first && code.slice(body.from, first.from).includes("\n")) {
     const indent = lineIndentation(code, first.from);
+    if (isDocstringStatement(first)) {
+      const block = lines.map(line => `${indent}${line}`).join("\n");
+      const leadingSeparator = lines.length > 1 ? "\n\n" : "\n";
+      const trailingSeparator = lines.length > 1 && statements.length > 1 ? "\n" : "";
+      return {
+        offset: lineEnd(code, Math.max(first.from, first.to - 1)),
+        text: `${leadingSeparator}${block}${trailingSeparator}`,
+      };
+    }
     const block = lines.map(line => `${indent}${line}\n`).join("");
     // A synthesized open() gets a blank separator line before the statement that follows it.
     return { offset: lineStart(code, first.from), text: lines.length > 1 ? `${block}\n` : block };
@@ -239,6 +234,10 @@ function insertIntoBody(
     );
   const indent = `${lineIndentation(code, definition.from)}    `;
   return { offset: lineEnd(code, body.from), text: lines.map(line => `\n${indent}${line}`).join("") };
+}
+
+function isDocstringStatement(statement: ParserSyntaxNode): boolean {
+  return statement.name === PYTHON_NODE.EXPRESSION_STATEMENT && statement.getChild(PYTHON_NODE.STRING) !== null;
 }
 
 function toPythonIdentifier(name: string): string {

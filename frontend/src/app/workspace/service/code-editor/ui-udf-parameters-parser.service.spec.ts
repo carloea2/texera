@@ -217,27 +217,41 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
   (
     [
       [
-        "append below the last UiParameter declaration",
+        "insert before existing UiParameter declarations",
         "b",
         "double",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
           "    def open(self):",
-          '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
           '>        self.b = self.UiParameter(name="b", type=AttributeType.DOUBLE).value',
+          '        self.a = self.UiParameter(name="a", type=AttributeType.INT).value',
           "        self.other = 1",
         ],
       ],
       [
-        "insert at the top of an existing open() body",
+        "insert after an open() docstring and before executable statements",
         "b",
         "integer",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
           "    def open(self):",
-          '>        self.b = self.UiParameter(name="b", type=AttributeType.INT).value',
           '        """Load resources."""',
+          '>        self.b = self.UiParameter(name="b", type=AttributeType.INT).value',
           "        self.other = 1",
+        ],
+      ],
+      [
+        "insert before a header-based UiParameter and its following compound statement",
+        "limit",
+        "string",
+        [
+          "class ProcessTupleOperator(UDFOperatorV2):",
+          "    def open(self):",
+          '>        self.limit = self.UiParameter(name="limit", type=AttributeType.STRING).value',
+          '        if self.UiParameter(name="debug", type=AttributeType.BOOL).value:',
+          "            self.x = 1",
+          "        for i in range(3):",
+          "            pass",
         ],
       ],
       [
@@ -256,15 +270,15 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
         ],
       ],
       [
-        "create an undecorated open() at the top of a class without methods",
+        "create an undecorated open() after a class docstring",
         "b",
         "boolean",
         [
           "class ProcessTupleOperator(UDFOperatorV2):",
+          '    """Doc."""',
+          ">",
           ">    def open(self) -> None:",
           '>        self.b = self.UiParameter(name="b", type=AttributeType.BOOL).value',
-          ">",
-          '    """Doc."""',
         ],
       ],
       [
@@ -322,8 +336,8 @@ describe("UiUdfParametersParserService.computeParameterInsertion", () => {
     expect(code).toContain('self.my_param_1 = self.UiParameter(name="my param-1", type=AttributeType.TIMESTAMP).value');
     expect(code).toContain('self.class_ = self.UiParameter(name="class", type=AttributeType.DOUBLE).value');
     expect(service.parse(code)).toEqual([
-      { attribute: { attributeName: "my param-1", attributeType: "timestamp" }, value: "" },
       { attribute: { attributeName: "class", attributeType: "double" }, value: "" },
+      { attribute: { attributeName: "my param-1", attributeType: "timestamp" }, value: "" },
     ]);
   });
 
