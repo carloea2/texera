@@ -1288,10 +1288,8 @@ describe("MenuComponent", () => {
         expect(utility("disable operators").nativeElement.disabled).toBe(false);
         utility("disable operators").triggerEventHandler("click", null);
         utility("view result").triggerEventHandler("click", null);
-        // The "reuse result if possible" button is hard-disabled in the template
-        // (`[disabled]="true || …"`), so it is asserted, not clicked — firing its handler
-        // would claim an interaction the UI cannot perform.
-        expect(utility("reuse result if possible").nativeElement.disabled).toBe(true);
+        expect(utility("reuse result if possible").nativeElement.disabled).toBe(false);
+        utility("reuse result if possible").triggerEventHandler("click", null);
 
         menu.isDisableOperator = false;
         menu.isToViewResult = false;
@@ -1303,7 +1301,7 @@ describe("MenuComponent", () => {
 
         expect(disable).toHaveBeenCalledTimes(2);
         expect(view).toHaveBeenCalledTimes(2);
-        expect(reuse).toHaveBeenCalledTimes(1);
+        expect(reuse).toHaveBeenCalledTimes(2);
       });
 
       it("wires the export-result button", () => {

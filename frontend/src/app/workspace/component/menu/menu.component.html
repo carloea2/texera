@@ -302,7 +302,7 @@
           </button>
           <button
             *ngIf="(operatorMenu.isMarkForReuse || ! operatorMenu.isReuseResultClickable)"
-            [disabled]="true || ! operatorMenu.isReuseResultClickable"
+            [disabled]="! operatorMenu.isReuseResultClickable"
             (click)="operatorMenu.reuseResultHighlightedOperator()"
             nz-button
             title="reuse result if possible">
