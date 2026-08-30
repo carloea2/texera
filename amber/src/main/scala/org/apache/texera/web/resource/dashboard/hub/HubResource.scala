@@ -418,7 +418,9 @@ class HubResource {
       @QueryParam("uid") uid: Integer,
       @QueryParam("limit") limit: Integer
   ): java.util.Map[String, java.util.List[DashboardClickableFileEntry]] = {
-    val tableSet = EntityTables(entityType)
+    val tableSet = EntityTables(
+      Option(entityType).getOrElse(throw new BadRequestException("entityType is required"))
+    )
     val baseTable = tableSet.base
     val isPublicColumn = baseTable.isPublicColumn
     val baseIdColumn = baseTable.idColumn
