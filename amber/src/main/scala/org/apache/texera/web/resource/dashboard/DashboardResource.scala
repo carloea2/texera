@@ -104,7 +104,7 @@ object DashboardResource {
         val q3 = ProjectSearchQueryBuilder.constructQuery(uid, params, includePublic)
         val q4 = DatasetSearchQueryBuilder.constructQuery(uid, params, includePublic)
         q1.unionAll(q3).unionAll(q4)
-      case _ => throw new IllegalArgumentException(s"Unknown resource type: ${params.resourceType}")
+      case _ => throw new BadRequestException(s"Unknown resource type: ${params.resourceType}")
     }
 
     val finalQuery =
