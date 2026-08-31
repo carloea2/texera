@@ -840,8 +840,9 @@ class WorkflowResource extends LazyLogging {
       .where(WORKFLOW.WID.eq(wid))
       .and(WORKFLOW.IS_PUBLIC.isTrue)
       .fetchOne()
-    if (workflow == null)
+    if (workflow == null) {
       throw new NotFoundException(s"Public workflow with id $wid not found")
+    }
     WorkflowWithPrivilege(
       workflow.getName,
       workflow.getDescription,

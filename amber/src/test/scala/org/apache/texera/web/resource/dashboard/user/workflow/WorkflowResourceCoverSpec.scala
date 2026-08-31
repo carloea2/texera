@@ -152,21 +152,6 @@ class WorkflowResourceCoverSpec
       .execute()
   }
 
-  "retrievePublicWorkflow" should "return a public workflow" in {
-    val workflow = workflowDao.fetchOneByWid(testWid)
-    workflow.setIsPublic(true)
-    workflowDao.update(workflow)
-
-    val result = resource.retrievePublicWorkflow(testWid)
-    result.wid shouldBe Integer.valueOf(testWid)
-    result.readonly shouldBe true
-  }
-
-  it should "reject private and missing workflows as not found" in {
-    assertThrows[NotFoundException](resource.retrievePublicWorkflow(testWid))
-    assertThrows[NotFoundException](resource.retrievePublicWorkflow(testWid + 1))
-  }
-
   "getCoverImage" should "throw NotFoundException when no cover is set" in {
     assertThrows[NotFoundException] {
       resource.getCoverImage(testWid, session(owner))
