@@ -320,9 +320,12 @@ class HubResource {
       .getInstance()
       .createDSLContext()
 
+  /** @throws javax.ws.rs.BadRequestException if entityType is missing */
   @GET
   @Path("/count")
   def getCount(@QueryParam("entityType") entityType: EntityType): Integer = {
+    if (entityType == null)
+      throw new BadRequestException("entityType is required")
     val entityTables = EntityTables(entityType).base
     val (table, isPublicColumn) = (entityTables.table, entityTables.isPublicColumn)
 

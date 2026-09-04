@@ -683,7 +683,8 @@ class HubResourceSpec
   }
 
   it should "reject a missing entity type" in {
-    intercept[BadRequestException](hub.getCount(null))
+    val thrown = intercept[BadRequestException](hub.getCount(null))
+    thrown.getMessage shouldBe "entityType is required"
     intercept[BadRequestException](hub.getTops(null, null, null, null))
   }
 
