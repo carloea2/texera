@@ -15,6 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
+import pickle
+
+import cloudpickle
 import pytest
 from pytexera.workflow.codec import (
     BoundaryPayload,
@@ -80,3 +83,87 @@ def test_envelope_rejects_duplicate_boundaries_and_cross_key_merge() -> None:
             WorkflowEnvelope("left", ()),
             WorkflowEnvelope("right", ()),
         )
+
+
+@pytest.mark.parametrize("identity", [None, 1, True, b"edge", []])
+def test_identities_require_strings(identity):
+    with pytest.raises(TypeError, match="string"):
+        BoundaryPayload(identity, (), (), b"")
+    with pytest.raises(TypeError, match="string"):
+        WorkflowEnvelope(identity, ())
+
+
+@pytest.mark.parametrize("identity", ["", "\u96ea"])
+def test_empty_and_unicode_identities(identity):
+    if not identity:
+        with pytest.raises(ValueError, match="nonempty"):
+            WorkflowEnvelope(identity, ())
+        with pytest.raises(ValueError, match="nonempty"):
+            BoundaryPayload(identity, (), (), b"")
+    else:
+        envelope = WorkflowEnvelope(identity, (encode_boundary(identity, (), ()),))
+        assert loads_envelope(dumps_envelope(envelope)) == envelope
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "value", "error"),
+    [
+        ("envelope", "execution_key", 42, TypeError),
+        ("envelope", "execution_key", "", ValueError),
+        ("envelope", "boundaries", [], TypeError),
+        ("boundary", "boundary_id", 42, TypeError),
+        ("boundary", "fields", ["value"], TypeError),
+        ("boundary", "fields", (1,), TypeError),
+        ("boundary", "present", ["value"], TypeError),
+        ("boundary", "present", ("other",), ValueError),
+        ("boundary", "payload", "bytes", TypeError),
+    ],
+)
+def test_envelope_codec_revalidates_unpickled_metadata(target, field, value, error):
+    boundary = encode_boundary("edge", ("value",), (42,))
+    envelope = WorkflowEnvelope("run", (boundary,))
+    object.__setattr__(envelope if target == "envelope" else boundary, field, value)
+    # Simulate an existing serialized instance: pickle bypasses constructors.
+    payload = cloudpickle.dumps(envelope)
+    with pytest.raises(error):
+        loads_envelope(payload)
+    with pytest.raises(error):
+        dumps_envelope(envelope)
+
+
+def test_merge_rejects_overlapping_ids_and_orders_disjoint_ids():
+    first = encode_boundary("z", ("value",), (1,))
+    second = encode_boundary("z", ("value",), (2,))
+    with pytest.raises(ValueError, match="unique"):
+        merge_envelopes(
+            WorkflowEnvelope("run", (first,)), WorkflowEnvelope("run", (second,))
+        )
+    other = encode_boundary("a", ("value",), (3,))
+    merged = merge_envelopes(
+        WorkflowEnvelope("run", (first,)), WorkflowEnvelope("run", (other,))
+    )
+    assert merged.boundaries == (other, first)
+    assert decode_boundary(merged.boundaries[0], ("value",)) == (3,)
+    assert decode_boundary(merged.boundaries[1], ("value",)) == (1,)
+    with pytest.raises(TypeError):
+        _ = first < other
+
+
+@pytest.mark.parametrize("values", [[42], {"value": 42}, "x", None])
+def test_encoder_rejects_non_tuple_values_before_serialization(values, monkeypatch):
+    def unexpected_serialization(*args, **kwargs):
+        pytest.fail("invalid values reached serialization")
+
+    monkeypatch.setattr(cloudpickle, "dumps", unexpected_serialization)
+    with pytest.raises(TypeError, match="tuple"):
+        encode_boundary("edge", ("value",), values)
+
+
+@pytest.mark.parametrize(
+    ("payload", "error"), [(b"", EOFError), (b"!", pickle.UnpicklingError)]
+)
+def test_decoders_preserve_pickle_exceptions(payload, error):
+    with pytest.raises(error):
+        loads_envelope(payload)
+    with pytest.raises(error):
+        decode_boundary(BoundaryPayload("edge", (), (), payload), ())

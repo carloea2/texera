@@ -25,7 +25,7 @@ from dataclasses import dataclass
 import cloudpickle
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
 class BoundaryPayload:
     """One boundary contract, its path-present fields, and encoded values."""
 
@@ -35,12 +35,22 @@ class BoundaryPayload:
     payload: bytes
 
     def __post_init__(self) -> None:
+        if not isinstance(self.boundary_id, str):
+            raise TypeError("boundary ID must be a string")
         if not self.boundary_id:
             raise ValueError("boundary ID must be nonempty")
+        if not isinstance(self.fields, tuple) or any(
+            not isinstance(field, str) for field in self.fields
+        ):
+            raise TypeError("boundary fields must be a tuple of strings")
         if self.fields != tuple(sorted(set(self.fields))) or any(
             not field.isidentifier() for field in self.fields
         ):
             raise ValueError("boundary fields must be canonical Python names")
+        if not isinstance(self.present, tuple) or any(
+            not isinstance(field, str) for field in self.present
+        ):
+            raise TypeError("present fields must be a tuple of strings")
         if self.present != tuple(
             field for field in self.fields if field in frozenset(self.present)
         ):
@@ -57,12 +67,16 @@ class WorkflowEnvelope:
     boundaries: tuple[BoundaryPayload, ...]
 
     def __post_init__(self) -> None:
+        if not isinstance(self.execution_key, str):
+            raise TypeError("execution key must be a string")
         if not self.execution_key:
             raise ValueError("execution key must be nonempty")
         if not isinstance(self.boundaries, tuple) or any(
             not isinstance(row, BoundaryPayload) for row in self.boundaries
         ):
             raise TypeError("workflow boundaries must be a typed tuple")
+        for row in self.boundaries:
+            row.__post_init__()
         ids = tuple(row.boundary_id for row in self.boundaries)
         if ids != tuple(sorted(set(ids))):
             raise ValueError("workflow boundaries must be canonical and unique")
@@ -77,6 +91,8 @@ def encode_boundary(
 ) -> BoundaryPayload:
     """Encode values present on this path under one selected field contract."""
 
+    if not isinstance(values, tuple):
+        raise TypeError("boundary values must be a tuple")
     present = fields if present is None else present
     if len(present) != len(values):
         raise ValueError("present boundary fields and values must have equal length")
@@ -88,8 +104,13 @@ def decode_boundary(
     boundary: BoundaryPayload,
     fields: tuple[str, ...],
 ) -> tuple[object, ...]:
-    """Decode a payload only under its exact selected field contract."""
+    """Decode under the exact contract; pickle/loading exceptions propagate unchanged.
 
+    Empty payloads raise EOFError; invalid opcodes raise pickle.UnpicklingError.
+    Other loading failures also propagate. Only load trusted workflow payloads.
+    """
+
+    boundary.__post_init__()
     if boundary.fields != fields:
         raise ValueError("boundary fields do not match the requested contract")
     values = cloudpickle.loads(boundary.payload)
@@ -99,19 +120,25 @@ def decode_boundary(
 
 
 def dumps_envelope(envelope: WorkflowEnvelope) -> bytes:
-    """Validate and encode a workflow envelope."""
+    """Encode the inert envelope after validating its complete shape."""
 
     if not isinstance(envelope, WorkflowEnvelope):
         raise TypeError("envelope codec requires WorkflowEnvelope")
+    envelope.__post_init__()
     return cloudpickle.dumps(envelope, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def loads_envelope(payload: bytes) -> WorkflowEnvelope:
-    """Decode and type-check one workflow envelope."""
+    """Decode trusted bytes and revalidate envelope and nested boundary metadata.
+
+    Pickle/loading exceptions propagate unchanged, as in decode_boundary.
+    Post-load validation is not a security boundary for untrusted pickle data.
+    """
 
     envelope = cloudpickle.loads(payload)
     if not isinstance(envelope, WorkflowEnvelope):
         raise TypeError("decoded payload is not WorkflowEnvelope")
+    envelope.__post_init__()
     return envelope
 
 
