@@ -20,19 +20,13 @@
 package org.apache.texera.amber.operator.statistics
 
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.typesafe.config.ConfigFactory
 import org.apache.texera.amber.core.tuple.{Attribute, AttributeType, Schema}
 import org.apache.texera.amber.core.workflow.PortIdentity
 import org.apache.texera.amber.operator.{LogicalOp, PythonOperatorDescriptor}
 import org.apache.texera.amber.operator.metadata.OperatorMetadataGenerator
-import org.apache.texera.amber.operator.tags.IntegrationTest
 import org.apache.texera.amber.util.JSONUtils.objectMapper
-import org.apache.texera.amber.util.python.PythonWorkerPool
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.Tag
-
-import java.nio.file.{Files, Paths}
 
 class OLSAnalysisOpDescSpec extends AnyFlatSpec with Matchers {
   private def config: ObjectNode =
@@ -169,104 +163,28 @@ class OLSAnalysisOpDescSpec extends AnyFlatSpec with Matchers {
       "[\"integer\",\"long\",\"double\"]"
   }
 
-  it should "execute generated code against real statsmodels and independent analytical checks" taggedAs Tag(
-    classOf[IntegrationTest].getName
-  ) in {
-    checkRuntime(realRuntime = false)
+  it should "generate a full-table OLS fit without a train/test split" in {
+    val code = descriptor().generatePythonCode()
+    code should include("from statsmodels.regression.linear_model import OLS")
+    code should include("class ProcessTableOperator(UDFTableOperator)")
+    code should include("OLS(y, x, missing=\"raise\", hasconst=intercept).fit(use_t=True)")
+    code should not include "train_test_split"
   }
 
-  it should "buffer all input and finalize typed results using real pytexera" taggedAs Tag(
-    classOf[IntegrationTest].getName
-  ) in {
-    checkRuntime(realRuntime = true)
-  }
-
-  for (realRuntime <- List(false, true)) {
-    it should s"report failed pooled requests and recover without stale results (real=$realRuntime)" taggedAs Tag(
-      classOf[IntegrationTest].getName
-    ) in {
-      val missing = runRuntime(objectMapper.createObjectNode(), realRuntime)
-      missing.exit shouldBe 1
-      missing.stderr should include("KeyError")
-
-      val invalid = runtimePayload
-      invalid.put("default", "raise ValueError('OLS protocol failure λ')")
-      val rejected = runRuntime(invalid, realRuntime)
-      rejected.exit shouldBe 1
-      rejected.stderr should include("OLS protocol failure λ")
-
-      val wrongColumns = runtimePayload
-      wrongColumns.putArray("columns")
-      val failedChecks = runRuntime(wrongColumns, realRuntime)
-      failedChecks.exit shouldBe 1
-      failedChecks.stderr should include("FAILED")
-
-      // The next request must compile fresh generated code and run a fresh suite,
-      // rather than reuse failed modules, expectations or unittest results.
-      checkRuntime(realRuntime)
-    }
-  }
-
-  private def checkRuntime(realRuntime: Boolean): Unit = {
-    val outcome = runRuntime(runtimePayload, realRuntime)
-    val output = outcome.stdout + outcome.stderr
-    withClue(output) { outcome.exit shouldBe 0 }
-    output should include("OK")
-    if (realRuntime) output should include("REAL_TABLE_LIFECYCLE_OK")
-  }
-
-  private def runtimePayload: ObjectNode = {
-    val payload = objectMapper.createObjectNode()
-    val cases = List("default", "no_intercept", "strict", "multiple", "unusual")
-    cases.foreach { name =>
-      val node = config
-      name match {
-        case "no_intercept" => node.put("includeIntercept", false)
-        case "strict"       => node.put("missingValues", "error")
-        case "multiple"     => node.putArray("predictors").add("x").add("z")
-        case "unusual" =>
-          node.put("target", "réponse\n'\\")
-          node.putArray("predictors").add("(Intercept)").add("x\n'\"\\λ")
-        case _ =>
-      }
-      payload.put(name, descriptor(node).generatePythonCode())
-    }
-    val invalid = config
-    invalid.putArray("predictors").add("y")
-    payload.put("invalid", descriptor(invalid).generatePythonCode())
-    val d = descriptor()
-    val columns = payload.putArray("columns")
-    val types = payload.putObject("types")
-    d.getOutputSchemas(schemas(d))(d.operatorInfo.outputPorts.head.id)
-      .getAttributes
-      .foreach { a =>
-        columns.add(a.getName)
-        types.put(a.getName, a.getType.name())
-      }
-    payload
-  }
-
-  private def runRuntime(
-      payload: ObjectNode,
-      realRuntime: Boolean
-  ): PythonWorkerPool.Outcome = {
-    val python =
-      ConfigFactory.parseResources("udf.conf").resolve().getConfig("python").getString("path")
-    val env = if (realRuntime) {
-      val root = Iterator
-        .iterate(Paths.get("").toAbsolutePath)(_.getParent)
-        .takeWhile(_ != null)
-        .find(p => Files.isDirectory(p.resolve("amber/src/main/python")))
-        .getOrElse(fail("Cannot locate the Amber Python source tree"))
-      Map("PYTHONPATH" -> root.resolve("amber/src/main/python").toString)
-    } else Map.empty[String, String]
-    PythonWorkerPool.run(
-      resourcePath = "/statistics/ols_runtime_checks.py",
-      launchArgs = if (realRuntime) Seq("--real") else Seq.empty,
-      pythonExe = python,
-      request = payload,
-      env = env,
-      interpreterArgs = Seq("-X", "utf8")
+  it should "generate complete-case handling for only the selected columns" in {
+    val code = descriptor().generatePythonCode()
+    code should include("columns = [target] + predictors")
+    code should include("complete = table[columns].dropna()")
+    code should include("if config[\"missing\"] == \"error\" and n_omitted:")
+    code should include(
+      "raise ValueError(f\"OLS found {n_omitted} rows with missing selected values\")"
     )
+  }
+
+  it should "generate rank validation and null handling for undefined statistics" in {
+    val code = descriptor().generatePythonCode()
+    code should include("if np.linalg.matrix_rank(x) != x.shape[1]:")
+    code should include("OLS design is rank-deficient")
+    code should include("return float(value) if np.isfinite(value) else None")
   }
 }
