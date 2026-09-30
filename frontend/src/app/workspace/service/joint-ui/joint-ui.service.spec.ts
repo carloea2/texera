@@ -519,6 +519,25 @@ describe("JointUIService", () => {
       additionalMetadata: { userFriendlyName: friendlyName },
     });
 
+    it.each([
+      ["CategoryRecode", "TypeCasting"],
+      ["TypeCasting", "TypeCasting"],
+      ["CSVFileScan", "CSVFileScan"],
+    ])("renders %s with the existing %s icon", (operatorType, icon) => {
+      const service = new JointUIService(buildMetadataWithSchemas([minimalSchema(operatorType)]) as never);
+      const predicate = {
+        operatorID: "icon-test",
+        operatorType,
+        operatorVersion: "v1",
+        operatorProperties: {},
+        inputPorts: [],
+        outputPorts: [],
+        showAdvanced: false,
+      } as OperatorPredicate;
+      const element = service.getJointOperatorElement(predicate, { x: 0, y: 0 });
+      expect(element.attr(".texera-operator-icon/xlink:href")).toBe(`assets/operator_images/${icon}.png`);
+    });
+
     it("throws when the operator type isn't in the loaded schema list", () => {
       const service = new JointUIService(emptyMetadataStub as never);
       const operator = {

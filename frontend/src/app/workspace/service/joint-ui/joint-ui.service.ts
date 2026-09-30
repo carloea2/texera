@@ -737,6 +737,8 @@ export class JointUIService {
     operatorType: string,
     operatorFriendlyName: string
   ): joint.shapes.devs.ModelSelectors {
+    // Reuse the existing value-transformation icon for explicit category mapping.
+    const operatorIcon = operatorType === "CategoryRecode" ? "TypeCasting" : operatorType;
     return {
       ".texera-operator-coeditor-editing": {
         text: "",
@@ -934,7 +936,7 @@ export class JointUIService {
         visibility: "hidden",
       },
       ".texera-operator-icon": {
-        "xlink:href": "assets/operator_images/" + operatorType + ".png",
+        "xlink:href": "assets/operator_images/" + operatorIcon + ".png",
         width: 35,
         height: 35,
         "ref-x": 0.5,
