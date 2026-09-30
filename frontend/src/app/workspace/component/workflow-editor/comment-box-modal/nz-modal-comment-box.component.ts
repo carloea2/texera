@@ -42,6 +42,7 @@ import { FormsModule } from "@angular/forms";
 import { NzButtonComponent } from "ng-zorro-antd/button";
 import { NzWaveDirective } from "ng-zorro-antd/core/wave";
 import { NzIconDirective } from "ng-zorro-antd/icon";
+import { isWorkflowColor, WORKFLOW_COLOR_PRESETS, WorkflowColor } from "../../../types/workflow-color";
 
 @UntilDestroy()
 @Component({
@@ -72,6 +73,25 @@ import { NzIconDirective } from "ng-zorro-antd/icon";
 export class NzModalCommentBoxComponent {
   readonly commentBox: YType<CommentBox> = inject(NZ_MODAL_DATA).commentBox;
   public user?: User;
+  readonly colorOptions = [{ id: undefined, label: "Default (reset)", fill: "#F2F4F5" }, ...WORKFLOW_COLOR_PRESETS];
+
+  get selectedColor(): WorkflowColor | undefined {
+    const color = this.commentBox.toJSON().color;
+    return isWorkflowColor(color) ? color : undefined;
+  }
+
+  get canChangeColor(): boolean {
+    return (
+      !!this.user &&
+      this.workflowActionService.checkWorkflowModificationEnabled() &&
+      !this.workflowActionService.getWorkflowMetadata().readonly
+    );
+  }
+
+  setColor(color: WorkflowColor | undefined): void {
+    if (!this.canChangeColor) return;
+    this.workflowActionService.setCommentBoxColor(this.commentBox.get("commentBoxID").toJSON(), color);
+  }
 
   constructor(
     @Inject(LOCALE_ID) public locale: string,
