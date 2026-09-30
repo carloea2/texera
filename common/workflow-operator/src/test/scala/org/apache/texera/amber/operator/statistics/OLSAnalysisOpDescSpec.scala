@@ -27,15 +27,12 @@ import org.apache.texera.amber.operator.{LogicalOp, PythonOperatorDescriptor}
 import org.apache.texera.amber.operator.metadata.OperatorMetadataGenerator
 import org.apache.texera.amber.operator.tags.IntegrationTest
 import org.apache.texera.amber.util.JSONUtils.objectMapper
+import org.apache.texera.amber.util.python.PythonWorkerPool
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Tag
 
-import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
-import java.util.concurrent.TimeUnit
-import scala.io.{Codec, Source}
-import scala.util.Using
 
 class OLSAnalysisOpDescSpec extends AnyFlatSpec with Matchers {
   private def config: ObjectNode =
@@ -184,9 +181,41 @@ class OLSAnalysisOpDescSpec extends AnyFlatSpec with Matchers {
     checkRuntime(realRuntime = true)
   }
 
+  for (realRuntime <- List(false, true)) {
+    it should s"report failed pooled requests and recover without stale results (real=$realRuntime)" taggedAs Tag(
+      classOf[IntegrationTest].getName
+    ) in {
+      val missing = runRuntime(objectMapper.createObjectNode(), realRuntime)
+      missing.exit shouldBe 1
+      missing.stderr should include("KeyError")
+
+      val invalid = runtimePayload
+      invalid.put("default", "raise ValueError('OLS protocol failure λ')")
+      val rejected = runRuntime(invalid, realRuntime)
+      rejected.exit shouldBe 1
+      rejected.stderr should include("OLS protocol failure λ")
+
+      val wrongColumns = runtimePayload
+      wrongColumns.putArray("columns")
+      val failedChecks = runRuntime(wrongColumns, realRuntime)
+      failedChecks.exit shouldBe 1
+      failedChecks.stderr should include("FAILED")
+
+      // The next request must compile fresh generated code and run a fresh suite,
+      // rather than reuse failed modules, expectations or unittest results.
+      checkRuntime(realRuntime)
+    }
+  }
+
   private def checkRuntime(realRuntime: Boolean): Unit = {
-    val python =
-      ConfigFactory.parseResources("udf.conf").resolve().getConfig("python").getString("path")
+    val outcome = runRuntime(runtimePayload, realRuntime)
+    val output = outcome.stdout + outcome.stderr
+    withClue(output) { outcome.exit shouldBe 0 }
+    output should include("OK")
+    if (realRuntime) output should include("REAL_TABLE_LIFECYCLE_OK")
+  }
+
+  private def runtimePayload: ObjectNode = {
     val payload = objectMapper.createObjectNode()
     val cases = List("default", "no_intercept", "strict", "multiple", "unusual")
     cases.foreach { name =>
@@ -214,41 +243,30 @@ class OLSAnalysisOpDescSpec extends AnyFlatSpec with Matchers {
         columns.add(a.getName)
         types.put(a.getName, a.getType.name())
       }
-    val driver = Using.resource(
-      Source.fromResource("statistics/ols_runtime_checks.py")(Codec.UTF8)
-    )(_.mkString)
-    val moduleFile = Files.createTempFile("ols_modules_", ".json")
-    val driverFile = Files.createTempFile("ols_checks_", ".py")
-    val outputFile = Files.createTempFile("ols_checks_", ".log")
-    try {
-      Files.write(moduleFile, objectMapper.writeValueAsBytes(payload))
-      Files.writeString(driverFile, driver, StandardCharsets.UTF_8)
-      val builder =
-        new ProcessBuilder(python, "-X", "utf8", driverFile.toString, moduleFile.toString)
-          .redirectErrorStream(true)
-          .redirectOutput(outputFile.toFile)
-      if (realRuntime) {
-        val root = Iterator
-          .iterate(Paths.get("").toAbsolutePath)(_.getParent)
-          .takeWhile(_ != null)
-          .find(p => Files.isDirectory(p.resolve("amber/src/main/python")))
-          .getOrElse(fail("Cannot locate the Amber Python source tree"))
-        builder.environment().put("PYTHONPATH", root.resolve("amber/src/main/python").toString)
-        builder.command().add("--real")
-      }
-      val process = builder.start()
-      if (!process.waitFor(60, TimeUnit.SECONDS)) {
-        process.destroyForcibly()
-        fail("OLS runtime checks timed out after 60 seconds")
-      }
-      val output = Files.readString(outputFile)
-      withClue(output) { process.exitValue() shouldBe 0 }
-      output should include("OK")
-      if (realRuntime) output should include("REAL_TABLE_LIFECYCLE_OK")
-    } finally {
-      Files.deleteIfExists(moduleFile)
-      Files.deleteIfExists(driverFile)
-      Files.deleteIfExists(outputFile)
-    }
+    payload
+  }
+
+  private def runRuntime(
+      payload: ObjectNode,
+      realRuntime: Boolean
+  ): PythonWorkerPool.Outcome = {
+    val python =
+      ConfigFactory.parseResources("udf.conf").resolve().getConfig("python").getString("path")
+    val env = if (realRuntime) {
+      val root = Iterator
+        .iterate(Paths.get("").toAbsolutePath)(_.getParent)
+        .takeWhile(_ != null)
+        .find(p => Files.isDirectory(p.resolve("amber/src/main/python")))
+        .getOrElse(fail("Cannot locate the Amber Python source tree"))
+      Map("PYTHONPATH" -> root.resolve("amber/src/main/python").toString)
+    } else Map.empty[String, String]
+    PythonWorkerPool.run(
+      resourcePath = "/statistics/ols_runtime_checks.py",
+      launchArgs = if (realRuntime) Seq("--real") else Seq.empty,
+      pythonExe = python,
+      request = payload,
+      env = env,
+      interpreterArgs = Seq("-X", "utf8")
+    )
   }
 }

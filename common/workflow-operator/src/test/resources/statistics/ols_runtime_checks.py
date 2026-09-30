@@ -15,17 +15,21 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Generated-code contract checks with an optional real pytexera lifecycle.
+"""PythonWorkerPool checks with an optional real pytexera lifecycle.
 
 The real NumPy, pandas, SciPy and statsmodels packages always execute. Without
 --real only the pytexera import seam is stubbed. Neither mode replaces a full
 worker/localhost test. Expected fits use normal equations and
-explicit textbook formulas, not a second call to statsmodels.
+explicit textbook formulas, not a second call to statsmodels. Each JSON request
+gets fresh generated modules and a fresh unittest suite.
 """
 
 import base64
+import contextlib
+import io
 import json
 import sys
+import traceback
 import types
 import unittest
 from typing import Iterator, Optional
@@ -53,16 +57,6 @@ else:
     stub.Optional = Optional
     sys.modules["pytexera"] = stub
 
-with open(sys.argv.pop(1), encoding="utf-8") as source:
-    payload = json.load(source)
-
-operators = {}
-for name, code in payload.items():
-    if name not in ("columns", "types"):
-        namespace = {"__name__": "generated_ols_" + name}
-        exec(compile(code, name, "exec"), namespace)
-        operators[name] = namespace["ProcessTableOperator"]
-
 
 class OLSChecks(unittest.TestCase):
     def setUp(self):
@@ -70,11 +64,11 @@ class OLSChecks(unittest.TestCase):
 
     def run_fit(self, frame, config="default"):
         before = frame.copy(deep=True)
-        rows = list(operators[config]().process_table(frame, 0))
+        rows = list(self.operators[config]().process_table(frame, 0))
         pd.testing.assert_frame_equal(frame, before)
         self.assertGreater(len(rows), 0)
         for row in rows:
-            self.assertEqual(list(row), payload["columns"])
+            self.assertEqual(list(row), self.payload["columns"])
             # Reject NaN/Infinity and non-serializable NumPy scalar outputs.
             json.dumps(row, allow_nan=False)
         return rows
@@ -255,8 +249,8 @@ class OLSChecks(unittest.TestCase):
         from core.models import Schema, Tuple
         from core.models.table import all_output_to_tuple
 
-        schema = Schema(raw_schema=payload["types"])
-        op = operators["default"]()
+        schema = Schema(raw_schema=self.payload["types"])
+        op = self.operators["default"]()
         op.open()
         records = self.frame.to_dict("records") + [{"y": None, "x": 6}]
         for record in records:
@@ -271,11 +265,54 @@ class OLSChecks(unittest.TestCase):
             tuples[0].finalize(schema)
             self.assertEqual(tuples[0].get_fields(), tuple(result.values()))
         op.close()
-        empty_op = operators["default"]()
+        empty_op = self.operators["default"]()
         with self.assertRaisesRegex(ValueError, "No complete rows"):
             list(empty_op.on_finish(0))
         print("REAL_TABLE_LIFECYCLE_OK")
 
 
+def run_checks(payload):
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        try:
+            operators = {}
+            for name in (
+                "default",
+                "no_intercept",
+                "strict",
+                "multiple",
+                "unusual",
+                "invalid",
+            ):
+                namespace = {"__name__": "generated_ols_" + name}
+                exec(compile(payload[name], name, "exec"), namespace)
+                operators[name] = namespace["ProcessTableOperator"]
+            # Bind state to this request's test class, never to a previous suite.
+            checks = type(
+                "RequestOLSChecks",
+                (OLSChecks,),
+                {"operators": operators, "payload": payload},
+            )
+            suite = unittest.defaultTestLoader.loadTestsFromTestCase(checks)
+            result = unittest.TextTestRunner(stream=stderr, verbosity=2).run(suite)
+            exit_code = 0 if result.wasSuccessful() else 1
+        except Exception:
+            traceback.print_exc()
+            exit_code = 1
+    return {"exit": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue()}
+
+
+def main():
+    print(json.dumps({"ready": True}), flush=True)
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            result = run_checks(json.loads(line))
+        except Exception:
+            result = {"exit": 1, "stdout": "", "stderr": traceback.format_exc()}
+        print(json.dumps(result), flush=True)
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    main()
