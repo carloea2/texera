@@ -21,7 +21,13 @@ package org.apache.texera.amber.operator.aggregate
 
 import com.fasterxml.jackson.annotation.{JsonIgnore, JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.{JsonSchemaInject, JsonSchemaTitle}
-import org.apache.texera.amber.core.tuple.{Attribute, AttributeType, AttributeTypeUtils, Tuple}
+import org.apache.texera.amber.core.tuple.{
+  Attribute,
+  AttributeType,
+  AttributeTypeUtils,
+  Schema,
+  Tuple
+}
 import org.apache.texera.amber.operator.metadata.annotations.AutofillAttributeName
 
 import javax.validation.constraints.NotNull
@@ -89,6 +95,52 @@ class AggregationOperation {
   @JsonPropertyDescription("column name of average result")
   @NotNull(message = "result attribute is required")
   var resultAttribute: String = _
+
+  @JsonProperty
+  @JsonSchemaTitle("Conditions (COUNT/SUM)")
+  @JsonPropertyDescription(
+    "Only matching rows contribute to this COUNT or SUM. Empty conditions include every row. Null values match only explicit null checks."
+  )
+  var conditions: List[AggregationCondition] = List.empty
+
+  @JsonProperty
+  @JsonSchemaTitle("Match conditions")
+  @JsonSchemaInject(json = """{"enum":["all","any"],"default":"all"}""")
+  @JsonPropertyDescription(
+    "Require all or any conditions to match. Does not affect other measures or remove groups."
+  )
+  var conditionMatch: String = "all"
+
+  @JsonIgnore
+  def compileConditions(inputSchema: Schema): Tuple => Boolean = {
+    require(
+      conditions != null && !conditions.contains(null),
+      "Conditions and their rules cannot be null"
+    )
+    require(
+      conditionMatch == "all" || conditionMatch == "any",
+      "Condition match must be all or any"
+    )
+    require(
+      conditions.isEmpty || aggFunction == AggregationFunction.COUNT ||
+        aggFunction == AggregationFunction.SUM,
+      "Conditions are supported only for COUNT and SUM"
+    )
+    // Compile every rule now, even if runtime evaluation can short-circuit.
+    val predicates = conditions.map(_.compile(inputSchema))
+    if (predicates.isEmpty) _ => true
+    else if (conditionMatch == "all") tuple => predicates.forall(_(tuple))
+    else tuple => predicates.exists(_(tuple))
+  }
+
+  @JsonIgnore
+  def getAggFunc(attrType: AttributeType, inputSchema: Schema): DistributedAggregation[Object] = {
+    val matches = compileConditions(inputSchema)
+    val aggregate = getAggFunc(attrType)
+    aggregate.copy(iterate =
+      (partial, tuple) => if (matches(tuple)) aggregate.iterate(partial, tuple) else partial
+    )
+  }
 
   @JsonIgnore
   def getAggregationAttribute(attrType: AttributeType): Attribute = {

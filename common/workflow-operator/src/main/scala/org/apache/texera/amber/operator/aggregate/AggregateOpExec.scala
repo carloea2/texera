@@ -57,7 +57,7 @@ class AggregateOpExec(descString: String) extends OperatorExecutor {
             (agg.attribute == null || agg.attribute.trim.isEmpty)
           ) null
           else tuple.getSchema.getAttribute(agg.attribute).getType
-        agg.getAggFunc(attrType)
+        agg.getAggFunc(attrType, tuple.getSchema)
       }
     }
 
