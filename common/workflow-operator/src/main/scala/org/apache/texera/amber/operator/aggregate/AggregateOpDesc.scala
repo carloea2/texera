@@ -22,7 +22,7 @@ package org.apache.texera.amber.operator.aggregate
 import com.fasterxml.jackson.annotation.{JsonProperty, JsonPropertyDescription}
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle
 import org.apache.texera.amber.core.executor.OpExecWithClassName
-import org.apache.texera.amber.core.tuple.Schema
+import org.apache.texera.amber.core.tuple.{Attribute, AttributeType, Schema}
 import org.apache.texera.amber.core.virtualidentity.{
   ExecutionIdentity,
   PhysicalOpIdentity,
@@ -69,7 +69,7 @@ class AggregateOpDesc extends LogicalOp {
         workflowId,
         executionId,
         OpExecWithClassName(
-          "org.apache.texera.amber.operator.aggregate.AggregateOpExec",
+          "org.apache.texera.amber.operator.aggregate.PartialAggregateOpExec",
           partialDesc
         )
       )
@@ -92,7 +92,9 @@ class AggregateOpDesc extends LogicalOp {
                     (agg.attribute == null || agg.attribute.trim.isEmpty)
                   ) null
                   else inputSchema.getAttribute(agg.attribute).getType
-                agg.getAggregationAttribute(attrType)
+                if (agg.aggFunction == AggregationFunction.AVERAGE)
+                  new Attribute(agg.resultAttribute, AttributeType.BINARY)
+                else agg.getAggregationAttribute(attrType)
               }
           )
           Map(PortIdentity(internal = true) -> outputSchema)
@@ -102,25 +104,33 @@ class AggregateOpDesc extends LogicalOp {
     val finalInputPort = InputPort(PortIdentity(0, internal = true))
     val finalOutputPort = OutputPort(PortIdentity(0), blocking = true)
     // Keep the logical descriptor unchanged: schema checks and replanning must
-    // retain source columns and predicates. Partial totals have no row conditions.
-    executorDesc.aggregations = aggregations.map(aggr => aggr.getFinal)
-    val finalDesc = objectMapper.writeValueAsString(executorDesc)
+    // retain source columns and predicates. The global executor merges partial
+    // states without evaluating source-row conditions or averaging local averages.
 
     val finalPhysicalOp = PhysicalOp
       .oneToOnePhysicalOp(
         PhysicalOpIdentity(operatorIdentifier, "globalAgg"),
         workflowId,
         executionId,
-        OpExecWithClassName("org.apache.texera.amber.operator.aggregate.AggregateOpExec", finalDesc)
+        OpExecWithClassName(
+          "org.apache.texera.amber.operator.aggregate.FinalAggregateOpExec",
+          partialDesc
+        )
       )
       .withParallelizable(false)
       .withIsOneToManyOp(true)
       .withInputPorts(List(finalInputPort))
       .withOutputPorts(List(finalOutputPort))
       .withPropagateSchema(
-        SchemaPropagationFunc(inputSchemas =>
-          Map(operatorInfo.outputPorts.head.id -> inputSchemas(finalInputPort.id))
-        )
+        SchemaPropagationFunc(inputSchemas => {
+          val inputSchema = inputSchemas(finalInputPort.id)
+          val outputSchema = Schema(
+            groupKeys.map(inputSchema.getAttribute) ++ localAggregations.map { agg =>
+              agg.getAggregationAttribute(inputSchema.getAttribute(agg.resultAttribute).getType)
+            }
+          )
+          Map(operatorInfo.outputPorts.head.id -> outputSchema)
+        })
       )
       .withPartitionRequirement(List(Option(HashPartition(groupKeys))))
       .withDerivePartition(_ => HashPartition(groupKeys))

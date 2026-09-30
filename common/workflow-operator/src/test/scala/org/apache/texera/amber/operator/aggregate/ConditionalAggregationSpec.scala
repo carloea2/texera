@@ -286,6 +286,7 @@ class ConditionalAggregationSpec extends AnyFlatSpec with Matchers {
       .path("definitions")
       .path("AggregationOperation")
     definition.path("properties").path("conditions").path("type").asText shouldBe "array"
+    definition.path("properties").path("conditions").path("title").asText shouldBe "Conditions"
     definition
       .path("required")
       .elements()
@@ -354,12 +355,118 @@ class ConditionalAggregationSpec extends AnyFlatSpec with Matchers {
     ).getMessage should include("Condition")
   }
 
-  Seq("average", "min", "max", "concat").foreach { function =>
-    it should s"reject conditions on unsupported $function without changing legacy defaults" in {
-      intercept[IllegalArgumentException] {
-        validate(measure("out", Seq(rule("sex", "=", "F")), function, "amount"))
-      }.getMessage should include("COUNT and SUM")
-      validate(measure("out", function = function, column = "amount"))
+  Seq(
+    ("count", "", Seq[Any](2, 0, 1, 0)),
+    ("sum", "amount", Seq[Any](10, 0, 0, 0)),
+    ("average", "amount", Seq[Any](10.0, null, null, null)),
+    ("min", "amount", Seq[Any](10, null, null, null)),
+    ("max", "amount", Seq[Any](10, null, null, null)),
+    ("concat", "race", Seq[Any]("BLACK/AFRICAN AMERICAN,OTHER", "", "WHITE", ""))
+  ).foreach {
+    case (function, column, expected) =>
+      it should s"support conditional $function while retaining groups with no matching values" in {
+        val operation = measure("out", Seq(rule("sex", "=", "F")), function, column)
+        val result = run(descriptor(Seq(operation)), Seq(rows.take(3), rows.drop(3), Seq.empty))
+          .map(row => row.getField[Any]("year") -> row.getField[Any]("out"))
+          .toMap
+        result shouldBe Seq[Any](2013, 2014, 2015, null).zip(expected).toMap
+        run(descriptor(Seq(operation)), Seq(Seq.empty)) shouldBe empty
+        intercept[IllegalArgumentException] {
+          validate(operation + ("conditions" -> Seq(rule("age", ">", "invalid"))))
+        }.getMessage should include("Condition")
+      }
+  }
+
+  Seq(AttributeType.INTEGER, AttributeType.LONG, AttributeType.DOUBLE, AttributeType.TIMESTAMP)
+    .foreach { kind =>
+      it should s"weight conditional and unconditional $kind averages by non-null row counts" in {
+        val schema = Schema().add("v", kind).add("selected", AttributeType.BOOLEAN)
+        def row(value: Int, selected: Boolean = true): Tuple = {
+          val typed: Any = kind match {
+            case AttributeType.LONG      => value.toLong
+            case AttributeType.DOUBLE    => value.toDouble
+            case AttributeType.TIMESTAMP => new Timestamp(value.toLong)
+            case _                       => value
+          }
+          Tuple(schema, Array[Any](typed, selected))
+        }
+        val partitions = Seq(
+          Seq(row(10), row(20), row(30)),
+          Seq(row(100)),
+          Seq(Tuple(schema, Array[Any](null, true))),
+          Seq.empty
+        )
+        Seq(Seq.empty, Seq(rule("selected", "=", "true"))).foreach { conditions =>
+          val desc = descriptor(Seq(measure("avg", conditions, "average", "v")), Seq.empty)
+          val data = if (conditions.isEmpty) partitions else partitions :+ Seq(row(1000, false))
+          Seq(data, data.reverse, Seq(data.flatten)).foreach { split =>
+            run(desc, split, schema).head.getField[Double]("avg") shouldBe 40.0
+          }
+        }
+      }
     }
+
+  Seq(
+    (AttributeType.INTEGER, Int.MaxValue, Int.MinValue),
+    (AttributeType.LONG, Long.MaxValue, Long.MinValue),
+    (AttributeType.DOUBLE, Double.PositiveInfinity, Double.NegativeInfinity),
+    (AttributeType.TIMESTAMP, new Timestamp(Long.MaxValue), new Timestamp(-1000L))
+  ).foreach {
+    case (kind, largest, smallest) =>
+      it should s"keep $kind extrema distinct from empty conditional partials" in {
+        val schema = Schema().add("v", kind).add("selected", AttributeType.BOOLEAN)
+        Seq("min" -> largest, "max" -> smallest).foreach {
+          case (function, value) =>
+            val desc = descriptor(
+              Seq(measure("out", Seq(rule("selected", "=", "true")), function, "v")),
+              Seq.empty
+            )
+            val partitions = Seq(
+              Seq(Tuple(schema, Array[Any](value, true))),
+              Seq(Tuple(schema, Array[Any](null, true))),
+              Seq(Tuple(schema, Array[Any](value, false))),
+              Seq.empty
+            )
+            Seq(partitions, partitions.reverse).foreach { data =>
+              run(desc, data, schema).head.getField[Any]("out") shouldBe value
+            }
+        }
+      }
+  }
+
+  it should "merge CONCAT without separators from workers with no matches" in {
+    val schema = Schema().add("v", AttributeType.STRING).add("selected", AttributeType.BOOLEAN)
+    def row(value: String, selected: Boolean = true): Tuple =
+      Tuple(schema, Array[Any](value, selected))
+    val desc = descriptor(
+      Seq(measure("out", Seq(rule("selected", "=", "true")), "concat", "v")),
+      Seq.empty
+    )
+    val partitions = Seq(
+      Seq(row(null), row("北"), row(null), row(""), row("東京")),
+      Seq(row("excluded", false)),
+      Seq(row("tail")),
+      Seq(row(null)),
+      Seq.empty
+    )
+    run(desc, partitions, schema).head.getField[String]("out") shouldBe "北,,,東京,tail"
+  }
+
+  it should "support any matching independently for every aggregation" in {
+    val functions = Seq("count", "sum", "average", "min", "max", "concat")
+    val desc = descriptor(
+      functions.map { function =>
+        measure(
+          function,
+          Seq(rule("sex", "=", "M"), rule("age", ">=", "49")),
+          function,
+          if (function == "concat") "race" else "amount",
+          "any"
+        )
+      },
+      Seq.empty
+    )
+    val result = run(desc, Seq(rows.take(2), rows.drop(2))).head
+    result.getFields.toSeq shouldBe Seq(2, 50, 25.0, 20, 30, "WHITE,BLACK,WHITE")
   }
 }

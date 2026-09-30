@@ -97,9 +97,9 @@ class AggregationOperation {
   var resultAttribute: String = _
 
   @JsonProperty
-  @JsonSchemaTitle("Conditions (COUNT/SUM)")
+  @JsonSchemaTitle("Conditions")
   @JsonPropertyDescription(
-    "Only matching rows contribute to this COUNT or SUM. Empty conditions include every row. Null values match only explicit null checks."
+    "Only matching rows contribute to this measure. Empty conditions include every row. Null values match only explicit null checks."
   )
   var conditions: List[AggregationCondition] = List.empty
 
@@ -120,11 +120,6 @@ class AggregationOperation {
     require(
       conditionMatch == "all" || conditionMatch == "any",
       "Condition match must be all or any"
-    )
-    require(
-      conditions.isEmpty || aggFunction == AggregationFunction.COUNT ||
-        aggFunction == AggregationFunction.SUM,
-      "Conditions are supported only for COUNT and SUM"
     )
     // Compile every rule now, even if runtime evaluation can short-circuit.
     val predicates = conditions.map(_.compile(inputSchema))
@@ -255,16 +250,21 @@ class AggregationOperation {
       )
     }
     new DistributedAggregation[Object](
-      () => AttributeTypeUtils.maxValue(attributeType),
+      () => null,
       (partial, tuple) => {
         val value = tuple.getField[Object](attribute)
         val comp = AttributeTypeUtils.compare(value, partial, attributeType)
-        if (value != null && comp < 0) value else partial
+        val isNaN = attributeType == AttributeType.DOUBLE && value != null &&
+          value.asInstanceOf[java.lang.Double].isNaN
+        if (value != null && !isNaN && (partial == null || comp < 0)) value else partial
       },
       (partial1, partial2) =>
-        if (AttributeTypeUtils.compare(partial1, partial2, attributeType) < 0) partial1
+        if (
+          partial2 == null || (partial1 != null &&
+          AttributeTypeUtils.compare(partial1, partial2, attributeType) < 0)
+        ) partial1
         else partial2,
-      partial => if (partial == AttributeTypeUtils.maxValue(attributeType)) null else partial
+      partial => partial
     )
   }
 
@@ -280,16 +280,16 @@ class AggregationOperation {
       )
     }
     new DistributedAggregation[Object](
-      () => AttributeTypeUtils.minValue(attributeType),
+      () => null,
       (partial, tuple) => {
         val value = tuple.getField[Object](attribute)
         val comp = AttributeTypeUtils.compare(value, partial, attributeType)
-        if (value != null && comp > 0) value else partial
+        if (value != null && (partial == null || comp > 0)) value else partial
       },
       (partial1, partial2) =>
         if (AttributeTypeUtils.compare(partial1, partial2, attributeType) > 0) partial1
         else partial2,
-      partial => if (partial == AttributeTypeUtils.minValue(attributeType)) null else partial
+      partial => partial
     )
   }
 
