@@ -520,10 +520,10 @@ describe("JointUIService", () => {
     });
 
     it.each([
-      ["CategoryRecode", "TypeCasting"],
+      ["CategoryRecode", "CategoryRecode"],
       ["TypeCasting", "TypeCasting"],
       ["CSVFileScan", "CSVFileScan"],
-    ])("renders %s with the existing %s icon", (operatorType, icon) => {
+    ])("renders %s with its conventionally named %s icon", (operatorType, icon) => {
       const service = new JointUIService(buildMetadataWithSchemas([minimalSchema(operatorType)]) as never);
       const predicate = {
         operatorID: "icon-test",
