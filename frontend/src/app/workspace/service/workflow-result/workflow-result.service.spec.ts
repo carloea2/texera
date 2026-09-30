@@ -335,6 +335,41 @@ describe("OperatorPaginationResultService", () => {
   });
 
   describe("selectTuple", () => {
+    it.each([10, 25, 50, 100])("requests a row on the next %i-row page with a backend-safe column limit", pageSize => {
+      const events = mockWorkflowWebsocketService.subscribeToEvent.mock.results[0]
+        .value as Subject<PaginatedResultEvent>;
+      const received: unknown[] = [];
+      service.selectTuple(pageSize, pageSize).subscribe(result => received.push(result.tuple));
+      const request = mockWorkflowWebsocketService.send.mock.calls[0][1] as {
+        requestID: string;
+        columnLimit: number;
+      };
+      // ResultPaginationRequest.columnLimit is a Scala Int, not a JavaScript safe integer.
+      expect(request.columnLimit).toBe(2_147_483_647);
+      expect(mockWorkflowWebsocketService.send).toHaveBeenCalledWith(
+        "ResultPaginationRequest",
+        expect.objectContaining({ pageIndex: 2, pageSize, columnOffset: 0 })
+      );
+      events.next({
+        requestID: request.requestID,
+        operatorID: "testOperator",
+        pageIndex: 2,
+        table: [{ id: pageSize + 1, category: "日本", missing: "NULL" }],
+        schema: [],
+      });
+      expect(received).toEqual([{ id: pageSize + 1, category: "日本", missing: "NULL" }]);
+    });
+
+    it("returns no tuple when the server answers an empty page", () => {
+      const events = mockWorkflowWebsocketService.subscribeToEvent.mock.results[0]
+        .value as Subject<PaginatedResultEvent>;
+      const received: unknown[] = [];
+      service.selectTuple(100, 100).subscribe(result => received.push(result.tuple));
+      const request = mockWorkflowWebsocketService.send.mock.calls[0][1] as { requestID: string };
+      events.next({ requestID: request.requestID, operatorID: "testOperator", pageIndex: 2, table: [], schema: [] });
+      expect(received).toEqual([undefined]);
+    });
+
     it("should return the correct tuple and schema", async () => {
       const testSchema: SchemaAttribute[] = [
         { attributeName: "id", attributeType: "integer" },

@@ -240,6 +240,9 @@ export class OperatorResultService {
 }
 
 export class OperatorPaginationResultService {
+  // Match ResultPaginationRequest.columnLimit (Scala Int). MAX_SAFE_INTEGER
+  // overflows the server's request decoder when row details request all columns.
+  private static readonly ALL_COLUMNS = 2_147_483_647;
   private pendingRequests: Map<string, Subject<PaginatedResultEvent>> = new Map();
   private resultCache: Map<number, ReadonlyArray<object>> = new Map();
   private statsCache: Record<string, Record<string, number>> = {};
@@ -292,13 +295,14 @@ export class OperatorPaginationResultService {
     pageIndex: number,
     pageSize: number,
     columnOffset: number = 0,
-    columnLimit: number = Number.MAX_SAFE_INTEGER,
+    columnLimit: number = OperatorPaginationResultService.ALL_COLUMNS,
     columnSearch: string = ""
   ): Observable<PaginatedResultEvent> {
     // update currently selected page
     this.currentPageIndex = pageIndex;
     // first fetch from frontend result cache
-    const useCache = columnOffset === 0 && columnLimit === Number.MAX_SAFE_INTEGER && columnSearch === "";
+    const useCache =
+      columnOffset === 0 && columnLimit === OperatorPaginationResultService.ALL_COLUMNS && columnSearch === "";
     const pageCache = useCache ? this.resultCache.get(pageIndex) : undefined;
     if (pageCache) {
       return of(<PaginatedResultEvent>{
