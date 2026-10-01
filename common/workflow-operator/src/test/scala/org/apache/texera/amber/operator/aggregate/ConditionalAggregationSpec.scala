@@ -449,7 +449,46 @@ class ConditionalAggregationSpec extends AnyFlatSpec with Matchers {
       Seq(row(null)),
       Seq.empty
     )
-    run(desc, partitions, schema).head.getField[String]("out") shouldBe "北,,,東京,tail"
+    run(desc, partitions, schema).head.getField[String]("out") shouldBe "北,,,東京,tail,"
+  }
+
+  it should "preserve matched CONCAT null and empty slots across worker boundaries" in {
+    val schema = Schema().add("v", AttributeType.STRING).add("selected", AttributeType.BOOLEAN)
+    def row(value: String, selected: Boolean = true): Tuple =
+      Tuple(schema, Array[Any](value, selected))
+
+    Seq(Seq.empty, Seq(rule("selected", "=", "true"))).foreach { conditions =>
+      val desc = descriptor(Seq(measure("out", conditions, "concat", "v")), Seq.empty)
+      Seq(null, "").foreach { blank =>
+        val partitions = Seq(Seq(row("text")), Seq(row(blank)))
+        run(desc, partitions, schema).head.getField[String]("out") shouldBe "text,"
+      }
+      val partitions = Seq(
+        Seq(row(null), row("")),
+        Seq(row("α,"), row(null)),
+        Seq(row(""), row("東京")),
+        Seq(row(null)),
+        Seq.empty
+      )
+      // CONCAT is order-sensitive: changing worker arrival order may change the
+      // text, but splitting the same ordered rows must not drop matched slots.
+      partitions.permutations.foreach { ordered =>
+        val single = run(desc, Seq(ordered.flatten), schema).head.getField[String]("out")
+        run(desc, ordered, schema).head.getField[String]("out") shouldBe single
+      }
+      run(desc, Seq(Seq(row(null)), Seq(row(""))), schema).head
+        .getField[String]("out") shouldBe ""
+    }
+
+    val conditional = descriptor(
+      Seq(measure("out", Seq(rule("selected", "=", "true")), "concat", "v")),
+      Seq.empty
+    )
+    run(
+      conditional,
+      Seq(Seq(row("text")), Seq(row(null, false), row("", false)), Seq(row(null))),
+      schema
+    ).head.getField[String]("out") shouldBe "text,"
   }
 
   it should "support any matching independently for every aggregation" in {

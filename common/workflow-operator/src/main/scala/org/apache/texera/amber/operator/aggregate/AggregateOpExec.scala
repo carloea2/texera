@@ -24,6 +24,7 @@ import org.apache.texera.amber.core.tuple.{Tuple, TupleLike}
 import org.apache.texera.amber.util.JSONUtils.objectMapper
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets.UTF_8
 import scala.collection.mutable
 
 /**
@@ -83,10 +84,18 @@ class AggregateOpExec protected (
         if (mergePartials) {
           val operation = desc.aggregations(index)
           val value = tuple.getField[Object](operation.resultAttribute)
-          val incoming = if (operation.aggFunction == AggregationFunction.AVERAGE) {
-            val buffer = ByteBuffer.wrap(value.asInstanceOf[Array[Byte]])
-            AveragePartialObj(buffer.getDouble(), buffer.getDouble())
-          } else value
+          val incoming = operation.aggFunction match {
+            case AggregationFunction.AVERAGE =>
+              val buffer = ByteBuffer.wrap(value.asInstanceOf[Array[Byte]])
+              AveragePartialObj(buffer.getDouble(), buffer.getDouble())
+            case AggregationFunction.CONCAT =>
+              val buffer = ByteBuffer.wrap(value.asInstanceOf[Array[Byte]])
+              val leadingEmptyCount = buffer.getLong()
+              val text = new Array[Byte](buffer.remaining())
+              buffer.get(text)
+              ConcatPartialObj(new String(text, UTF_8), leadingEmptyCount)
+            case _ => value
+          }
           aggregation.merge(partial, incoming)
         } else aggregation.iterate(partial, tuple)
     }
@@ -109,6 +118,13 @@ class AggregateOpExec protected (
                 // after merging every worker, including workers with no matches.
                 case avg: AveragePartialObj =>
                   ByteBuffer.allocate(16).putDouble(avg.sum).putDouble(avg.count).array()
+                case concat: ConcatPartialObj =>
+                  val text = concat.value.getBytes(UTF_8)
+                  ByteBuffer
+                    .allocate(8 + text.length)
+                    .putLong(concat.leadingEmptyCount)
+                    .put(text)
+                    .array()
                 case value => value
               }
         }

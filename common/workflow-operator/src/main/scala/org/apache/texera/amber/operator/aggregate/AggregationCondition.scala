@@ -26,7 +26,7 @@ import org.apache.texera.amber.operator.metadata.annotations.AutofillAttributeNa
 
 import scala.util.Try
 
-/** A typed row predicate for one COUNT or SUM, compiled once per input schema. */
+/** A typed row predicate for one aggregate measure, compiled once per input schema. */
 class AggregationCondition {
   @JsonProperty(required = true)
   @AutofillAttributeName

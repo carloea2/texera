@@ -92,7 +92,10 @@ class AggregateOpDesc extends LogicalOp {
                     (agg.attribute == null || agg.attribute.trim.isEmpty)
                   ) null
                   else inputSchema.getAttribute(agg.attribute).getType
-                if (agg.aggFunction == AggregationFunction.AVERAGE)
+                if (
+                  agg.aggFunction == AggregationFunction.AVERAGE ||
+                  agg.aggFunction == AggregationFunction.CONCAT
+                )
                   new Attribute(agg.resultAttribute, AttributeType.BINARY)
                 else agg.getAggregationAttribute(attrType)
               }

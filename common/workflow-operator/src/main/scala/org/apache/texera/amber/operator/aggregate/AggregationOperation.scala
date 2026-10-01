@@ -33,6 +33,7 @@ import org.apache.texera.amber.operator.metadata.annotations.AutofillAttributeNa
 import javax.validation.constraints.NotNull
 
 case class AveragePartialObj(sum: Double, count: Double) extends Serializable {}
+case class ConcatPartialObj(value: String, leadingEmptyCount: Long) extends Serializable
 
 @JsonSchemaInject(json = """
 {
@@ -215,26 +216,31 @@ class AggregationOperation {
     )
   }
 
-  private def concatAgg(): DistributedAggregation[String] = {
-    new DistributedAggregation[String](
-      () => "",
+  private def concatAgg(): DistributedAggregation[ConcatPartialObj] = {
+    new DistributedAggregation[ConcatPartialObj](
+      () => ConcatPartialObj("", 0L),
       (partial, tuple) => {
-        if (partial == "") {
-          if (tuple.getField(attribute) != null) tuple.getField(attribute).toString else ""
-        } else {
-          partial + "," + (if (tuple.getField(attribute) != null)
-                             tuple.getField(attribute).toString
-                           else "")
-        }
+        val value = Option(tuple.getField[Object](attribute)).fold("")(_.toString)
+        if (partial.value.isEmpty && value.isEmpty)
+          partial.copy(leadingEmptyCount = Math.addExact(partial.leadingEmptyCount, 1L))
+        else if (partial.value.isEmpty) partial.copy(value = value)
+        else partial.copy(value = partial.value + "," + value)
       },
       (partial1, partial2) => {
-        if (partial1 != "" && partial2 != "") {
-          partial1 + "," + partial2
-        } else {
-          partial1 + partial2
-        }
+        // Leading null/empty values disappear in a single stream, but become
+        // interior slots if an earlier worker supplied non-empty text. Preserve
+        // their count so a matched blank is not confused with zero matches.
+        if (partial1.value.isEmpty)
+          partial2.copy(leadingEmptyCount =
+            Math.addExact(partial1.leadingEmptyCount, partial2.leadingEmptyCount)
+          )
+        else
+          partial1.copy(value =
+            partial1.value + ",".repeat(Math.toIntExact(partial2.leadingEmptyCount)) +
+              (if (partial2.value.nonEmpty) "," + partial2.value else "")
+          )
       },
-      partial => partial
+      partial => partial.value
     )
   }
 
