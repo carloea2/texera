@@ -444,6 +444,7 @@ describe("OperatorPaginationResultService", () => {
         schema: [{ attributeName: "id", attributeType: "integer" }],
       });
       expect(service.getCurrentPageIndex()).toBe(2);
+      expect(service.getCurrentPageSize()).toBe(10);
     });
 
     it("fetches from the server and resolves once the matching page event arrives", () => {
@@ -457,6 +458,7 @@ describe("OperatorPaginationResultService", () => {
         expect.objectContaining({ operatorID: "testOperator", pageIndex: 3, pageSize: 10 })
       );
       expect(service.getCurrentPageIndex()).toBe(3);
+      expect(service.getCurrentPageSize()).toBe(10);
 
       const requestID = (mockWorkflowWebsocketService.send.mock.calls[0][1] as any).requestID;
       const page: PaginatedResultEvent = {
@@ -519,12 +521,15 @@ describe("OperatorPaginationResultService", () => {
       (service as any).pendingRequests.set("req", new Subject());
       (service as any).currentPageIndex = 5;
       (service as any).currentTotalNumTuples = 99;
+      service.selectPage(5, 25);
+      expect(service.getCurrentPageSize()).toBe(25);
 
       service.reset();
 
       expect((service as any).resultCache.size).toBe(0);
       expect((service as any).pendingRequests.size).toBe(0);
       expect(service.getCurrentPageIndex()).toBe(1);
+      expect(service.getCurrentPageSize()).toBeUndefined();
       expect(service.getCurrentTotalNumTuples()).toBe(0);
     });
   });

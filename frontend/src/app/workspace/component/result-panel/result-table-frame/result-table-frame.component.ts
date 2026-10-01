@@ -159,6 +159,7 @@ export class ResultTableFrameComponent implements OnInit, OnChanges {
       this.isFrontPagination = true;
       this.isOperatorFinished = false;
       this.currentPageIndex = 1;
+      this.pageSize = 50;
       this.totalNumTuples = 0;
       this.currentColumnOffset = 0;
       this.columnSearch = "";
@@ -171,7 +172,13 @@ export class ResultTableFrameComponent implements OnInit, OnChanges {
       if (paginatedResultService) {
         this.isFrontPagination = false;
         this.totalNumTuples = paginatedResultService.getCurrentTotalNumTuples();
-        this.currentPageIndex = paginatedResultService.getCurrentPageIndex();
+        const pageSize = paginatedResultService.getCurrentPageSize();
+        if (pageSize !== undefined && this.pageSizeOptions.includes(pageSize)) {
+          this.pageSize = pageSize;
+        }
+        const pageIndex = paginatedResultService.getCurrentPageIndex();
+        const lastPage = Math.max(1, Math.ceil(this.totalNumTuples / this.pageSize));
+        this.currentPageIndex = Number.isSafeInteger(pageIndex) ? Math.max(1, Math.min(pageIndex, lastPage)) : 1;
         this.changePaginatedResultData();
 
         this.tableStats = paginatedResultService.getStats();

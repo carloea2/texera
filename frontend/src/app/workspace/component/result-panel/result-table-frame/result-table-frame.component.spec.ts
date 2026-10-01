@@ -45,6 +45,7 @@ import { PaginatedResultEvent } from "../../../types/workflow-websocket.interfac
 import { IndexableObject } from "../../../types/result-table.interface";
 import { RowModalComponent } from "../result-panel-modal.component";
 import { ResultExportationComponent } from "../../result-exportation/result-exportation.component";
+import { WorkflowWebsocketService } from "../../../service/workflow-websocket/workflow-websocket.service";
 
 type OperatorStatsMap = Record<string, Record<string, Record<string, number>>>;
 
@@ -76,6 +77,7 @@ describe("ResultTableFrameComponent", () => {
     const paginatedResultService = {
       getCurrentTotalNumTuples: vi.fn().mockReturnValue(42),
       getCurrentPageIndex: vi.fn().mockReturnValue(1),
+      getCurrentPageSize: vi.fn().mockReturnValue(undefined),
       getStats: vi.fn().mockReturnValue({ name: { min: 1 } }),
       selectPage: vi.fn().mockReturnValue(of(makePageEvent(1))),
       ...overrides,
@@ -169,6 +171,85 @@ describe("ResultTableFrameComponent", () => {
   });
 
   describe("ngOnChanges", () => {
+    it.each([10, 25, 100])(
+      "restores the operator's %i-row page after destroying and recreating its frame",
+      pageSize => {
+        const ws = TestBed.inject(WorkflowWebsocketService);
+        const send = vi.spyOn(ws, "send").mockImplementation(() => {});
+        const events = (ws as any).webSocketResponseSubject;
+        events.next({
+          type: "WebResultUpdateEvent",
+          updates: { op1: paginationUpdate(125, []), op2: paginationUpdate(125, []) },
+          tableStats: {},
+        });
+        const showOperator = (operatorId: string): void => {
+          fixture.destroy();
+          fixture = TestBed.createComponent(ResultTableFrameComponent);
+          component = fixture.componentInstance;
+          fixture.componentRef.setInput("operatorId", operatorId);
+          fixture.detectChanges();
+        };
+        const receivePage = (): void => {
+          const request = send.mock.lastCall![1] as {
+            requestID: string;
+            operatorID: string;
+            pageIndex: number;
+            pageSize: number;
+          };
+          const start = (request.pageIndex - 1) * request.pageSize;
+          events.next({
+            type: "PaginatedResultEvent",
+            requestID: request.requestID,
+            operatorID: request.operatorID,
+            pageIndex: request.pageIndex,
+            schema: [{ attributeName: "id", attributeType: "integer" }],
+            table: Array.from({ length: Math.min(request.pageSize, 125 - start) }, (_, index) => ({
+              id: start + index + 1,
+            })),
+          });
+          fixture.detectChanges();
+        };
+
+        showOperator("op1");
+        receivePage();
+        component.onTableQueryParamsChange(queryParams(1, pageSize));
+        component.onTableQueryParamsChange(queryParams(2, pageSize));
+        receivePage();
+        const previousRows = component.currentResult;
+        expect(previousRows[0]).toEqual({ id: pageSize + 1 });
+
+        showOperator("op2");
+        receivePage();
+        expect(component.pageSize).toBe(50);
+        expect(component.currentPageIndex).toBe(1);
+        showOperator("op1");
+        receivePage();
+        expect(component.pageSize).toBe(pageSize);
+        expect(component.currentPageIndex).toBe(2);
+        expect(component.currentResult).toEqual(previousRows);
+      }
+    );
+
+    it.each([0, -1, 1.5, NaN, Infinity, 10])(
+      "clamps a restored page index of %s before requesting results",
+      pageIndex => {
+        const paginated = makePaginatedResultService({
+          getCurrentTotalNumTuples: vi.fn().mockReturnValue(5),
+          getCurrentPageIndex: vi.fn().mockReturnValue(pageIndex),
+        });
+        component.ngOnChanges({ operatorId: new SimpleChange(undefined, "op1", true) });
+        expect(paginated.selectPage).toHaveBeenCalledWith(1, 50, 0, GUI_CONFIG_LIMIT, "");
+        expect(component.currentPageIndex).toBe(1);
+      }
+    );
+
+    it.each([0, -1, 5, 1000, NaN, Infinity])("falls back to 50 rows for unsupported stored page size %s", pageSize => {
+      const paginated = makePaginatedResultService({ getCurrentPageSize: vi.fn().mockReturnValue(pageSize) });
+      component.ngOnChanges({ operatorId: new SimpleChange(undefined, "op1", true) });
+      expect(paginated.selectPage).toHaveBeenCalledWith(1, 50, 0, GUI_CONFIG_LIMIT, "");
+      expect(component.pageSize).toBe(50);
+    });
+
     it("clears the previous operator's rows, page and search when switching operators", () => {
       component.operatorId = "op1";
       component.setupResultTable([SAMPLE_ROW], 60);
