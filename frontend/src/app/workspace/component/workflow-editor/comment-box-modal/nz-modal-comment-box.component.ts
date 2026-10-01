@@ -72,6 +72,7 @@ import { isWorkflowColor, WORKFLOW_COLOR_PRESETS, WorkflowColor } from "../../..
 })
 export class NzModalCommentBoxComponent {
   readonly commentBox: YType<CommentBox> = inject(NZ_MODAL_DATA).commentBox;
+  private readonly commentBoxID = this.commentBox.get("commentBoxID").toJSON();
   public user?: User;
   readonly colorOptions = [{ id: undefined, label: "Default (reset)", fill: "#F2F4F5" }, ...WORKFLOW_COLOR_PRESETS];
 
@@ -81,16 +82,19 @@ export class NzModalCommentBoxComponent {
   }
 
   get canChangeColor(): boolean {
+    const graph = this.workflowActionService.getTexeraGraph();
     return (
       !!this.user &&
       this.workflowActionService.checkWorkflowModificationEnabled() &&
-      !this.workflowActionService.getWorkflowMetadata().readonly
+      !this.workflowActionService.getWorkflowMetadata().readonly &&
+      graph.hasCommentBox(this.commentBoxID) &&
+      graph.getSharedCommentBoxType(this.commentBoxID) === this.commentBox
     );
   }
 
   setColor(color: WorkflowColor | undefined): void {
     if (!this.canChangeColor) return;
-    this.workflowActionService.setCommentBoxColor(this.commentBox.get("commentBoxID").toJSON(), color);
+    this.workflowActionService.setCommentBoxColor(this.commentBoxID, color);
   }
 
   constructor(

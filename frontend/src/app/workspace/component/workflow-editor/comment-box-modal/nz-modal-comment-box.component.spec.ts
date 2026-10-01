@@ -18,6 +18,7 @@
  */
 
 import { ComponentFixture, TestBed } from "@angular/core/testing";
+import { HttpClientTestingModule } from "@angular/common/http/testing";
 import { BrowserAnimationsModule } from "@angular/platform-browser/animations";
 import { NZ_MODAL_DATA, NzModalRef } from "ng-zorro-antd/modal";
 import { NzModalCommentBoxComponent } from "./nz-modal-comment-box.component";
@@ -27,6 +28,10 @@ import { StubUserService } from "../../../../common/service/user/stub-user.servi
 import { NotificationService } from "../../../../common/service/notification/notification.service";
 import { User } from "../../../../common/type/user";
 import { commonTestProviders } from "../../../../common/testing/test-utils";
+import * as Y from "yjs";
+import { WorkflowGraph } from "../../../service/workflow-graph/model/workflow-graph";
+import { OperatorMetadataService } from "../../../service/operator-metadata/operator-metadata.service";
+import { StubOperatorMetadataService } from "../../../service/operator-metadata/stub-operator-metadata.service";
 
 const BOX_ID = "box-1";
 const CREATION_TIME = "2026-01-01T00:00:00.000Z";
@@ -85,7 +90,7 @@ describe("NzModalCommentBoxComponent", () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [NzModalCommentBoxComponent, BrowserAnimationsModule],
+      imports: [NzModalCommentBoxComponent, BrowserAnimationsModule, HttpClientTestingModule],
       providers: [
         { provide: NZ_MODAL_DATA, useValue: { commentBox } },
         {
@@ -97,6 +102,10 @@ describe("NzModalCommentBoxComponent", () => {
             setCommentBoxColor,
             checkWorkflowModificationEnabled: () => !opts.readonly,
             getWorkflowMetadata: () => ({ readonly: !!opts.readonly }),
+            getTexeraGraph: () => ({
+              hasCommentBox: () => true,
+              getSharedCommentBoxType: () => commentBox,
+            }),
           },
         },
         { provide: UserService, useClass: StubUserService },
@@ -582,5 +591,71 @@ describe("NzModalCommentBoxComponent", () => {
       deleteLink.click();
       expect(deleteComment).toHaveBeenCalledWith(COMMENT.creatorID, CREATION_TIME, BOX_ID);
     });
+  });
+});
+
+describe("comment color picker shared target lifecycle", () => {
+  let fixture: ComponentFixture<NzModalCommentBoxComponent>;
+  let action: WorkflowActionService;
+  let graph: WorkflowGraph;
+  const buttons = () =>
+    Array.from(fixture.nativeElement.querySelectorAll(".comment-colors button")) as HTMLButtonElement[];
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [NzModalCommentBoxComponent, BrowserAnimationsModule, HttpClientTestingModule],
+      providers: [
+        ...commonTestProviders,
+        { provide: OperatorMetadataService, useClass: StubOperatorMetadataService },
+        { provide: UserService, useClass: StubUserService },
+        { provide: NzModalRef, useValue: {} },
+        { provide: NotificationService, useValue: { success: vi.fn(), error: vi.fn() } },
+        {
+          provide: NZ_MODAL_DATA,
+          useFactory: (service: WorkflowActionService) => ({
+            commentBox: service.getTexeraGraph().getSharedCommentBoxType(BOX_ID),
+          }),
+          deps: [WorkflowActionService],
+        },
+      ],
+    }).compileComponents();
+    action = TestBed.inject(WorkflowActionService);
+    graph = action.getTexeraGraph() as WorkflowGraph;
+    action.addCommentBox({ commentBoxID: BOX_ID, comments: [], commentBoxPosition: { x: 0, y: 0 } });
+    fixture = TestBed.createComponent(NzModalCommentBoxComponent);
+    (TestBed.inject(UserService) as unknown as StubUserService).userChangeSubject.next(makeUser());
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    fixture?.destroy();
+    graph?.destroyYModel();
+  });
+
+  it("disables stale controls and ignores a color choice after remote deletion", () => {
+    const remote = new Y.Doc();
+    try {
+      Y.applyUpdate(remote, Y.encodeStateAsUpdate(graph.sharedModel.yDoc));
+      remote.getMap("commentBoxMap").delete(BOX_ID);
+      Y.applyUpdate(graph.sharedModel.yDoc, Y.encodeStateAsUpdate(remote), remote);
+      fixture.detectChanges();
+
+      expect(() => fixture.componentInstance.setColor("blue")).not.toThrow();
+      expect(buttons().every(button => button.disabled)).toBe(true);
+      expect(graph.hasCommentBox(BOX_ID)).toBe(false);
+    } finally {
+      remote.destroy();
+    }
+  });
+
+  it("does not recolor a replacement with the same id after workflow reload", () => {
+    const workflow = JSON.parse(JSON.stringify(action.getWorkflow()));
+    action.reloadWorkflow(workflow, false, false);
+    graph = action.getTexeraGraph() as WorkflowGraph;
+    fixture.detectChanges();
+    fixture.componentInstance.setColor("orange");
+
+    expect(graph.getCommentBox(BOX_ID)).not.toHaveProperty("color");
+    expect(buttons().every(button => button.disabled)).toBe(true);
   });
 });
