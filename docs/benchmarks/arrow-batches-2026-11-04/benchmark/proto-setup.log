@@ -1,0 +1,13 @@
+Writing __init__.py
+Writing org\__init__.py
+Writing org\apache\__init__.py
+Writing org\apache\texera\__init__.py
+Writing org\apache\texera\amber\__init__.py
+Writing org\apache\texera\amber\core\__init__.py
+Writing org\apache\texera\amber\engine\__init__.py
+Writing org\apache\texera\amber\engine\architecture\__init__.py
+Writing org\apache\texera\amber\engine\architecture\rpc\__init__.py
+Writing org\apache\texera\amber\engine\architecture\sendsemantics\__init__.py
+Writing org\apache\texera\amber\engine\architecture\worker\__init__.py
+Writing org\apache\texera\amber\engine\common\__init__.py
+Writing scalapb\__init__.py

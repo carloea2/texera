@@ -1,0 +1,242 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="Architecture and conversion work" id="architecture-and-conversion-work">
+    <mxGraphModel grid="1" gridSize="10" page="1" pageWidth="1540" pageHeight="790" background="#FFFFFF" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Arrow batch API: remove the Python row detour" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=25;fontColor=#111111;fontStyle=1;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="25" y="18" width="1490" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="current-title" value="Current pandas batch API" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=21;fontColor=#111111;fontStyle=1;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="25" y="76" width="1150" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="current-worker" value="" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;dashed=1;dashPattern=6 4;fontFamily=Arial;fontSize=15;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="145" y="120" width="1240" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="current-worker-label" value="Python worker" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=17;fontColor=#111111;fontStyle=1;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="160" y="129" width="250" height="29" as="geometry" />
+        </mxCell>
+        <mxCell id="current-mainloop" value="MainLoop mediates execution and control" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=right;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="540" y="130" width="825" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="current-incoming-label" value="Arrow frame" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="16" y="236" width="117" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="current-outgoing-label" value="Arrow frame" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1401" y="236" width="127" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="current-component-0-name" value="InputManager" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="170" y="170" width="190" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="current-component-1-name" value="BatchOperator" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="400" y="170" width="480" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="current-component-2-name" value="DataProcessor" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="170" width="180" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="current-component-3-name" value="OutputManager" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="170" width="220" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="current-input" value="Tuple wrappers&#10;around Arrow" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="180" y="227" width="170" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-pandas-input" value="Tuples / Series&#10;→ DataFrame" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="410" y="227" width="140" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-udf" value="pandas UDF" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="570" y="227" width="140" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-pandas-output" value="iterrows()&#10;→ output Series" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="730" y="227" width="140" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-finalize" value="Wrap as Tuple;&#10;finalize each row" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="930" y="227" width="160" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-output" value="Rebuild Arrow&#10;from row values" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="227" width="200" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="current-input-note" value="Fields read on access" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="176" y="292" width="178" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="current-pandas-note" value="DataFrame in / out; framework converts through rows" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="406" y="292" width="468" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="current-schema-note" value="Schema validation" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="925" y="292" width="170" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="current-rebuild-note" value="Table.from_pydict" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1145" y="292" width="210" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="current-retained-output" value="Routing, serialization, storage" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=12;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1139" y="322" width="222" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-title" value="Proposed Arrow batch API" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=21;fontColor=#111111;fontStyle=1;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="25" y="436" width="1150" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-worker" value="" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;dashed=1;dashPattern=6 4;fontFamily=Arial;fontSize=15;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="145" y="480" width="1240" height="285" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-worker-label" value="Python worker" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=17;fontColor=#111111;fontStyle=1;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="160" y="489" width="250" height="29" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-mainloop" value="MainLoop: cooperate between batch calls and yields" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=right;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="540" y="490" width="825" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-incoming-label" value="Arrow frame" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="16" y="619" width="117" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-outgoing-label" value="Arrow frame" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1401" y="619" width="127" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-component-0-name" value="InputManager" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="170" y="530" width="190" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-component-1-name" value="ArrowBatchOperator" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFF2CC;strokeColor=#D6B656;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="400" y="530" width="480" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-component-2-name" value="DataProcessor" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="530" width="180" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-component-3-name" value="OutputManager" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#B1DDED;strokeColor=#177DA2;strokeWidth=1;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="530" width="220" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-adapter-role" value="Pass pa.Table&#10;bounded batches" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="170" y="588" width="190" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-udf-body" value="" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;fontFamily=Arial;fontSize=15;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="400" y="566" width="480" height="164" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-arrow-body" value="Arrow compute: pa.Table → pa.Table" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="438" y="582" width="405" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-or" value="or" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="438" y="627" width="405" height="22" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-pandas-body" value="Arrow → pandas UDF → Arrow" style="rounded=0;html=0;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="438" y="656" width="405" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-validation-role" value="Check batch schema&#10;for output port" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="920" y="588" width="180" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-output-role" value="Partition, serialize,&#10;write configured storage" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="588" width="220" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-input-removed" value="Removed:&#10;Tuple wrappers + Series input" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=13;fontColor=#111111;fontStyle=1;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="158" y="676" width="230" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-output-removed" value="Removed: iterrows(), output Tuples,&#10;and Arrow reconstruction from row values" style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=14;fontColor=#111111;fontStyle=1;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="910" y="676" width="465" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="proposed-pandas-note" value="The pandas body retains Arrow ↔ pandas conversion." style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=12;fontColor=#111111;fontStyle=0;align=center;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="406" y="699" width="468" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="current-takeaway" value="Orange: extra Python row work around the UDF." style="text;html=0;strokeColor=none;fillColor=none;fontFamily=Arial;fontSize=16;fontColor=#111111;fontStyle=0;align=left;verticalAlign=middle;spacing=5;" vertex="1" parent="1">
+          <mxGeometry x="170" y="386" width="790" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="current-flow-0" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="132" y="256" as="sourcePoint" />
+            <mxPoint x="180" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-1" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="350" y="256" as="sourcePoint" />
+            <mxPoint x="410" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-2" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="550" y="256" as="sourcePoint" />
+            <mxPoint x="570" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-3" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="710" y="256" as="sourcePoint" />
+            <mxPoint x="730" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-4" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="870" y="256" as="sourcePoint" />
+            <mxPoint x="930" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-5" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1090" y="256" as="sourcePoint" />
+            <mxPoint x="1150" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="current-flow-6" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1350" y="256" as="sourcePoint" />
+            <mxPoint x="1400" y="256" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-body-input" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="400" y="639" as="sourcePoint" />
+            <mxPoint x="418" y="639" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-arrow-in" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="418" y="639" as="sourcePoint" />
+            <mxPoint x="438" y="601" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="418" y="601" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-pandas-in" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="418" y="639" as="sourcePoint" />
+            <mxPoint x="438" y="675" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="418" y="675" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-arrow-out" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="843" y="601" as="sourcePoint" />
+            <mxPoint x="861" y="639" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="861" y="601" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-pandas-out" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="843" y="675" as="sourcePoint" />
+            <mxPoint x="861" y="639" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="861" y="675" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-body-output" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=none;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="861" y="639" as="sourcePoint" />
+            <mxPoint x="880" y="639" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-flow-input" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="132" y="639" as="sourcePoint" />
+            <mxPoint x="400" y="639" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="proposed-flow-output" value="" style="edgeStyle=none;rounded=0;strokeColor=#111111;strokeWidth=1;endFill=1;endArrow=block;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="880" y="639" as="sourcePoint" />
+            <mxPoint x="1400" y="639" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

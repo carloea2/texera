@@ -1,0 +1,19 @@
+{
+  "bench_arrow_batches.py": "457503df64d22ac9f86fe99357539b9f512bcdb187338774ae6e07bf63a67302",
+  "environment.json": "3509974a181459bea31093b7e3c48b8dc6d9eabddbf630ff3aab2570fe7c9469",
+  "preflight.json": "000d05ac1216f35cb3b285036b9ff703255a497e26e41fffbfe18ff50a00ee88",
+  "profile-current-mixed.txt": "ecf7038cd614236ad27366f0e6fa25b03e2c1dfdc3884bdd8dab0e56f368996d",
+  "profile_arrow_bench.py": "ad4972361c3bd212bc2ee4228923602cf7d481613dfdf9e7c9e8ff6e87b72432",
+  "proto-setup.log": "84526cfe332740bebf83882b8e4765f2df0ca1ebe16dcaea4d5edff2df6bd395",
+  "raw.jsonl": "a178f08e5194a7ffac3cb0b8dc7c14d1d2dd4166d01204b967593a4b70c3c269",
+  "README.md": "09850e1449f22525fc30460b0deaa768976421d0a98f4850635c8e1fa68f2cde",
+  "repository-proof.json": "6c2a8ac8a16fe174e082a925dd21f45f0e2a4a158af33d43eedc3854640bcdc5",
+  "results.md": "bf5a15c77964de0efad966bbfc6670b7fbbe056beda2db2692f19b3f817ab74a",
+  "run-local.ps1": "4b9bc79f6fdda89deef9a7cf728ea30aa44d557d9271a5a7decfc5d2ac249d77",
+  "run_arrow_batch_bench.py": "cdef0cb868aa8cf66ce007bfe06818eea408bc647d3eecf1045f871f36dab389",
+  "run_arrow_memory_supplement.py": "d4fa330dda2fc0aa4854035d470037133cdfb96fbc4167089a0d6f74c4b49d24",
+  "setup.json": "2535948ea298693d2b7feebf84846eb11b18db322978eb1e0416db1c84a9f387",
+  "setup_arrow_bench.py": "770e1a6d66418132fcab3d9c17fcc2818bcaec44e2105d577267f75fb68dad99",
+  "summary.json": "f89732601ddfcdd550ba3048624db895c7ae7e23b63bcf02dac8720a2299bef5",
+  "supplemental-memory.jsonl": "5fc1f590d1d80ff4f20de85212c318c7ac6fe262cbb2d3111201675f83d5c5a9"
+}

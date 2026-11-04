@@ -1,0 +1,39 @@
+Attribution profile only; this run is not part of the timing samples.
+         11517409 function calls (11296568 primitive calls) in 11.567 seconds
+
+   Ordered by: cumulative time
+   List reduced from 431 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000   11.567   11.567 bench_arrow_batches.py:157(invoke)
+        1    0.014    0.014   11.567   11.567 bench_arrow_batches.py:103(legacy)
+    10001    0.061    0.000   11.206    0.001 bench_arrow_batches.py:115(consume)
+    20000    0.019    0.000    7.775    0.000 operator.py:213(process_tuple)
+    10001    0.052    0.000    7.751    0.001 operator.py:222(_process_batch)
+    10000    0.024    0.000    4.695    0.000 tuple.py:237(as_series)
+30000/20000    0.385    0.000    3.988    0.000 series.py:389(__init__)
+    10000    0.052    0.000    2.486    0.000 series.py:607(_init_dict)
+   400000    0.532    0.000    2.100    0.000 tuple.py:202(__getitem__)
+    20000    0.026    0.000    2.040    0.000 tuple.py:246(as_dict)
+    20000    0.108    0.000    1.974    0.000 tuple.py:241(_evaluate_all_fields)
+    20000    0.045    0.000    1.812    0.000 table.py:85(all_output_to_tuple)
+    10000    0.090    0.000    1.736    0.000 pampy.py:260(match)
+        2    0.000    0.000    1.722    0.861 frame.py:694(__init__)
+        1    0.000    0.000    1.717    1.717 construction.py:506(nested_data_to_arrays)
+        1    0.007    0.007    1.708    1.708 construction.py:793(to_arrays)
+        1    0.046    0.046    1.683    1.683 construction.py:860(_list_of_series_to_arrays)
+    30010    0.287    0.000    1.502    0.000 construction.py:517(sanitize_array)
+   100000    1.314    0.000    1.314    0.000 tuple.py:88(field_accessor)
+    10000    0.018    0.000    1.281    0.000 tuple.py:291(finalize)
+    10001    0.043    0.000    1.253    0.000 frame.py:1505(iterrows)
+2841889/2831887    0.782    0.000    1.117    0.000 {built-in method builtins.isinstance}
+    10000    0.071    0.000    1.046    0.000 base.py:3820(get_indexer)
+    60004    0.053    0.000    1.045    0.000 base.py:7593(ensure_index)
+    10000    0.171    0.000    0.962    0.000 base.py:475(__new__)
+60000/50000    0.090    0.000    0.881    0.000 pampy.py:59(match_value)
+    10000    0.015    0.000    0.716    0.000 pampy.py:44(run)
+    20000    0.101    0.000    0.713    0.000 tuple.py:180(__init__)
+    10000    0.201    0.000    0.695    0.000 tuple.py:378(validate_schema)
+    10000    0.016    0.000    0.681    0.000 table.py:102(<lambda>)
+
+

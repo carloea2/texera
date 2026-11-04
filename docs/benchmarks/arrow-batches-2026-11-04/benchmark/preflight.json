@@ -1,0 +1,5 @@
+{
+  "checks_passed": 111,
+  "scope": "Fixture output equivalence and IPC round trip; empty, one-row and partial-batch inputs; hand-computable grouped count. This is not new-API engine conformance.",
+  "command": "C:\\Users\\carlo\\texera\\venv312\\Scripts\\python.exe C:\\Users\\carlo\\texera\\texera-worktrees\\audit-pyamber-arrow\\target\\arrow-batch-bench-20261104\\bench_arrow_batches.py --mode selfcheck"
+}
