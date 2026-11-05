@@ -1,0 +1,7 @@
+Java UDF UI parameter evidence, feature issue apache/texera#9337.
+Source commit f7cca33003c9f9a9b4d7cf2b9a92842f43eea884.
+Chromium, 1600 x 1000 viewport, native 850 x 610 property-panel captures.
+Both images use the feature frontend. Before uses baseline Java metadata without Parameters; after uses metadata exported by the actual Scala OperatorMetadataGenerator at the feature commit.
+Workflow/auth HTTP fixtures and an isolated in-memory Yjs server were used. Added boolean/string/integer parameters through the UI, edited values to true/sample run/42, verified locked names/types, and verified source and values after reload. This reload uses fixture persistence.
+Execution was verified independently using the browser-generated source and values through the actual Java descriptor, ExecFactory, initialized JVM fields, and a real tuple.
+No existing account, workflow, or running service was changed for these captures.
